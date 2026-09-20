@@ -1,7 +1,7 @@
 import { Connection, PublicKey, Transaction, Keypair } from '@solana/web3.js';
 import { BN, Wallet, Program } from '@coral-xyz/anchor';
 
-// ========================= 基础类型定义 =========================
+// ========================= Basic Type Definitions =========================
 
 export type DataSourceType = 'fast' | 'chain';
 
@@ -29,7 +29,7 @@ export interface Fun100xSdkOptions {
   paramsAccount?: string;
 }
 
-// ========================= 订单和交易相关类型 =========================
+// ========================= Order and Trading Related Types =========================
 
 export interface OrderData {
   order_pda: string;
@@ -89,7 +89,7 @@ export interface MintInfo {
   [key: string]: any;
 }
 
-// ========================= 交易参数类型 =========================
+// ========================= Trading Parameter Types =========================
 
 export interface BuyParams {
   mintAccount: string | PublicKey;
@@ -147,7 +147,7 @@ export interface TransactionOptions {
   computeUnits?: number;
 }
 
-// ========================= 查询参数类型 =========================
+// ========================= Query Parameter Types =========================
 
 export interface OrdersQueryOptions {
   type?: 'up_orders' | 'down_orders';
@@ -167,7 +167,7 @@ export interface UserOrdersQueryOptions {
   dataSource?: DataSourceType;
 }
 
-// ========================= 模拟器相关类型 =========================
+// ========================= Simulator Related Types =========================
 
 export interface SimulationResult {
   liqResult: {
@@ -187,7 +187,7 @@ export interface SimulationResult {
   suggestedSolAmount: string;
 }
 
-// ========================= 工具类相关类型 =========================
+// ========================= Utility Related Types =========================
 
 export interface FindPrevNextResult {
   prevOrder: OrderData | null;
@@ -200,7 +200,7 @@ export interface ValidationResult {
   warnings: string[];
 }
 
-// ========================= 模块接口定义 =========================
+// ========================= Module Interface Definitions =========================
 
 export interface TradingModule {
   buy(params: BuyParams, options?: TransactionOptions): Promise<TransactionResult>;
@@ -242,14 +242,14 @@ export interface SimulatorModule {
   simulateSellStopLoss(mint: string, sellTokenAmount: bigint | string | number, stopLossPrice: bigint | string | number, lastPrice?: any, ordersData?: any): Promise<any>;
 }
 
-// ========================= 数据接口类型 =========================
+// ========================= Data Interface Types =========================
 
 export interface DataInterface {
   orders(mint: string, options?: OrdersQueryOptions): Promise<OrdersResponse>;
   price(mint: string, options?: PriceQueryOptions): Promise<PriceResponse>;
 }
 
-// ========================= 主 SDK 类型定义 =========================
+// ========================= Main SDK Type Definition =========================
 
 export declare class Fun100xSdk {
   connection: Connection;
@@ -262,12 +262,12 @@ export declare class Fun100xSdk {
   paramsAccount: PublicKey;
   fastApiUrl: string;
 
-  // 常量
+  // Constants
   readonly MAX_ORDERS_COUNT: number;
   readonly FIND_MAX_ORDERS_COUNT: number;
   readonly SUGGEST_LIQ_RATIO: number;
 
-  // 模块
+  // Modules
   trading: TradingModule;
   fast: FastModule;
   chain: ChainModule;
@@ -276,7 +276,7 @@ export declare class Fun100xSdk {
   simulator: SimulatorModule;
   data: DataInterface;
 
-  // 静态工具类引用
+  // Static utility class references
   static CurveAMM: typeof CurveAMM;
   static OrderUtils: typeof OrderUtils;
 
@@ -286,14 +286,14 @@ export declare class Fun100xSdk {
     options?: Fun100xSdkOptions
   );
 
-  // OrderUtils 快捷方法
+  // OrderUtils shortcut methods
   buildLpPairs(orders: OrderData[], direction: string, price: any, maxCount?: number): LpPair[];
   buildOrderAccounts(orders: OrderData[], maxCount?: number): (string | null)[];
   findPrevNext(orders: OrderData[], findOrderPda: string): FindPrevNextResult;
   findOrderIndex(orders: OrderData[], targetOrderPda: string | PublicKey | null): number;
 }
 
-// ========================= 工具类导出 =========================
+// ========================= Utility Class Exports =========================
 
 export declare class OrderUtils {
   static buildLpPairs(orders: OrderData[], direction: string, price: any, maxCount?: number): LpPair[];
@@ -336,7 +336,7 @@ export declare class CurveAMM {
   static calculateInitialK(): any;
   static getInitialPrice(): bigint | null;
 
-  // Custom pool parameters calculation (动态流动池)
+  // Custom pool parameters calculation (dynamic liquidity pool)
   static calculateK(initialVirtualSol: any, initialVirtualToken: any): any;
   static getInitialPriceWithParams(initialVirtualSol: any, initialVirtualToken: any): bigint | null;
 
@@ -349,7 +349,7 @@ export declare class CurveAMM {
   static buyFromPriceWithTokenOutput(startLowPrice: bigint | string | number, tokenOutputAmount: bigint | string | number): [bigint, bigint] | null;
   static sellFromPriceWithSolOutput(startHighPrice: bigint | string | number, solOutputAmount: bigint | string | number): [bigint, bigint] | null;
 
-  // AMM calculation methods with custom pool parameters (动态流动池)
+  // AMM calculation methods with custom pool parameters (dynamic liquidity pool)
   static priceToReservesWithParams(price: any, initialVirtualSol: any, initialVirtualToken: any): [any, any] | null;
   static buyFromPriceToPriceWithParams(startLowPrice: bigint | string | number, endHighPrice: bigint | string | number, initialVirtualSol: any, initialVirtualToken: any): [bigint, bigint] | null;
   static sellFromPriceToPriceWithParams(startHighPrice: bigint | string | number, endLowPrice: bigint | string | number, initialVirtualSol: any, initialVirtualToken: any): [bigint, bigint] | null;
@@ -365,7 +365,7 @@ export declare class CurveAMM {
   static calculatePoolPrice(lpTokenReserve: bigint | string | number | BN, lpSolReserve: bigint | string | number | BN): string | null;
 }
 
-// ========================= 常量和函数导出 =========================
+// ========================= Constant and Function Exports =========================
 
 export declare const FUN100X_PROGRAM_ID: PublicKey;
 
@@ -373,7 +373,7 @@ export declare function getProgramId(network?: NetworkType): PublicKey;
 
 export declare function getDefaultOptions(networkName?: 'MAINNET' | 'DEVNET' | 'LOCALNET'): NetworkConfig;
 
-// ========================= 模块类导出 =========================
+// ========================= Module Class Exports =========================
 
 export declare class TradingModule implements TradingModule {}
 export declare class FastModule implements FastModule {}
@@ -382,5 +382,5 @@ export declare class TokenModule implements TokenModule {}
 export declare class ParamModule implements ParamModule {}
 export declare class SimulatorModule implements SimulatorModule {}
 
-// 默认导出
+// Default export
 export default Fun100xSdk;

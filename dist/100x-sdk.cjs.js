@@ -12,12 +12,15 @@ var require$$1$2 = require('util');
 var require$$0$5 = require('stream');
 var require$$3$1 = require('http');
 var require$$4 = require('https');
-var require$$0$6 = require('url');
+var require$$2$1 = require('url');
 var require$$8 = require('crypto');
-var require$$4$1 = require('assert');
-var require$$0$7 = require('tty');
-var require$$8$1 = require('zlib');
-var require$$10 = require('events');
+var require$$0$8 = require('net');
+var require$$1$3 = require('tls');
+var require$$3$2 = require('assert');
+var require$$0$6 = require('tty');
+var require$$0$7 = require('events');
+var require$$6 = require('http2');
+var require$$10 = require('zlib');
 
 function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
 
@@ -31,11 +34,14 @@ var require$$1__default$1 = /*#__PURE__*/_interopDefaultLegacy(require$$1$2);
 var require$$0__default$4 = /*#__PURE__*/_interopDefaultLegacy(require$$0$5);
 var require$$3__default$1 = /*#__PURE__*/_interopDefaultLegacy(require$$3$1);
 var require$$4__default = /*#__PURE__*/_interopDefaultLegacy(require$$4);
-var require$$0__default$5 = /*#__PURE__*/_interopDefaultLegacy(require$$0$6);
+var require$$2__default = /*#__PURE__*/_interopDefaultLegacy(require$$2$1);
 var require$$8__default = /*#__PURE__*/_interopDefaultLegacy(require$$8);
-var require$$4__default$1 = /*#__PURE__*/_interopDefaultLegacy(require$$4$1);
+var require$$0__default$7 = /*#__PURE__*/_interopDefaultLegacy(require$$0$8);
+var require$$1__default$2 = /*#__PURE__*/_interopDefaultLegacy(require$$1$3);
+var require$$3__default$2 = /*#__PURE__*/_interopDefaultLegacy(require$$3$2);
+var require$$0__default$5 = /*#__PURE__*/_interopDefaultLegacy(require$$0$6);
 var require$$0__default$6 = /*#__PURE__*/_interopDefaultLegacy(require$$0$7);
-var require$$8__default$1 = /*#__PURE__*/_interopDefaultLegacy(require$$8$1);
+var require$$6__default = /*#__PURE__*/_interopDefaultLegacy(require$$6);
 var require$$10__default = /*#__PURE__*/_interopDefaultLegacy(require$$10);
 
 var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
@@ -2770,39 +2776,43 @@ node$1.toBufferBE = toBufferBE;
 (function (exports) {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.u256be = exports.u256 = exports.u192be = exports.u192 = exports.u128be = exports.u128 = exports.u64be = exports.u64 = exports.bigIntBE = exports.bigInt = void 0;
+	const buffer_1 = require$$3__default["default"];
 	const buffer_layout_1 = Layout$1;
 	const bigint_buffer_1 = node$1;
 	const base_1 = base;
-	const bigInt = (length) => (property) => {
-	    const layout = (0, buffer_layout_1.blob)(length, property);
-	    const { encode, decode } = (0, base_1.encodeDecode)(layout);
-	    const bigIntLayout = layout;
-	    bigIntLayout.decode = (buffer, offset) => {
-	        const src = decode(buffer, offset);
-	        return (0, bigint_buffer_1.toBigIntLE)(Buffer.from(src));
+	// https://github.com/no2chem/bigint-buffer/issues/59
+	function assertValidBigInteger(untrustedInput) {
+	    if (typeof untrustedInput !== 'bigint') {
+	        throw new Error('Expected a `BigInt`');
+	    }
+	}
+	function bigInt_IMPL(littleEndian, length) {
+	    return (property) => {
+	        const layout = (0, buffer_layout_1.blob)(length, property);
+	        const { encode, decode } = (0, base_1.encodeDecode)(layout);
+	        const bigIntLayout = layout;
+	        bigIntLayout.decode = (buffer, offset) => {
+	            const src = decode(buffer, offset);
+	            return littleEndian ? (0, bigint_buffer_1.toBigIntLE)(buffer_1.Buffer.from(src)) : (0, bigint_buffer_1.toBigIntBE)(buffer_1.Buffer.from(src));
+	        };
+	        bigIntLayout.encode = (bigInt, buffer, offset) => {
+	            assertValidBigInteger(bigInt);
+	            let src;
+	            if (length === 0) {
+	                // https://github.com/no2chem/bigint-buffer/issues/40
+	                // `toBuffer{BE|LE}` crashes when passed zero for the `length` argument.
+	                src = buffer_1.Buffer.alloc(0);
+	            }
+	            else {
+	                src = littleEndian ? (0, bigint_buffer_1.toBufferLE)(bigInt, length) : (0, bigint_buffer_1.toBufferBE)(bigInt, length);
+	            }
+	            return encode(src, buffer, offset);
+	        };
+	        return bigIntLayout;
 	    };
-	    bigIntLayout.encode = (bigInt, buffer, offset) => {
-	        const src = (0, bigint_buffer_1.toBufferLE)(bigInt, length);
-	        return encode(src, buffer, offset);
-	    };
-	    return bigIntLayout;
-	};
-	exports.bigInt = bigInt;
-	const bigIntBE = (length) => (property) => {
-	    const layout = (0, buffer_layout_1.blob)(length, property);
-	    const { encode, decode } = (0, base_1.encodeDecode)(layout);
-	    const bigIntLayout = layout;
-	    bigIntLayout.decode = (buffer, offset) => {
-	        const src = decode(buffer, offset);
-	        return (0, bigint_buffer_1.toBigIntBE)(Buffer.from(src));
-	    };
-	    bigIntLayout.encode = (bigInt, buffer, offset) => {
-	        const src = (0, bigint_buffer_1.toBufferBE)(bigInt, length);
-	        return encode(src, buffer, offset);
-	    };
-	    return bigIntLayout;
-	};
-	exports.bigIntBE = bigIntBE;
+	}
+	exports.bigInt = bigInt_IMPL.bind(null, /* littleEndian */ true);
+	exports.bigIntBE = bigInt_IMPL.bind(null, /* littleEndian */ false);
 	exports.u64 = (0, exports.bigInt)(8);
 	exports.u64be = (0, exports.bigIntBE)(8);
 	exports.u128 = (0, exports.bigInt)(16);
@@ -5774,10 +5784,10 @@ var native = {};
 
 Object.defineProperty(native, "__esModule", { value: true });
 native.bool = void 0;
-const buffer_layout_1$5 = Layout$1;
+const buffer_layout_1$6 = Layout$1;
 const base_1$1 = base;
 const bool = (property) => {
-    const layout = (0, buffer_layout_1$5.u8)(property);
+    const layout = (0, buffer_layout_1$6.u8)(property);
     const { encode, decode } = (0, base_1$1.encodeDecode)(layout);
     const boolLayout = layout;
     boolLayout.decode = (buffer, offset) => {
@@ -5796,16 +5806,16 @@ var web3 = {};
 
 Object.defineProperty(web3, "__esModule", { value: true });
 web3.publicKey = void 0;
-const buffer_layout_1$4 = Layout$1;
-const web3_js_1$J = require$$0__default["default"];
+const buffer_layout_1$5 = Layout$1;
+const web3_js_1$L = require$$0__default["default"];
 const base_1 = base;
 const publicKey = (property) => {
-    const layout = (0, buffer_layout_1$4.blob)(32, property);
+    const layout = (0, buffer_layout_1$5.blob)(32, property);
     const { encode, decode } = (0, base_1.encodeDecode)(layout);
     const publicKeyLayout = layout;
     publicKeyLayout.decode = (buffer, offset) => {
         const src = decode(buffer, offset);
-        return new web3_js_1$J.PublicKey(src);
+        return new web3_js_1$L.PublicKey(src);
     };
     publicKeyLayout.encode = (publicKey, buffer, offset) => {
         const src = publicKey.toBuffer();
@@ -6043,6 +6053,8 @@ var TokenInstruction;
     // ConfidentialMintBurnExtension = 42,
     TokenInstruction[TokenInstruction["ScaledUiAmountExtension"] = 43] = "ScaledUiAmountExtension";
     TokenInstruction[TokenInstruction["PausableExtension"] = 44] = "PausableExtension";
+    TokenInstruction[TokenInstruction["UnwrapLamports"] = 45] = "UnwrapLamports";
+    TokenInstruction[TokenInstruction["PermissionedBurnExtension"] = 46] = "PermissionedBurnExtension";
 })(TokenInstruction || (types$2.TokenInstruction = TokenInstruction = {}));
 
 (function (exports) {
@@ -6395,28 +6407,28 @@ var internal$1 = {};
 
 Object.defineProperty(internal$1, "__esModule", { value: true });
 internal$1.getSigners = getSigners;
-const web3_js_1$I = require$$0__default["default"];
+const web3_js_1$K = require$$0__default["default"];
 /** @internal */
 function getSigners(signerOrMultisig, multiSigners) {
-    return signerOrMultisig instanceof web3_js_1$I.PublicKey
+    return signerOrMultisig instanceof web3_js_1$K.PublicKey
         ? [signerOrMultisig, multiSigners]
         : [signerOrMultisig.publicKey, [signerOrMultisig]];
 }
 
-var instructions$d = {};
+var instructions$e = {};
 
 var internal = {};
 
 Object.defineProperty(internal, "__esModule", { value: true });
 internal.addSigners = addSigners;
-const web3_js_1$H = require$$0__default["default"];
+const web3_js_1$J = require$$0__default["default"];
 /** @internal */
 function addSigners(keys, ownerOrAuthority, multiSigners) {
     if (multiSigners.length) {
         keys.push({ pubkey: ownerOrAuthority, isSigner: false, isWritable: false });
         for (const signer of multiSigners) {
             keys.push({
-                pubkey: signer instanceof web3_js_1$H.PublicKey ? signer : signer.publicKey,
+                pubkey: signer instanceof web3_js_1$J.PublicKey ? signer : signer.publicKey,
                 isSigner: true,
                 isWritable: false,
             });
@@ -6485,9 +6497,9 @@ function addSigners(keys, ownerOrAuthority, multiSigners) {
 	    return new web3_js_1.TransactionInstruction({ keys, programId, data });
 	}
 	
-} (instructions$d));
+} (instructions$e));
 
-var __awaiter$A = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$C = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -6499,10 +6511,10 @@ var __awaiter$A = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 Object.defineProperty(actions$9, "__esModule", { value: true });
 actions$9.enableCpiGuard = enableCpiGuard;
 actions$9.disableCpiGuard = disableCpiGuard;
-const web3_js_1$G = require$$0__default["default"];
-const internal_js_1$m = internal$1;
-const constants_js_1$C = constants$1;
-const instructions_js_1$6 = instructions$d;
+const web3_js_1$I = require$$0__default["default"];
+const internal_js_1$o = internal$1;
+const constants_js_1$E = constants$1;
+const instructions_js_1$6 = instructions$e;
 /**
  * Enable CPI Guard on the given account
  *
@@ -6517,10 +6529,10 @@ const instructions_js_1$6 = instructions$d;
  * @return Signature of the confirmed transaction
  */
 function enableCpiGuard(connection_1, payer_1, account_1, owner_1) {
-    return __awaiter$A(this, arguments, void 0, function* (connection, payer, account, owner, multiSigners = [], confirmOptions, programId = constants_js_1$C.TOKEN_2022_PROGRAM_ID) {
-        const [ownerPublicKey, signers] = (0, internal_js_1$m.getSigners)(owner, multiSigners);
-        const transaction = new web3_js_1$G.Transaction().add((0, instructions_js_1$6.createEnableCpiGuardInstruction)(account, ownerPublicKey, signers, programId));
-        return yield (0, web3_js_1$G.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$C(this, arguments, void 0, function* (connection, payer, account, owner, multiSigners = [], confirmOptions, programId = constants_js_1$E.TOKEN_2022_PROGRAM_ID) {
+        const [ownerPublicKey, signers] = (0, internal_js_1$o.getSigners)(owner, multiSigners);
+        const transaction = new web3_js_1$I.Transaction().add((0, instructions_js_1$6.createEnableCpiGuardInstruction)(account, ownerPublicKey, signers, programId));
+        return yield (0, web3_js_1$I.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 /**
@@ -6537,20 +6549,20 @@ function enableCpiGuard(connection_1, payer_1, account_1, owner_1) {
  * @return Signature of the confirmed transaction
  */
 function disableCpiGuard(connection_1, payer_1, account_1, owner_1) {
-    return __awaiter$A(this, arguments, void 0, function* (connection, payer, account, owner, multiSigners = [], confirmOptions, programId = constants_js_1$C.TOKEN_2022_PROGRAM_ID) {
-        const [ownerPublicKey, signers] = (0, internal_js_1$m.getSigners)(owner, multiSigners);
-        const transaction = new web3_js_1$G.Transaction().add((0, instructions_js_1$6.createDisableCpiGuardInstruction)(account, ownerPublicKey, signers, programId));
-        return yield (0, web3_js_1$G.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$C(this, arguments, void 0, function* (connection, payer, account, owner, multiSigners = [], confirmOptions, programId = constants_js_1$E.TOKEN_2022_PROGRAM_ID) {
+        const [ownerPublicKey, signers] = (0, internal_js_1$o.getSigners)(owner, multiSigners);
+        const transaction = new web3_js_1$I.Transaction().add((0, instructions_js_1$6.createDisableCpiGuardInstruction)(account, ownerPublicKey, signers, programId));
+        return yield (0, web3_js_1$I.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
-var state$g = {};
+var state$h = {};
 
-var hasRequiredState$b;
+var hasRequiredState$c;
 
-function requireState$b () {
-	if (hasRequiredState$b) return state$g;
-	hasRequiredState$b = 1;
+function requireState$c () {
+	if (hasRequiredState$c) return state$h;
+	hasRequiredState$c = 1;
 	(function (exports) {
 		Object.defineProperty(exports, "__esModule", { value: true });
 		exports.CPI_GUARD_SIZE = exports.CpiGuardLayout = void 0;
@@ -6571,8 +6583,8 @@ function requireState$b () {
 		    }
 		}
 		
-	} (state$g));
-	return state$g;
+	} (state$h));
+	return state$h;
 }
 
 var hasRequiredCpiGuard;
@@ -6597,8 +6609,8 @@ function requireCpiGuard () {
 		};
 		Object.defineProperty(exports, "__esModule", { value: true });
 		__exportStar(actions$9, exports);
-		__exportStar(instructions$d, exports);
-		__exportStar(requireState$b(), exports);
+		__exportStar(instructions$e, exports);
+		__exportStar(requireState$c(), exports);
 		
 	} (cpiGuard));
 	return cpiGuard;
@@ -6608,7 +6620,7 @@ var defaultAccountState = {};
 
 var actions$8 = {};
 
-var instructions$c = {};
+var instructions$d = {};
 
 (function (exports) {
 	Object.defineProperty(exports, "__esModule", { value: true });
@@ -6679,9 +6691,9 @@ var instructions$c = {};
 	    return new web3_js_1.TransactionInstruction({ keys, programId, data });
 	}
 	
-} (instructions$c));
+} (instructions$d));
 
-var __awaiter$z = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$B = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -6693,10 +6705,10 @@ var __awaiter$z = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 Object.defineProperty(actions$8, "__esModule", { value: true });
 actions$8.initializeDefaultAccountState = initializeDefaultAccountState;
 actions$8.updateDefaultAccountState = updateDefaultAccountState;
-const web3_js_1$F = require$$0__default["default"];
-const internal_js_1$l = internal$1;
-const constants_js_1$B = constants$1;
-const instructions_js_1$5 = instructions$c;
+const web3_js_1$H = require$$0__default["default"];
+const internal_js_1$n = internal$1;
+const constants_js_1$D = constants$1;
+const instructions_js_1$5 = instructions$d;
 /**
  * Initialize a default account state on a mint
  *
@@ -6710,9 +6722,9 @@ const instructions_js_1$5 = instructions$c;
  * @return Signature of the confirmed transaction
  */
 function initializeDefaultAccountState(connection_1, payer_1, mint_1, state_1, confirmOptions_1) {
-    return __awaiter$z(this, arguments, void 0, function* (connection, payer, mint, state, confirmOptions, programId = constants_js_1$B.TOKEN_2022_PROGRAM_ID) {
-        const transaction = new web3_js_1$F.Transaction().add((0, instructions_js_1$5.createInitializeDefaultAccountStateInstruction)(mint, state, programId));
-        return yield (0, web3_js_1$F.sendAndConfirmTransaction)(connection, transaction, [payer], confirmOptions);
+    return __awaiter$B(this, arguments, void 0, function* (connection, payer, mint, state, confirmOptions, programId = constants_js_1$D.TOKEN_2022_PROGRAM_ID) {
+        const transaction = new web3_js_1$H.Transaction().add((0, instructions_js_1$5.createInitializeDefaultAccountStateInstruction)(mint, state, programId));
+        return yield (0, web3_js_1$H.sendAndConfirmTransaction)(connection, transaction, [payer], confirmOptions);
     });
 }
 /**
@@ -6730,20 +6742,20 @@ function initializeDefaultAccountState(connection_1, payer_1, mint_1, state_1, c
  * @return Signature of the confirmed transaction
  */
 function updateDefaultAccountState(connection_1, payer_1, mint_1, state_1, freezeAuthority_1) {
-    return __awaiter$z(this, arguments, void 0, function* (connection, payer, mint, state, freezeAuthority, multiSigners = [], confirmOptions, programId = constants_js_1$B.TOKEN_2022_PROGRAM_ID) {
-        const [freezeAuthorityPublicKey, signers] = (0, internal_js_1$l.getSigners)(freezeAuthority, multiSigners);
-        const transaction = new web3_js_1$F.Transaction().add((0, instructions_js_1$5.createUpdateDefaultAccountStateInstruction)(mint, state, freezeAuthorityPublicKey, signers, programId));
-        return yield (0, web3_js_1$F.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$B(this, arguments, void 0, function* (connection, payer, mint, state, freezeAuthority, multiSigners = [], confirmOptions, programId = constants_js_1$D.TOKEN_2022_PROGRAM_ID) {
+        const [freezeAuthorityPublicKey, signers] = (0, internal_js_1$n.getSigners)(freezeAuthority, multiSigners);
+        const transaction = new web3_js_1$H.Transaction().add((0, instructions_js_1$5.createUpdateDefaultAccountStateInstruction)(mint, state, freezeAuthorityPublicKey, signers, programId));
+        return yield (0, web3_js_1$H.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
-var state$f = {};
+var state$g = {};
 
-var hasRequiredState$a;
+var hasRequiredState$b;
 
-function requireState$a () {
-	if (hasRequiredState$a) return state$f;
-	hasRequiredState$a = 1;
+function requireState$b () {
+	if (hasRequiredState$b) return state$g;
+	hasRequiredState$b = 1;
 	(function (exports) {
 		Object.defineProperty(exports, "__esModule", { value: true });
 		exports.DEFAULT_ACCOUNT_STATE_SIZE = exports.DefaultAccountStateLayout = void 0;
@@ -6763,8 +6775,8 @@ function requireState$a () {
 		    }
 		}
 		
-	} (state$f));
-	return state$f;
+	} (state$g));
+	return state$g;
 }
 
 var hasRequiredDefaultAccountState;
@@ -6789,8 +6801,8 @@ function requireDefaultAccountState () {
 		};
 		Object.defineProperty(exports, "__esModule", { value: true });
 		__exportStar(actions$8, exports);
-		__exportStar(instructions$c, exports);
-		__exportStar(requireState$a(), exports);
+		__exportStar(instructions$d, exports);
+		__exportStar(requireState$b(), exports);
 		
 	} (defaultAccountState));
 	return defaultAccountState;
@@ -6869,7 +6881,7 @@ instruction$1.createUpdateGroupMaxSizeInstruction = createUpdateGroupMaxSizeInst
 instruction$1.createUpdateGroupAuthorityInstruction = createUpdateGroupAuthorityInstruction;
 instruction$1.createInitializeMemberInstruction = createInitializeMemberInstruction;
 const codecs_1$5 = require$$0__default$2["default"];
-const web3_js_1$E = require$$0__default["default"];
+const web3_js_1$G = require$$0__default["default"];
 function getInstructionEncoder$1(discriminator, dataEncoder) {
     return (0, codecs_1$5.transformEncoder)((0, codecs_1$5.getTupleEncoder)([(0, codecs_1$5.getBytesEncoder)(), dataEncoder]), (data) => [
         discriminator,
@@ -6881,7 +6893,7 @@ function getPublicKeyEncoder$1() {
 }
 function createInitializeGroupInstruction(args) {
     const { programId, group, mint, mintAuthority, updateAuthority, maxSize } = args;
-    return new web3_js_1$E.TransactionInstruction({
+    return new web3_js_1$G.TransactionInstruction({
         programId,
         keys: [
             { isSigner: false, isWritable: true, pubkey: group },
@@ -6894,12 +6906,12 @@ function createInitializeGroupInstruction(args) {
         ]), (0, codecs_1$5.getStructEncoder)([
             ['updateAuthority', getPublicKeyEncoder$1()],
             ['maxSize', (0, codecs_1$5.getU64Encoder)()],
-        ])).encode({ updateAuthority: updateAuthority !== null && updateAuthority !== void 0 ? updateAuthority : web3_js_1$E.SystemProgram.programId, maxSize })),
+        ])).encode({ updateAuthority: updateAuthority !== null && updateAuthority !== void 0 ? updateAuthority : web3_js_1$G.SystemProgram.programId, maxSize })),
     });
 }
 function createUpdateGroupMaxSizeInstruction(args) {
     const { programId, group, updateAuthority, maxSize } = args;
-    return new web3_js_1$E.TransactionInstruction({
+    return new web3_js_1$G.TransactionInstruction({
         programId,
         keys: [
             { isSigner: false, isWritable: true, pubkey: group },
@@ -6913,7 +6925,7 @@ function createUpdateGroupMaxSizeInstruction(args) {
 }
 function createUpdateGroupAuthorityInstruction(args) {
     const { programId, group, currentAuthority, newAuthority } = args;
-    return new web3_js_1$E.TransactionInstruction({
+    return new web3_js_1$G.TransactionInstruction({
         programId,
         keys: [
             { isSigner: false, isWritable: true, pubkey: group },
@@ -6922,12 +6934,12 @@ function createUpdateGroupAuthorityInstruction(args) {
         data: Buffer.from(getInstructionEncoder$1(new Uint8Array([
             /* await splDiscriminate('spl_token_group_interface:update_authority') */
             161, 105, 88, 1, 237, 221, 216, 203,
-        ]), (0, codecs_1$5.getStructEncoder)([['newAuthority', getPublicKeyEncoder$1()]])).encode({ newAuthority: newAuthority !== null && newAuthority !== void 0 ? newAuthority : web3_js_1$E.SystemProgram.programId })),
+        ]), (0, codecs_1$5.getStructEncoder)([['newAuthority', getPublicKeyEncoder$1()]])).encode({ newAuthority: newAuthority !== null && newAuthority !== void 0 ? newAuthority : web3_js_1$G.SystemProgram.programId })),
     });
 }
 function createInitializeMemberInstruction(args) {
     const { programId, member, memberMint, memberMintAuthority, group, groupUpdateAuthority } = args;
-    return new web3_js_1$E.TransactionInstruction({
+    return new web3_js_1$G.TransactionInstruction({
         programId,
         keys: [
             { isSigner: false, isWritable: true, pubkey: member },
@@ -6943,7 +6955,7 @@ function createInitializeMemberInstruction(args) {
     });
 }
 
-var state$e = {};
+var state$f = {};
 
 var tokenGroup = {};
 
@@ -6951,7 +6963,7 @@ Object.defineProperty(tokenGroup, "__esModule", { value: true });
 tokenGroup.TOKEN_GROUP_SIZE = void 0;
 tokenGroup.packTokenGroup = packTokenGroup;
 tokenGroup.unpackTokenGroup = unpackTokenGroup;
-const web3_js_1$D = require$$0__default["default"];
+const web3_js_1$F = require$$0__default["default"];
 const codecs_1$4 = require$$0__default$2["default"];
 const tokenGroupCodec = (0, codecs_1$4.getStructCodec)([
     ['updateAuthority', (0, codecs_1$4.fixCodecSize)((0, codecs_1$4.getBytesCodec)(), 32)],
@@ -6973,7 +6985,7 @@ function isNonePubkey$1(buffer) {
 function packTokenGroup(group) {
     var _a;
     // If no updateAuthority given, set it to the None/Zero PublicKey for encoding
-    const updateAuthority = (_a = group.updateAuthority) !== null && _a !== void 0 ? _a : web3_js_1$D.PublicKey.default;
+    const updateAuthority = (_a = group.updateAuthority) !== null && _a !== void 0 ? _a : web3_js_1$F.PublicKey.default;
     return tokenGroupCodec.encode({
         updateAuthority: updateAuthority.toBuffer(),
         mint: group.mint.toBuffer(),
@@ -6986,13 +6998,13 @@ function unpackTokenGroup(buffer) {
     const data = tokenGroupCodec.decode(buffer);
     return isNonePubkey$1(data.updateAuthority)
         ? {
-            mint: new web3_js_1$D.PublicKey(data.mint),
+            mint: new web3_js_1$F.PublicKey(data.mint),
             size: data.size,
             maxSize: data.maxSize,
         }
         : {
-            updateAuthority: new web3_js_1$D.PublicKey(data.updateAuthority),
-            mint: new web3_js_1$D.PublicKey(data.mint),
+            updateAuthority: new web3_js_1$F.PublicKey(data.updateAuthority),
+            mint: new web3_js_1$F.PublicKey(data.mint),
             size: data.size,
             maxSize: data.maxSize,
         };
@@ -7004,7 +7016,7 @@ Object.defineProperty(tokenGroupMember, "__esModule", { value: true });
 tokenGroupMember.TOKEN_GROUP_MEMBER_SIZE = void 0;
 tokenGroupMember.packTokenGroupMember = packTokenGroupMember;
 tokenGroupMember.unpackTokenGroupMember = unpackTokenGroupMember;
-const web3_js_1$C = require$$0__default["default"];
+const web3_js_1$E = require$$0__default["default"];
 const codecs_1$3 = require$$0__default$2["default"];
 const tokenGroupMemberCodec = (0, codecs_1$3.getStructCodec)([
     ['mint', (0, codecs_1$3.fixCodecSize)((0, codecs_1$3.getBytesCodec)(), 32)],
@@ -7024,8 +7036,8 @@ function packTokenGroupMember(member) {
 function unpackTokenGroupMember(buffer) {
     const data = tokenGroupMemberCodec.decode(buffer);
     return {
-        mint: new web3_js_1$C.PublicKey(data.mint),
-        group: new web3_js_1$C.PublicKey(data.group),
+        mint: new web3_js_1$E.PublicKey(data.mint),
+        group: new web3_js_1$E.PublicKey(data.group),
         memberNumber: data.memberNumber,
     };
 }
@@ -7049,7 +7061,7 @@ function unpackTokenGroupMember(buffer) {
 	__exportStar(tokenGroup, exports);
 	__exportStar(tokenGroupMember, exports);
 	
-} (state$e));
+} (state$f));
 
 (function (exports) {
 	var __createBinding = (commonjsGlobal && commonjsGlobal.__createBinding) || (Object.create ? (function(o, m, k, k2) {
@@ -7069,11 +7081,11 @@ function unpackTokenGroupMember(buffer) {
 	Object.defineProperty(exports, "__esModule", { value: true });
 	__exportStar(errors$3, exports);
 	__exportStar(instruction$1, exports);
-	__exportStar(state$e, exports);
+	__exportStar(state$f, exports);
 	
 } (cjs$1));
 
-var __awaiter$y = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$A = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -7089,10 +7101,10 @@ actions$7.tokenGroupUpdateGroupMaxSize = tokenGroupUpdateGroupMaxSize;
 actions$7.tokenGroupUpdateGroupAuthority = tokenGroupUpdateGroupAuthority;
 actions$7.tokenGroupMemberInitialize = tokenGroupMemberInitialize;
 actions$7.tokenGroupMemberInitializeWithRentTransfer = tokenGroupMemberInitializeWithRentTransfer;
-const web3_js_1$B = require$$0__default["default"];
+const web3_js_1$D = require$$0__default["default"];
 const spl_token_group_1 = cjs$1;
-const constants_js_1$A = constants$1;
-const internal_js_1$k = internal$1;
+const constants_js_1$C = constants$1;
+const internal_js_1$m = internal$1;
 /**
  * Initialize a new `Group`
  *
@@ -7111,9 +7123,9 @@ const internal_js_1$k = internal$1;
  * @return Signature of the confirmed transaction
  */
 function tokenGroupInitializeGroup(connection_1, payer_1, mint_1, mintAuthority_1, updateAuthority_1, maxSize_1) {
-    return __awaiter$y(this, arguments, void 0, function* (connection, payer, mint, mintAuthority, updateAuthority, maxSize, multiSigners = [], confirmOptions, programId = constants_js_1$A.TOKEN_2022_PROGRAM_ID) {
-        const [mintAuthorityPublicKey, signers] = (0, internal_js_1$k.getSigners)(mintAuthority, multiSigners);
-        const transaction = new web3_js_1$B.Transaction().add((0, spl_token_group_1.createInitializeGroupInstruction)({
+    return __awaiter$A(this, arguments, void 0, function* (connection, payer, mint, mintAuthority, updateAuthority, maxSize, multiSigners = [], confirmOptions, programId = constants_js_1$C.TOKEN_2022_PROGRAM_ID) {
+        const [mintAuthorityPublicKey, signers] = (0, internal_js_1$m.getSigners)(mintAuthority, multiSigners);
+        const transaction = new web3_js_1$D.Transaction().add((0, spl_token_group_1.createInitializeGroupInstruction)({
             programId,
             group: mint,
             mint,
@@ -7121,7 +7133,7 @@ function tokenGroupInitializeGroup(connection_1, payer_1, mint_1, mintAuthority_
             updateAuthority,
             maxSize,
         }));
-        return yield (0, web3_js_1$B.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+        return yield (0, web3_js_1$D.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 /**
@@ -7142,10 +7154,10 @@ function tokenGroupInitializeGroup(connection_1, payer_1, mint_1, mintAuthority_
  * @return Signature of the confirmed transaction
  */
 function tokenGroupInitializeGroupWithRentTransfer(connection_1, payer_1, mint_1, mintAuthority_1, updateAuthority_1, maxSize_1) {
-    return __awaiter$y(this, arguments, void 0, function* (connection, payer, mint, mintAuthority, updateAuthority, maxSize, multiSigners = [], confirmOptions, programId = constants_js_1$A.TOKEN_2022_PROGRAM_ID) {
-        const [mintAuthorityPublicKey, signers] = (0, internal_js_1$k.getSigners)(mintAuthority, multiSigners);
+    return __awaiter$A(this, arguments, void 0, function* (connection, payer, mint, mintAuthority, updateAuthority, maxSize, multiSigners = [], confirmOptions, programId = constants_js_1$C.TOKEN_2022_PROGRAM_ID) {
+        const [mintAuthorityPublicKey, signers] = (0, internal_js_1$m.getSigners)(mintAuthority, multiSigners);
         const lamports = yield connection.getMinimumBalanceForRentExemption(spl_token_group_1.TOKEN_GROUP_SIZE);
-        const transaction = new web3_js_1$B.Transaction().add(web3_js_1$B.SystemProgram.transfer({
+        const transaction = new web3_js_1$D.Transaction().add(web3_js_1$D.SystemProgram.transfer({
             fromPubkey: payer.publicKey,
             toPubkey: mint,
             lamports,
@@ -7157,7 +7169,7 @@ function tokenGroupInitializeGroupWithRentTransfer(connection_1, payer_1, mint_1
             updateAuthority,
             maxSize,
         }));
-        return yield (0, web3_js_1$B.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+        return yield (0, web3_js_1$D.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 /**
@@ -7175,15 +7187,15 @@ function tokenGroupInitializeGroupWithRentTransfer(connection_1, payer_1, mint_1
  * @return Signature of the confirmed transaction
  */
 function tokenGroupUpdateGroupMaxSize(connection_1, payer_1, mint_1, updateAuthority_1, maxSize_1) {
-    return __awaiter$y(this, arguments, void 0, function* (connection, payer, mint, updateAuthority, maxSize, multiSigners = [], confirmOptions, programId = constants_js_1$A.TOKEN_2022_PROGRAM_ID) {
-        const [updateAuthorityPublicKey, signers] = (0, internal_js_1$k.getSigners)(updateAuthority, multiSigners);
-        const transaction = new web3_js_1$B.Transaction().add((0, spl_token_group_1.createUpdateGroupMaxSizeInstruction)({
+    return __awaiter$A(this, arguments, void 0, function* (connection, payer, mint, updateAuthority, maxSize, multiSigners = [], confirmOptions, programId = constants_js_1$C.TOKEN_2022_PROGRAM_ID) {
+        const [updateAuthorityPublicKey, signers] = (0, internal_js_1$m.getSigners)(updateAuthority, multiSigners);
+        const transaction = new web3_js_1$D.Transaction().add((0, spl_token_group_1.createUpdateGroupMaxSizeInstruction)({
             programId,
             group: mint,
             updateAuthority: updateAuthorityPublicKey,
             maxSize,
         }));
-        return yield (0, web3_js_1$B.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+        return yield (0, web3_js_1$D.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 /**
@@ -7201,15 +7213,15 @@ function tokenGroupUpdateGroupMaxSize(connection_1, payer_1, mint_1, updateAutho
  * @return Signature of the confirmed transaction
  */
 function tokenGroupUpdateGroupAuthority(connection_1, payer_1, mint_1, updateAuthority_1, newAuthority_1) {
-    return __awaiter$y(this, arguments, void 0, function* (connection, payer, mint, updateAuthority, newAuthority, multiSigners = [], confirmOptions, programId = constants_js_1$A.TOKEN_2022_PROGRAM_ID) {
-        const [updateAuthorityPublicKey, signers] = (0, internal_js_1$k.getSigners)(updateAuthority, multiSigners);
-        const transaction = new web3_js_1$B.Transaction().add((0, spl_token_group_1.createUpdateGroupAuthorityInstruction)({
+    return __awaiter$A(this, arguments, void 0, function* (connection, payer, mint, updateAuthority, newAuthority, multiSigners = [], confirmOptions, programId = constants_js_1$C.TOKEN_2022_PROGRAM_ID) {
+        const [updateAuthorityPublicKey, signers] = (0, internal_js_1$m.getSigners)(updateAuthority, multiSigners);
+        const transaction = new web3_js_1$D.Transaction().add((0, spl_token_group_1.createUpdateGroupAuthorityInstruction)({
             programId,
             group: mint,
             currentAuthority: updateAuthorityPublicKey,
             newAuthority,
         }));
-        return yield (0, web3_js_1$B.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+        return yield (0, web3_js_1$D.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 /**
@@ -7231,9 +7243,9 @@ function tokenGroupUpdateGroupAuthority(connection_1, payer_1, mint_1, updateAut
  * @return Signature of the confirmed transaction
  */
 function tokenGroupMemberInitialize(connection_1, payer_1, mint_1, mintAuthority_1, group_1, groupUpdateAuthority_1) {
-    return __awaiter$y(this, arguments, void 0, function* (connection, payer, mint, mintAuthority, group, groupUpdateAuthority, multiSigners = [], confirmOptions, programId = constants_js_1$A.TOKEN_2022_PROGRAM_ID) {
-        const [mintAuthorityPublicKey, signers] = (0, internal_js_1$k.getSigners)(mintAuthority, multiSigners);
-        const transaction = new web3_js_1$B.Transaction().add((0, spl_token_group_1.createInitializeMemberInstruction)({
+    return __awaiter$A(this, arguments, void 0, function* (connection, payer, mint, mintAuthority, group, groupUpdateAuthority, multiSigners = [], confirmOptions, programId = constants_js_1$C.TOKEN_2022_PROGRAM_ID) {
+        const [mintAuthorityPublicKey, signers] = (0, internal_js_1$m.getSigners)(mintAuthority, multiSigners);
+        const transaction = new web3_js_1$D.Transaction().add((0, spl_token_group_1.createInitializeMemberInstruction)({
             programId,
             member: mint,
             memberMint: mint,
@@ -7241,7 +7253,7 @@ function tokenGroupMemberInitialize(connection_1, payer_1, mint_1, mintAuthority
             group,
             groupUpdateAuthority,
         }));
-        return yield (0, web3_js_1$B.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+        return yield (0, web3_js_1$D.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 /**
@@ -7263,10 +7275,10 @@ function tokenGroupMemberInitialize(connection_1, payer_1, mint_1, mintAuthority
  * @return Signature of the confirmed transaction
  */
 function tokenGroupMemberInitializeWithRentTransfer(connection_1, payer_1, mint_1, mintAuthority_1, group_1, groupUpdateAuthority_1) {
-    return __awaiter$y(this, arguments, void 0, function* (connection, payer, mint, mintAuthority, group, groupUpdateAuthority, multiSigners = [], confirmOptions, programId = constants_js_1$A.TOKEN_2022_PROGRAM_ID) {
-        const [mintAuthorityPublicKey, signers] = (0, internal_js_1$k.getSigners)(mintAuthority, multiSigners);
+    return __awaiter$A(this, arguments, void 0, function* (connection, payer, mint, mintAuthority, group, groupUpdateAuthority, multiSigners = [], confirmOptions, programId = constants_js_1$C.TOKEN_2022_PROGRAM_ID) {
+        const [mintAuthorityPublicKey, signers] = (0, internal_js_1$m.getSigners)(mintAuthority, multiSigners);
         const lamports = yield connection.getMinimumBalanceForRentExemption(spl_token_group_1.TOKEN_GROUP_MEMBER_SIZE);
-        const transaction = new web3_js_1$B.Transaction().add(web3_js_1$B.SystemProgram.transfer({
+        const transaction = new web3_js_1$D.Transaction().add(web3_js_1$D.SystemProgram.transfer({
             fromPubkey: payer.publicKey,
             toPubkey: mint,
             lamports,
@@ -7278,17 +7290,17 @@ function tokenGroupMemberInitializeWithRentTransfer(connection_1, payer_1, mint_
             group,
             groupUpdateAuthority,
         }));
-        return yield (0, web3_js_1$B.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+        return yield (0, web3_js_1$D.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
-var state$d = {};
+var state$e = {};
 
-var hasRequiredState$9;
+var hasRequiredState$a;
 
-function requireState$9 () {
-	if (hasRequiredState$9) return state$d;
-	hasRequiredState$9 = 1;
+function requireState$a () {
+	if (hasRequiredState$a) return state$e;
+	hasRequiredState$a = 1;
 	(function (exports) {
 		Object.defineProperty(exports, "__esModule", { value: true });
 		exports.TOKEN_GROUP_MEMBER_SIZE = exports.TOKEN_GROUP_SIZE = void 0;
@@ -7331,8 +7343,8 @@ function requireState$9 () {
 		    }
 		}
 		
-	} (state$d));
-	return state$d;
+	} (state$e));
+	return state$e;
 }
 
 var hasRequiredTokenGroup;
@@ -7357,19 +7369,19 @@ function requireTokenGroup () {
 		};
 		Object.defineProperty(exports, "__esModule", { value: true });
 		__exportStar(actions$7, exports);
-		__exportStar(requireState$9(), exports);
+		__exportStar(requireState$a(), exports);
 		
 	} (tokenGroup$1));
 	return tokenGroup$1;
 }
 
-var state$c = {};
+var state$d = {};
 
-var hasRequiredState$8;
+var hasRequiredState$9;
 
-function requireState$8 () {
-	if (hasRequiredState$8) return state$c;
-	hasRequiredState$8 = 1;
+function requireState$9 () {
+	if (hasRequiredState$9) return state$d;
+	hasRequiredState$9 = 1;
 	(function (exports) {
 		Object.defineProperty(exports, "__esModule", { value: true });
 		exports.GROUP_MEMBER_POINTER_SIZE = exports.GroupMemberPointerLayout = void 0;
@@ -7399,17 +7411,17 @@ function requireState$8 () {
 		    }
 		}
 		
-	} (state$c));
-	return state$c;
+	} (state$d));
+	return state$d;
 }
 
-var state$b = {};
+var state$c = {};
 
-var hasRequiredState$7;
+var hasRequiredState$8;
 
-function requireState$7 () {
-	if (hasRequiredState$7) return state$b;
-	hasRequiredState$7 = 1;
+function requireState$8 () {
+	if (hasRequiredState$8) return state$c;
+	hasRequiredState$8 = 1;
 	(function (exports) {
 		Object.defineProperty(exports, "__esModule", { value: true });
 		exports.GROUP_POINTER_SIZE = exports.GroupPointerLayout = void 0;
@@ -7439,8 +7451,8 @@ function requireState$7 () {
 		    }
 		}
 		
-	} (state$b));
-	return state$b;
+	} (state$c));
+	return state$c;
 }
 
 var immutableOwner = {};
@@ -7473,13 +7485,13 @@ function requireImmutableOwner () {
 	return immutableOwner;
 }
 
-var state$a = {};
+var state$b = {};
 
-var hasRequiredState$6;
+var hasRequiredState$7;
 
-function requireState$6 () {
-	if (hasRequiredState$6) return state$a;
-	hasRequiredState$6 = 1;
+function requireState$7 () {
+	if (hasRequiredState$7) return state$b;
+	hasRequiredState$7 = 1;
 	(function (exports) {
 		Object.defineProperty(exports, "__esModule", { value: true });
 		exports.INTEREST_BEARING_MINT_CONFIG_STATE_SIZE = exports.InterestBearingMintConfigStateLayout = void 0;
@@ -7503,15 +7515,15 @@ function requireState$6 () {
 		    return null;
 		}
 		
-	} (state$a));
-	return state$a;
+	} (state$b));
+	return state$b;
 }
 
 var memoTransfer = {};
 
 var actions$6 = {};
 
-var instructions$b = {};
+var instructions$c = {};
 
 (function (exports) {
 	Object.defineProperty(exports, "__esModule", { value: true });
@@ -7573,9 +7585,9 @@ var instructions$b = {};
 	    return new web3_js_1.TransactionInstruction({ keys, programId, data });
 	}
 	
-} (instructions$b));
+} (instructions$c));
 
-var __awaiter$x = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$z = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -7587,10 +7599,10 @@ var __awaiter$x = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 Object.defineProperty(actions$6, "__esModule", { value: true });
 actions$6.enableRequiredMemoTransfers = enableRequiredMemoTransfers;
 actions$6.disableRequiredMemoTransfers = disableRequiredMemoTransfers;
-const web3_js_1$A = require$$0__default["default"];
-const internal_js_1$j = internal$1;
-const constants_js_1$z = constants$1;
-const instructions_js_1$4 = instructions$b;
+const web3_js_1$C = require$$0__default["default"];
+const internal_js_1$l = internal$1;
+const constants_js_1$B = constants$1;
+const instructions_js_1$4 = instructions$c;
 /**
  * Enable memo transfers on the given account
  *
@@ -7605,10 +7617,10 @@ const instructions_js_1$4 = instructions$b;
  * @return Signature of the confirmed transaction
  */
 function enableRequiredMemoTransfers(connection_1, payer_1, account_1, owner_1) {
-    return __awaiter$x(this, arguments, void 0, function* (connection, payer, account, owner, multiSigners = [], confirmOptions, programId = constants_js_1$z.TOKEN_2022_PROGRAM_ID) {
-        const [ownerPublicKey, signers] = (0, internal_js_1$j.getSigners)(owner, multiSigners);
-        const transaction = new web3_js_1$A.Transaction().add((0, instructions_js_1$4.createEnableRequiredMemoTransfersInstruction)(account, ownerPublicKey, signers, programId));
-        return yield (0, web3_js_1$A.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$z(this, arguments, void 0, function* (connection, payer, account, owner, multiSigners = [], confirmOptions, programId = constants_js_1$B.TOKEN_2022_PROGRAM_ID) {
+        const [ownerPublicKey, signers] = (0, internal_js_1$l.getSigners)(owner, multiSigners);
+        const transaction = new web3_js_1$C.Transaction().add((0, instructions_js_1$4.createEnableRequiredMemoTransfersInstruction)(account, ownerPublicKey, signers, programId));
+        return yield (0, web3_js_1$C.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 /**
@@ -7625,20 +7637,20 @@ function enableRequiredMemoTransfers(connection_1, payer_1, account_1, owner_1) 
  * @return Signature of the confirmed transaction
  */
 function disableRequiredMemoTransfers(connection_1, payer_1, account_1, owner_1) {
-    return __awaiter$x(this, arguments, void 0, function* (connection, payer, account, owner, multiSigners = [], confirmOptions, programId = constants_js_1$z.TOKEN_2022_PROGRAM_ID) {
-        const [ownerPublicKey, signers] = (0, internal_js_1$j.getSigners)(owner, multiSigners);
-        const transaction = new web3_js_1$A.Transaction().add((0, instructions_js_1$4.createDisableRequiredMemoTransfersInstruction)(account, ownerPublicKey, signers, programId));
-        return yield (0, web3_js_1$A.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$z(this, arguments, void 0, function* (connection, payer, account, owner, multiSigners = [], confirmOptions, programId = constants_js_1$B.TOKEN_2022_PROGRAM_ID) {
+        const [ownerPublicKey, signers] = (0, internal_js_1$l.getSigners)(owner, multiSigners);
+        const transaction = new web3_js_1$C.Transaction().add((0, instructions_js_1$4.createDisableRequiredMemoTransfersInstruction)(account, ownerPublicKey, signers, programId));
+        return yield (0, web3_js_1$C.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
-var state$9 = {};
+var state$a = {};
 
-var hasRequiredState$5;
+var hasRequiredState$6;
 
-function requireState$5 () {
-	if (hasRequiredState$5) return state$9;
-	hasRequiredState$5 = 1;
+function requireState$6 () {
+	if (hasRequiredState$6) return state$a;
+	hasRequiredState$6 = 1;
 	(function (exports) {
 		Object.defineProperty(exports, "__esModule", { value: true });
 		exports.MEMO_TRANSFER_SIZE = exports.MemoTransferLayout = void 0;
@@ -7659,8 +7671,8 @@ function requireState$5 () {
 		    }
 		}
 		
-	} (state$9));
-	return state$9;
+	} (state$a));
+	return state$a;
 }
 
 var hasRequiredMemoTransfer;
@@ -7685,20 +7697,20 @@ function requireMemoTransfer () {
 		};
 		Object.defineProperty(exports, "__esModule", { value: true });
 		__exportStar(actions$6, exports);
-		__exportStar(instructions$b, exports);
-		__exportStar(requireState$5(), exports);
+		__exportStar(instructions$c, exports);
+		__exportStar(requireState$6(), exports);
 		
 	} (memoTransfer));
 	return memoTransfer;
 }
 
-var state$8 = {};
+var state$9 = {};
 
-var hasRequiredState$4;
+var hasRequiredState$5;
 
-function requireState$4 () {
-	if (hasRequiredState$4) return state$8;
-	hasRequiredState$4 = 1;
+function requireState$5 () {
+	if (hasRequiredState$5) return state$9;
+	hasRequiredState$5 = 1;
 	(function (exports) {
 		Object.defineProperty(exports, "__esModule", { value: true });
 		exports.METADATA_POINTER_SIZE = exports.MetadataPointerLayout = void 0;
@@ -7728,8 +7740,8 @@ function requireState$4 () {
 		    }
 		}
 		
-	} (state$8));
-	return state$8;
+	} (state$9));
+	return state$9;
 }
 
 var mintCloseAuthority = {};
@@ -7808,7 +7820,7 @@ var pausable = {};
 
 var actions$5 = {};
 
-var instructions$a = {};
+var instructions$b = {};
 
 (function (exports) {
 	Object.defineProperty(exports, "__esModule", { value: true });
@@ -7897,9 +7909,9 @@ var instructions$a = {};
 	    return new web3_js_1.TransactionInstruction({ keys, programId, data: data });
 	}
 	
-} (instructions$a));
+} (instructions$b));
 
-var __awaiter$w = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$y = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -7910,11 +7922,11 @@ var __awaiter$w = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(actions$5, "__esModule", { value: true });
 actions$5.pause = pause;
-actions$5.resume = resume;
-const web3_js_1$z = require$$0__default["default"];
-const internal_js_1$i = internal$1;
-const constants_js_1$y = constants$1;
-const instructions_js_1$3 = instructions$a;
+actions$5.resume = resume$1;
+const web3_js_1$B = require$$0__default["default"];
+const internal_js_1$k = internal$1;
+const constants_js_1$A = constants$1;
+const instructions_js_1$3 = instructions$b;
 /**
  * Pause a pausable mint
  *
@@ -7929,10 +7941,10 @@ const instructions_js_1$3 = instructions$a;
  * @return Public key of the mint
  */
 function pause(connection_1, payer_1, mint_1, owner_1) {
-    return __awaiter$w(this, arguments, void 0, function* (connection, payer, mint, owner, multiSigners = [], confirmOptions, programId = constants_js_1$y.TOKEN_2022_PROGRAM_ID) {
-        const [ownerPublicKey, signers] = (0, internal_js_1$i.getSigners)(owner, multiSigners);
-        const transaction = new web3_js_1$z.Transaction().add((0, instructions_js_1$3.createPauseInstruction)(mint, ownerPublicKey, multiSigners, programId));
-        return yield (0, web3_js_1$z.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$y(this, arguments, void 0, function* (connection, payer, mint, owner, multiSigners = [], confirmOptions, programId = constants_js_1$A.TOKEN_2022_PROGRAM_ID) {
+        const [ownerPublicKey, signers] = (0, internal_js_1$k.getSigners)(owner, multiSigners);
+        const transaction = new web3_js_1$B.Transaction().add((0, instructions_js_1$3.createPauseInstruction)(mint, ownerPublicKey, multiSigners, programId));
+        return yield (0, web3_js_1$B.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 /**
@@ -7948,21 +7960,21 @@ function pause(connection_1, payer_1, mint_1, owner_1) {
  *
  * @return Public key of the mint
  */
-function resume(connection_1, payer_1, mint_1, owner_1) {
-    return __awaiter$w(this, arguments, void 0, function* (connection, payer, mint, owner, multiSigners = [], confirmOptions, programId = constants_js_1$y.TOKEN_2022_PROGRAM_ID) {
-        const [ownerPublicKey, signers] = (0, internal_js_1$i.getSigners)(owner, multiSigners);
-        const transaction = new web3_js_1$z.Transaction().add((0, instructions_js_1$3.createResumeInstruction)(mint, ownerPublicKey, multiSigners, programId));
-        return yield (0, web3_js_1$z.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+function resume$1(connection_1, payer_1, mint_1, owner_1) {
+    return __awaiter$y(this, arguments, void 0, function* (connection, payer, mint, owner, multiSigners = [], confirmOptions, programId = constants_js_1$A.TOKEN_2022_PROGRAM_ID) {
+        const [ownerPublicKey, signers] = (0, internal_js_1$k.getSigners)(owner, multiSigners);
+        const transaction = new web3_js_1$B.Transaction().add((0, instructions_js_1$3.createResumeInstruction)(mint, ownerPublicKey, multiSigners, programId));
+        return yield (0, web3_js_1$B.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
-var state$7 = {};
+var state$8 = {};
 
-var hasRequiredState$3;
+var hasRequiredState$4;
 
-function requireState$3 () {
-	if (hasRequiredState$3) return state$7;
-	hasRequiredState$3 = 1;
+function requireState$4 () {
+	if (hasRequiredState$4) return state$8;
+	hasRequiredState$4 = 1;
 	(function (exports) {
 		Object.defineProperty(exports, "__esModule", { value: true });
 		exports.PAUSABLE_ACCOUNT_SIZE = exports.PausableAccountLayout = exports.PAUSABLE_CONFIG_SIZE = exports.PausableConfigLayout = void 0;
@@ -7996,8 +8008,8 @@ function requireState$3 () {
 		    }
 		}
 		
-	} (state$7));
-	return state$7;
+	} (state$8));
+	return state$8;
 }
 
 var hasRequiredPausable;
@@ -8022,8 +8034,8 @@ function requirePausable () {
 		};
 		Object.defineProperty(exports, "__esModule", { value: true });
 		__exportStar(actions$5, exports);
-		__exportStar(instructions$a, exports);
-		__exportStar(requireState$3(), exports);
+		__exportStar(instructions$b, exports);
+		__exportStar(requireState$4(), exports);
 		
 	} (pausable));
 	return pausable;
@@ -8060,11 +8072,46 @@ function requirePermanentDelegate () {
 	return permanentDelegate;
 }
 
+var state$7 = {};
+
+var hasRequiredState$3;
+
+function requireState$3 () {
+	if (hasRequiredState$3) return state$7;
+	hasRequiredState$3 = 1;
+	(function (exports) {
+		Object.defineProperty(exports, "__esModule", { value: true });
+		exports.PERMISSIONED_BURN_SIZE = exports.PermissionedBurnLayout = void 0;
+		exports.getPermissionedBurn = getPermissionedBurn;
+		const buffer_layout_1 = Layout$1;
+		const buffer_layout_utils_1 = cjs$2;
+		const web3_js_1 = require$$0__default["default"];
+		const extensionType_js_1 = requireExtensionType();
+		/** Buffer layout for de/serializing a permissioned burn config */
+		exports.PermissionedBurnLayout = (0, buffer_layout_1.struct)([(0, buffer_layout_utils_1.publicKey)('authority')]);
+		exports.PERMISSIONED_BURN_SIZE = exports.PermissionedBurnLayout.span;
+		function getPermissionedBurn(mint) {
+		    const extensionData = (0, extensionType_js_1.getExtensionData)(extensionType_js_1.ExtensionType.PermissionedBurn, mint.tlvData);
+		    if (extensionData !== null) {
+		        const { authority } = exports.PermissionedBurnLayout.decode(extensionData);
+		        return {
+		            authority: authority.equals(web3_js_1.PublicKey.default) ? null : authority,
+		        };
+		    }
+		    else {
+		        return null;
+		    }
+		}
+		
+	} (state$7));
+	return state$7;
+}
+
 var scaledUiAmount = {};
 
 var actions$4 = {};
 
-var instructions$9 = {};
+var instructions$a = {};
 
 (function (exports) {
 	Object.defineProperty(exports, "__esModule", { value: true });
@@ -8146,9 +8193,9 @@ var instructions$9 = {};
 	    return new web3_js_1.TransactionInstruction({ keys, programId, data });
 	}
 	
-} (instructions$9));
+} (instructions$a));
 
-var __awaiter$v = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$x = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -8159,10 +8206,10 @@ var __awaiter$v = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(actions$4, "__esModule", { value: true });
 actions$4.updateMultiplier = updateMultiplier;
-const web3_js_1$y = require$$0__default["default"];
-const internal_js_1$h = internal$1;
-const constants_js_1$x = constants$1;
-const instructions_js_1$2 = instructions$9;
+const web3_js_1$A = require$$0__default["default"];
+const internal_js_1$j = internal$1;
+const constants_js_1$z = constants$1;
+const instructions_js_1$2 = instructions$a;
 /**
  * Update scaled UI amount multiplier
  *
@@ -8179,10 +8226,10 @@ const instructions_js_1$2 = instructions$9;
  * @return Signature of the confirmed transaction
  */
 function updateMultiplier(connection_1, payer_1, mint_1, owner_1, multiplier_1, effectiveTimestamp_1) {
-    return __awaiter$v(this, arguments, void 0, function* (connection, payer, mint, owner, multiplier, effectiveTimestamp, multiSigners = [], confirmOptions, programId = constants_js_1$x.TOKEN_2022_PROGRAM_ID) {
-        const [ownerPublicKey, signers] = (0, internal_js_1$h.getSigners)(owner, multiSigners);
-        const transaction = new web3_js_1$y.Transaction().add((0, instructions_js_1$2.createUpdateMultiplierDataInstruction)(mint, ownerPublicKey, multiplier, effectiveTimestamp, multiSigners, programId));
-        return yield (0, web3_js_1$y.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$x(this, arguments, void 0, function* (connection, payer, mint, owner, multiplier, effectiveTimestamp, multiSigners = [], confirmOptions, programId = constants_js_1$z.TOKEN_2022_PROGRAM_ID) {
+        const [ownerPublicKey, signers] = (0, internal_js_1$j.getSigners)(owner, multiSigners);
+        const transaction = new web3_js_1$A.Transaction().add((0, instructions_js_1$2.createUpdateMultiplierDataInstruction)(mint, ownerPublicKey, multiplier, effectiveTimestamp, multiSigners, programId));
+        return yield (0, web3_js_1$A.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
@@ -8241,7 +8288,7 @@ function requireScaledUiAmount () {
 		};
 		Object.defineProperty(exports, "__esModule", { value: true });
 		__exportStar(actions$4, exports);
-		__exportStar(instructions$9, exports);
+		__exportStar(instructions$a, exports);
 		__exportStar(requireState$2(), exports);
 		
 	} (scaledUiAmount));
@@ -8252,18 +8299,18 @@ var transferFee = {};
 
 var actions$3 = {};
 
-var instructions$8 = {};
+var instructions$9 = {};
 
 var serialization = {};
 
 Object.defineProperty(serialization, "__esModule", { value: true });
-serialization.COptionPublicKeyLayout = void 0;
-const buffer_layout_1$3 = Layout$1;
-const buffer_layout_utils_1$1 = cjs$2;
-class COptionPublicKeyLayout extends buffer_layout_1$3.Layout {
+serialization.COptionU64Layout = serialization.COptionPublicKeyLayout = void 0;
+const buffer_layout_1$4 = Layout$1;
+const buffer_layout_utils_1$2 = cjs$2;
+class COptionPublicKeyLayout extends buffer_layout_1$4.Layout {
     constructor(property) {
         super(-1, property);
-        this.publicKeyLayout = (0, buffer_layout_utils_1$1.publicKey)();
+        this.publicKeyLayout = (0, buffer_layout_utils_1$2.publicKey)();
     }
     decode(buffer, offset = 0) {
         const option = buffer[offset];
@@ -8292,6 +8339,38 @@ class COptionPublicKeyLayout extends buffer_layout_1$3.Layout {
     }
 }
 serialization.COptionPublicKeyLayout = COptionPublicKeyLayout;
+class COptionU64Layout extends buffer_layout_1$4.Layout {
+    constructor(property) {
+        super(-1, property);
+        this.u64Layout = (0, buffer_layout_utils_1$2.u64)();
+    }
+    decode(buffer, offset = 0) {
+        const option = buffer[offset];
+        if (option === 0) {
+            return null;
+        }
+        return this.u64Layout.decode(buffer, offset + 1);
+    }
+    encode(src, buffer, offset = 0) {
+        if (src === null) {
+            buffer[offset] = 0;
+            return 1;
+        }
+        else {
+            buffer[offset] = 1;
+            this.u64Layout.encode(src, buffer, offset + 1);
+            return 9;
+        }
+    }
+    getSpan(buffer, offset = 0) {
+        if (buffer) {
+            const option = buffer[offset];
+            return option === 0 ? 1 : 1 + this.u64Layout.span;
+        }
+        throw new RangeError('Buffer must be provided');
+    }
+}
+serialization.COptionU64Layout = COptionU64Layout;
 
 (function (exports) {
 	Object.defineProperty(exports, "__esModule", { value: true });
@@ -8868,9 +8947,9 @@ serialization.COptionPublicKeyLayout = COptionPublicKeyLayout;
 	    };
 	}
 	
-} (instructions$8));
+} (instructions$9));
 
-var __awaiter$u = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$w = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -8885,10 +8964,10 @@ actions$3.withdrawWithheldTokensFromMint = withdrawWithheldTokensFromMint;
 actions$3.withdrawWithheldTokensFromAccounts = withdrawWithheldTokensFromAccounts;
 actions$3.harvestWithheldTokensToMint = harvestWithheldTokensToMint;
 actions$3.setTransferFee = setTransferFee;
-const web3_js_1$x = require$$0__default["default"];
-const internal_js_1$g = internal$1;
-const constants_js_1$w = constants$1;
-const instructions_js_1$1 = instructions$8;
+const web3_js_1$z = require$$0__default["default"];
+const internal_js_1$i = internal$1;
+const constants_js_1$y = constants$1;
+const instructions_js_1$1 = instructions$9;
 /**
  * Transfer tokens from one account to another, asserting the transfer fee, token mint, and decimals
  *
@@ -8907,10 +8986,10 @@ const instructions_js_1$1 = instructions$8;
  * @return Signature of the confirmed transaction
  */
 function transferCheckedWithFee(connection_1, payer_1, source_1, mint_1, destination_1, owner_1, amount_1, decimals_1, fee_1) {
-    return __awaiter$u(this, arguments, void 0, function* (connection, payer, source, mint, destination, owner, amount, decimals, fee, multiSigners = [], confirmOptions, programId = constants_js_1$w.TOKEN_2022_PROGRAM_ID) {
-        const [ownerPublicKey, signers] = (0, internal_js_1$g.getSigners)(owner, multiSigners);
-        const transaction = new web3_js_1$x.Transaction().add((0, instructions_js_1$1.createTransferCheckedWithFeeInstruction)(source, mint, destination, ownerPublicKey, amount, decimals, fee, multiSigners, programId));
-        return yield (0, web3_js_1$x.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$w(this, arguments, void 0, function* (connection, payer, source, mint, destination, owner, amount, decimals, fee, multiSigners = [], confirmOptions, programId = constants_js_1$y.TOKEN_2022_PROGRAM_ID) {
+        const [ownerPublicKey, signers] = (0, internal_js_1$i.getSigners)(owner, multiSigners);
+        const transaction = new web3_js_1$z.Transaction().add((0, instructions_js_1$1.createTransferCheckedWithFeeInstruction)(source, mint, destination, ownerPublicKey, amount, decimals, fee, multiSigners, programId));
+        return yield (0, web3_js_1$z.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 /**
@@ -8928,10 +9007,10 @@ function transferCheckedWithFee(connection_1, payer_1, source_1, mint_1, destina
  * @return Signature of the confirmed transaction
  */
 function withdrawWithheldTokensFromMint(connection_1, payer_1, mint_1, destination_1, authority_1) {
-    return __awaiter$u(this, arguments, void 0, function* (connection, payer, mint, destination, authority, multiSigners = [], confirmOptions, programId = constants_js_1$w.TOKEN_2022_PROGRAM_ID) {
-        const [authorityPublicKey, signers] = (0, internal_js_1$g.getSigners)(authority, multiSigners);
-        const transaction = new web3_js_1$x.Transaction().add((0, instructions_js_1$1.createWithdrawWithheldTokensFromMintInstruction)(mint, destination, authorityPublicKey, signers, programId));
-        return yield (0, web3_js_1$x.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$w(this, arguments, void 0, function* (connection, payer, mint, destination, authority, multiSigners = [], confirmOptions, programId = constants_js_1$y.TOKEN_2022_PROGRAM_ID) {
+        const [authorityPublicKey, signers] = (0, internal_js_1$i.getSigners)(authority, multiSigners);
+        const transaction = new web3_js_1$z.Transaction().add((0, instructions_js_1$1.createWithdrawWithheldTokensFromMintInstruction)(mint, destination, authorityPublicKey, signers, programId));
+        return yield (0, web3_js_1$z.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 /**
@@ -8950,10 +9029,10 @@ function withdrawWithheldTokensFromMint(connection_1, payer_1, mint_1, destinati
  * @return Signature of the confirmed transaction
  */
 function withdrawWithheldTokensFromAccounts(connection_1, payer_1, mint_1, destination_1, authority_1, multiSigners_1, sources_1, confirmOptions_1) {
-    return __awaiter$u(this, arguments, void 0, function* (connection, payer, mint, destination, authority, multiSigners, sources, confirmOptions, programId = constants_js_1$w.TOKEN_2022_PROGRAM_ID) {
-        const [authorityPublicKey, signers] = (0, internal_js_1$g.getSigners)(authority, multiSigners);
-        const transaction = new web3_js_1$x.Transaction().add((0, instructions_js_1$1.createWithdrawWithheldTokensFromAccountsInstruction)(mint, destination, authorityPublicKey, signers, sources, programId));
-        return yield (0, web3_js_1$x.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$w(this, arguments, void 0, function* (connection, payer, mint, destination, authority, multiSigners, sources, confirmOptions, programId = constants_js_1$y.TOKEN_2022_PROGRAM_ID) {
+        const [authorityPublicKey, signers] = (0, internal_js_1$i.getSigners)(authority, multiSigners);
+        const transaction = new web3_js_1$z.Transaction().add((0, instructions_js_1$1.createWithdrawWithheldTokensFromAccountsInstruction)(mint, destination, authorityPublicKey, signers, sources, programId));
+        return yield (0, web3_js_1$z.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 /**
@@ -8969,9 +9048,9 @@ function withdrawWithheldTokensFromAccounts(connection_1, payer_1, mint_1, desti
  * @return Signature of the confirmed transaction
  */
 function harvestWithheldTokensToMint(connection_1, payer_1, mint_1, sources_1, confirmOptions_1) {
-    return __awaiter$u(this, arguments, void 0, function* (connection, payer, mint, sources, confirmOptions, programId = constants_js_1$w.TOKEN_2022_PROGRAM_ID) {
-        const transaction = new web3_js_1$x.Transaction().add((0, instructions_js_1$1.createHarvestWithheldTokensToMintInstruction)(mint, sources, programId));
-        return yield (0, web3_js_1$x.sendAndConfirmTransaction)(connection, transaction, [payer], confirmOptions);
+    return __awaiter$w(this, arguments, void 0, function* (connection, payer, mint, sources, confirmOptions, programId = constants_js_1$y.TOKEN_2022_PROGRAM_ID) {
+        const transaction = new web3_js_1$z.Transaction().add((0, instructions_js_1$1.createHarvestWithheldTokensToMintInstruction)(mint, sources, programId));
+        return yield (0, web3_js_1$z.sendAndConfirmTransaction)(connection, transaction, [payer], confirmOptions);
     });
 }
 /**
@@ -8990,10 +9069,10 @@ function harvestWithheldTokensToMint(connection_1, payer_1, mint_1, sources_1, c
  * @return Signature of the confirmed transaction
  */
 function setTransferFee(connection_1, payer_1, mint_1, authority_1, multiSigners_1, transferFeeBasisPoints_1, maximumFee_1, confirmOptions_1) {
-    return __awaiter$u(this, arguments, void 0, function* (connection, payer, mint, authority, multiSigners, transferFeeBasisPoints, maximumFee, confirmOptions, programId = constants_js_1$w.TOKEN_2022_PROGRAM_ID) {
-        const [authorityPublicKey, signers] = (0, internal_js_1$g.getSigners)(authority, multiSigners);
-        const transaction = new web3_js_1$x.Transaction().add((0, instructions_js_1$1.createSetTransferFeeInstruction)(mint, authorityPublicKey, signers, transferFeeBasisPoints, maximumFee, programId));
-        return yield (0, web3_js_1$x.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$w(this, arguments, void 0, function* (connection, payer, mint, authority, multiSigners, transferFeeBasisPoints, maximumFee, confirmOptions, programId = constants_js_1$y.TOKEN_2022_PROGRAM_ID) {
+        const [authorityPublicKey, signers] = (0, internal_js_1$i.getSigners)(authority, multiSigners);
+        const transaction = new web3_js_1$z.Transaction().add((0, instructions_js_1$1.createSetTransferFeeInstruction)(mint, authorityPublicKey, signers, transferFeeBasisPoints, maximumFee, programId));
+        return yield (0, web3_js_1$z.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
@@ -9106,7 +9185,7 @@ function requireTransferFee () {
 		};
 		Object.defineProperty(exports, "__esModule", { value: true });
 		__exportStar(actions$3, exports);
-		__exportStar(instructions$8, exports);
+		__exportStar(instructions$9, exports);
 		__exportStar(requireState$1(), exports);
 		
 	} (transferFee));
@@ -9117,7 +9196,7 @@ var transferHook = {};
 
 var actions$2 = {};
 
-var instructions$7 = {};
+var instructions$8 = {};
 
 var transferChecked$2 = {};
 
@@ -9226,7 +9305,7 @@ var state$4 = {};
 
 var seeds = {};
 
-var __awaiter$t = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$v = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -9237,7 +9316,7 @@ var __awaiter$t = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(seeds, "__esModule", { value: true });
 seeds.unpackSeeds = unpackSeeds;
-const errors_js_1$6 = errors$4;
+const errors_js_1$7 = errors$4;
 const DISCRIMINATOR_SPAN = 1;
 const LITERAL_LENGTH_SPAN = 1;
 const INSTRUCTION_ARG_OFFSET_SPAN = 1;
@@ -9248,11 +9327,11 @@ const ACCOUNT_DATA_OFFSET_SPAN = 1;
 const ACCOUNT_DATA_LENGTH_SPAN = 1;
 function unpackSeedLiteral(seeds) {
     if (seeds.length < 1) {
-        throw new errors_js_1$6.TokenTransferHookInvalidSeed();
+        throw new errors_js_1$7.TokenTransferHookInvalidSeed();
     }
     const [length, ...rest] = seeds;
     if (rest.length < length) {
-        throw new errors_js_1$6.TokenTransferHookInvalidSeed();
+        throw new errors_js_1$7.TokenTransferHookInvalidSeed();
     }
     return {
         data: Buffer.from(rest.slice(0, length)),
@@ -9261,11 +9340,11 @@ function unpackSeedLiteral(seeds) {
 }
 function unpackSeedInstructionArg(seeds, instructionData) {
     if (seeds.length < 2) {
-        throw new errors_js_1$6.TokenTransferHookInvalidSeed();
+        throw new errors_js_1$7.TokenTransferHookInvalidSeed();
     }
     const [index, length] = seeds;
     if (instructionData.length < length + index) {
-        throw new errors_js_1$6.TokenTransferHookInvalidSeed();
+        throw new errors_js_1$7.TokenTransferHookInvalidSeed();
     }
     return {
         data: instructionData.subarray(index, index + length),
@@ -9274,11 +9353,11 @@ function unpackSeedInstructionArg(seeds, instructionData) {
 }
 function unpackSeedAccountKey(seeds, previousMetas) {
     if (seeds.length < 1) {
-        throw new errors_js_1$6.TokenTransferHookInvalidSeed();
+        throw new errors_js_1$7.TokenTransferHookInvalidSeed();
     }
     const [index] = seeds;
     if (previousMetas.length <= index) {
-        throw new errors_js_1$6.TokenTransferHookInvalidSeed();
+        throw new errors_js_1$7.TokenTransferHookInvalidSeed();
     }
     return {
         data: previousMetas[index].pubkey.toBuffer(),
@@ -9286,20 +9365,20 @@ function unpackSeedAccountKey(seeds, previousMetas) {
     };
 }
 function unpackSeedAccountData(seeds, previousMetas, connection) {
-    return __awaiter$t(this, void 0, void 0, function* () {
+    return __awaiter$v(this, void 0, void 0, function* () {
         if (seeds.length < 3) {
-            throw new errors_js_1$6.TokenTransferHookInvalidSeed();
+            throw new errors_js_1$7.TokenTransferHookInvalidSeed();
         }
         const [accountIndex, dataIndex, length] = seeds;
         if (previousMetas.length <= accountIndex) {
-            throw new errors_js_1$6.TokenTransferHookInvalidSeed();
+            throw new errors_js_1$7.TokenTransferHookInvalidSeed();
         }
         const accountInfo = yield connection.getAccountInfo(previousMetas[accountIndex].pubkey);
         if (accountInfo == null) {
-            throw new errors_js_1$6.TokenTransferHookAccountDataNotFound();
+            throw new errors_js_1$7.TokenTransferHookAccountDataNotFound();
         }
         if (accountInfo.data.length < dataIndex + length) {
-            throw new errors_js_1$6.TokenTransferHookInvalidSeed();
+            throw new errors_js_1$7.TokenTransferHookInvalidSeed();
         }
         return {
             data: accountInfo.data.subarray(dataIndex, dataIndex + length),
@@ -9308,7 +9387,7 @@ function unpackSeedAccountData(seeds, previousMetas, connection) {
     });
 }
 function unpackFirstSeed(seeds, previousMetas, instructionData, connection) {
-    return __awaiter$t(this, void 0, void 0, function* () {
+    return __awaiter$v(this, void 0, void 0, function* () {
         const [discriminator, ...rest] = seeds;
         const remaining = new Uint8Array(rest);
         switch (discriminator) {
@@ -9323,12 +9402,12 @@ function unpackFirstSeed(seeds, previousMetas, instructionData, connection) {
             case 4:
                 return unpackSeedAccountData(remaining, previousMetas, connection);
             default:
-                throw new errors_js_1$6.TokenTransferHookInvalidSeed();
+                throw new errors_js_1$7.TokenTransferHookInvalidSeed();
         }
     });
 }
 function unpackSeeds(seeds, previousMetas, instructionData, connection) {
-    return __awaiter$t(this, void 0, void 0, function* () {
+    return __awaiter$v(this, void 0, void 0, function* () {
         const unpackedSeeds = [];
         let i = 0;
         while (i < 32) {
@@ -9345,7 +9424,7 @@ function unpackSeeds(seeds, previousMetas, instructionData, connection) {
 
 var pubkeyData = {};
 
-var __awaiter$s = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$u = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -9356,10 +9435,10 @@ var __awaiter$s = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(pubkeyData, "__esModule", { value: true });
 pubkeyData.unpackPubkeyData = unpackPubkeyData;
-const web3_js_1$w = require$$0__default["default"];
-const errors_js_1$5 = errors$4;
+const web3_js_1$y = require$$0__default["default"];
+const errors_js_1$6 = errors$4;
 function unpackPubkeyData(keyDataConfig, previousMetas, instructionData, connection) {
-    return __awaiter$s(this, void 0, void 0, function* () {
+    return __awaiter$u(this, void 0, void 0, function* () {
         const [discriminator, ...rest] = keyDataConfig;
         const remaining = new Uint8Array(rest);
         switch (discriminator) {
@@ -9368,37 +9447,37 @@ function unpackPubkeyData(keyDataConfig, previousMetas, instructionData, connect
             case 2:
                 return unpackPubkeyDataFromAccountData(remaining, previousMetas, connection);
             default:
-                throw new errors_js_1$5.TokenTransferHookInvalidPubkeyData();
+                throw new errors_js_1$6.TokenTransferHookInvalidPubkeyData();
         }
     });
 }
 function unpackPubkeyDataFromInstructionData(remaining, instructionData) {
     if (remaining.length < 1) {
-        throw new errors_js_1$5.TokenTransferHookInvalidPubkeyData();
+        throw new errors_js_1$6.TokenTransferHookInvalidPubkeyData();
     }
     const dataIndex = remaining[0];
-    if (instructionData.length < dataIndex + web3_js_1$w.PUBLIC_KEY_LENGTH) {
-        throw new errors_js_1$5.TokenTransferHookPubkeyDataTooSmall();
+    if (instructionData.length < dataIndex + web3_js_1$y.PUBLIC_KEY_LENGTH) {
+        throw new errors_js_1$6.TokenTransferHookPubkeyDataTooSmall();
     }
-    return new web3_js_1$w.PublicKey(instructionData.subarray(dataIndex, dataIndex + web3_js_1$w.PUBLIC_KEY_LENGTH));
+    return new web3_js_1$y.PublicKey(instructionData.subarray(dataIndex, dataIndex + web3_js_1$y.PUBLIC_KEY_LENGTH));
 }
 function unpackPubkeyDataFromAccountData(remaining, previousMetas, connection) {
-    return __awaiter$s(this, void 0, void 0, function* () {
+    return __awaiter$u(this, void 0, void 0, function* () {
         if (remaining.length < 2) {
-            throw new errors_js_1$5.TokenTransferHookInvalidPubkeyData();
+            throw new errors_js_1$6.TokenTransferHookInvalidPubkeyData();
         }
         const [accountIndex, dataIndex] = remaining;
         if (previousMetas.length <= accountIndex) {
-            throw new errors_js_1$5.TokenTransferHookAccountDataNotFound();
+            throw new errors_js_1$6.TokenTransferHookAccountDataNotFound();
         }
         const accountInfo = yield connection.getAccountInfo(previousMetas[accountIndex].pubkey);
         if (accountInfo == null) {
-            throw new errors_js_1$5.TokenTransferHookAccountNotFound();
+            throw new errors_js_1$6.TokenTransferHookAccountNotFound();
         }
-        if (accountInfo.data.length < dataIndex + web3_js_1$w.PUBLIC_KEY_LENGTH) {
-            throw new errors_js_1$5.TokenTransferHookPubkeyDataTooSmall();
+        if (accountInfo.data.length < dataIndex + web3_js_1$y.PUBLIC_KEY_LENGTH) {
+            throw new errors_js_1$6.TokenTransferHookPubkeyDataTooSmall();
         }
-        return new web3_js_1$w.PublicKey(accountInfo.data.subarray(dataIndex, dataIndex + web3_js_1$w.PUBLIC_KEY_LENGTH));
+        return new web3_js_1$y.PublicKey(accountInfo.data.subarray(dataIndex, dataIndex + web3_js_1$y.PUBLIC_KEY_LENGTH));
     });
 }
 
@@ -9524,7 +9603,7 @@ function requireState () {
 var hasRequiredInstructions;
 
 function requireInstructions () {
-	if (hasRequiredInstructions) return instructions$7;
+	if (hasRequiredInstructions) return instructions$8;
 	hasRequiredInstructions = 1;
 	(function (exports) {
 		var __awaiter = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
@@ -9552,7 +9631,7 @@ function requireInstructions () {
 		const types_js_1 = types$2;
 		const buffer_layout_utils_1 = cjs$2;
 		const transferChecked_js_1 = transferChecked$2;
-		const instructions_js_1 = instructions$8;
+		const instructions_js_1 = instructions$9;
 		const mint_js_1 = requireMint();
 		const state_js_1 = requireState();
 		var TransferHookInstruction;
@@ -9758,8 +9837,8 @@ function requireInstructions () {
 		    });
 		}
 		
-	} (instructions$7));
-	return instructions$7;
+	} (instructions$8));
+	return instructions$8;
 }
 
 var hasRequiredActions;
@@ -9934,16 +10013,17 @@ function requireExtensionType () {
 		const index_js_1 = requireCpiGuard();
 		const index_js_2 = requireDefaultAccountState();
 		const index_js_3 = requireTokenGroup();
-		const state_js_1 = requireState$8();
-		const state_js_2 = requireState$7();
+		const state_js_1 = requireState$9();
+		const state_js_2 = requireState$8();
 		const immutableOwner_js_1 = requireImmutableOwner();
-		const state_js_3 = requireState$6();
+		const state_js_3 = requireState$7();
 		const index_js_4 = requireMemoTransfer();
-		const state_js_4 = requireState$4();
+		const state_js_4 = requireState$5();
 		const mintCloseAuthority_js_1 = requireMintCloseAuthority();
 		const nonTransferable_js_1 = requireNonTransferable();
 		const index_js_5 = requirePausable();
 		const permanentDelegate_js_1 = requirePermanentDelegate();
+		const state_js_5 = requireState$3();
 		const index_js_6 = requireScaledUiAmount();
 		const index_js_7 = requireTransferFee();
 		const index_js_8 = requireTransferHook();
@@ -9979,6 +10059,7 @@ function requireExtensionType () {
 		    ExtensionType[ExtensionType["ScaledUiAmountConfig"] = 25] = "ScaledUiAmountConfig";
 		    ExtensionType[ExtensionType["PausableConfig"] = 26] = "PausableConfig";
 		    ExtensionType[ExtensionType["PausableAccount"] = 27] = "PausableAccount";
+		    ExtensionType[ExtensionType["PermissionedBurn"] = 28] = "PermissionedBurn";
 		})(ExtensionType || (exports.ExtensionType = ExtensionType = {}));
 		exports.TYPE_SIZE = 2;
 		exports.LENGTH_SIZE = 2;
@@ -10045,6 +10126,8 @@ function requireExtensionType () {
 		            return index_js_5.PAUSABLE_CONFIG_SIZE;
 		        case ExtensionType.PausableAccount:
 		            return index_js_5.PAUSABLE_ACCOUNT_SIZE;
+		        case ExtensionType.PermissionedBurn:
+		            return state_js_5.PERMISSIONED_BURN_SIZE;
 		        case ExtensionType.TokenMetadata:
 		            throw Error(`Cannot get type length for variable extension type: ${e}`);
 		        default:
@@ -10069,6 +10152,7 @@ function requireExtensionType () {
 		        case ExtensionType.TokenGroupMember:
 		        case ExtensionType.ScaledUiAmountConfig:
 		        case ExtensionType.PausableConfig:
+		        case ExtensionType.PermissionedBurn:
 		            return true;
 		        case ExtensionType.Uninitialized:
 		        case ExtensionType.TransferFeeAmount:
@@ -10112,6 +10196,7 @@ function requireExtensionType () {
 		        case ExtensionType.TokenGroupMember:
 		        case ExtensionType.ScaledUiAmountConfig:
 		        case ExtensionType.PausableConfig:
+		        case ExtensionType.PermissionedBurn:
 		            return false;
 		        default:
 		            throw Error(`Unknown extension type: ${e}`);
@@ -10149,6 +10234,7 @@ function requireExtensionType () {
 		        case ExtensionType.TokenGroupMember:
 		        case ExtensionType.ScaledUiAmountConfig:
 		        case ExtensionType.PausableAccount:
+		        case ExtensionType.PermissionedBurn:
 		            return ExtensionType.Uninitialized;
 		    }
 		}
@@ -10392,7 +10478,7 @@ function requireMint () {
 	return mint;
 }
 
-var __awaiter$r = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$t = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -10409,16 +10495,16 @@ amountToUiAmount$2.amountToUiAmountForMintWithoutSimulation = amountToUiAmountFo
 amountToUiAmount$2.uiAmountToAmountForInterestBearingMintWithoutSimulation = uiAmountToAmountForInterestBearingMintWithoutSimulation;
 amountToUiAmount$2.uiAmountToAmountForScaledUiAmountMintWithoutSimulation = uiAmountToAmountForScaledUiAmountMintWithoutSimulation;
 amountToUiAmount$2.uiAmountToAmountForMintWithoutSimulation = uiAmountToAmountForMintWithoutSimulation;
-const web3_js_1$v = require$$0__default["default"];
-const constants_js_1$v = constants$1;
+const web3_js_1$x = require$$0__default["default"];
+const constants_js_1$x = constants$1;
 const amountToUiAmount_js_1$1 = amountToUiAmount$1;
 const mint_js_1$9 = requireMint();
-const state_js_1$1 = requireState$6();
+const state_js_1$1 = requireState$7();
 const state_js_2 = requireState$2();
 // Constants for interest calculations
 const ONE_IN_BASIS_POINTS = 10000;
 const SECONDS_PER_YEAR = 60 * 60 * 24 * 365.24;
-const SYSVAR_CLOCK_PUBKEY = new web3_js_1$v.PublicKey('SysvarC1ock11111111111111111111111111111111');
+const SYSVAR_CLOCK_PUBKEY = new web3_js_1$x.PublicKey('SysvarC1ock11111111111111111111111111111111');
 /**
  * Amount as a string using mint-prescribed decimals
  *
@@ -10431,8 +10517,8 @@ const SYSVAR_CLOCK_PUBKEY = new web3_js_1$v.PublicKey('SysvarC1ock11111111111111
  * @return Ui Amount generated or error
  */
 function amountToUiAmount(connection_1, payer_1, mint_1, amount_1) {
-    return __awaiter$r(this, arguments, void 0, function* (connection, payer, mint, amount, programId = constants_js_1$v.TOKEN_PROGRAM_ID) {
-        const transaction = new web3_js_1$v.Transaction().add((0, amountToUiAmount_js_1$1.createAmountToUiAmountInstruction)(mint, amount, programId));
+    return __awaiter$t(this, arguments, void 0, function* (connection, payer, mint, amount, programId = constants_js_1$x.TOKEN_PROGRAM_ID) {
+        const transaction = new web3_js_1$x.Transaction().add((0, amountToUiAmount_js_1$1.createAmountToUiAmountInstruction)(mint, amount, programId));
         const { returnData, err } = (yield connection.simulateTransaction(transaction, [payer], false)).value;
         if (returnData === null || returnData === void 0 ? void 0 : returnData.data) {
             return Buffer.from(returnData.data[0], returnData.data[1]).toString('utf-8');
@@ -10460,7 +10546,7 @@ function calculateExponentForTimesAndRate(t1, t2, r) {
  * @throws An error if the sysvar clock cannot be fetched or parsed.
  */
 function getSysvarClockTimestamp(connection) {
-    return __awaiter$r(this, void 0, void 0, function* () {
+    return __awaiter$t(this, void 0, void 0, function* () {
         const info = yield connection.getParsedAccountInfo(SYSVAR_CLOCK_PUBKEY);
         if (!(info === null || info === void 0 ? void 0 : info.value)) {
             throw new Error('Failed to fetch sysvar clock');
@@ -10558,10 +10644,10 @@ function amountToUiAmountForScaledUiAmountMintWithoutSimulation(amount, decimals
  * @return Ui Amount generated
  */
 function amountToUiAmountForMintWithoutSimulation(connection, mint, amount) {
-    return __awaiter$r(this, void 0, void 0, function* () {
+    return __awaiter$t(this, void 0, void 0, function* () {
         const accountInfo = yield connection.getAccountInfo(mint);
         const programId = accountInfo === null || accountInfo === void 0 ? void 0 : accountInfo.owner;
-        if (!(programId === null || programId === void 0 ? void 0 : programId.equals(constants_js_1$v.TOKEN_PROGRAM_ID)) && !(programId === null || programId === void 0 ? void 0 : programId.equals(constants_js_1$v.TOKEN_2022_PROGRAM_ID))) {
+        if (!(programId === null || programId === void 0 ? void 0 : programId.equals(constants_js_1$x.TOKEN_PROGRAM_ID)) && !(programId === null || programId === void 0 ? void 0 : programId.equals(constants_js_1$x.TOKEN_2022_PROGRAM_ID))) {
             throw new Error('Invalid program ID');
         }
         const mintInfo = (0, mint_js_1$9.unpackMint)(mint, accountInfo, programId);
@@ -10646,10 +10732,10 @@ function uiAmountToAmountForScaledUiAmountMintWithoutSimulation(uiAmount, decima
  * @return Raw amount
  */
 function uiAmountToAmountForMintWithoutSimulation(connection, mint, uiAmount) {
-    return __awaiter$r(this, void 0, void 0, function* () {
+    return __awaiter$t(this, void 0, void 0, function* () {
         const accountInfo = yield connection.getAccountInfo(mint);
         const programId = accountInfo === null || accountInfo === void 0 ? void 0 : accountInfo.owner;
-        if (!(programId === null || programId === void 0 ? void 0 : programId.equals(constants_js_1$v.TOKEN_PROGRAM_ID)) && !(programId === null || programId === void 0 ? void 0 : programId.equals(constants_js_1$v.TOKEN_2022_PROGRAM_ID))) {
+        if (!(programId === null || programId === void 0 ? void 0 : programId.equals(constants_js_1$x.TOKEN_PROGRAM_ID)) && !(programId === null || programId === void 0 ? void 0 : programId.equals(constants_js_1$x.TOKEN_2022_PROGRAM_ID))) {
             throw new Error('Invalid program ID');
         }
         const mintInfo = (0, mint_js_1$9.unpackMint)(mint, accountInfo, programId);
@@ -10769,7 +10855,7 @@ var approve$1 = {};
 	
 } (approve$1));
 
-var __awaiter$q = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$s = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -10780,10 +10866,10 @@ var __awaiter$q = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(approve$2, "__esModule", { value: true });
 approve$2.approve = approve;
-const web3_js_1$u = require$$0__default["default"];
-const constants_js_1$u = constants$1;
+const web3_js_1$w = require$$0__default["default"];
+const constants_js_1$w = constants$1;
 const approve_js_1$1 = approve$1;
-const internal_js_1$f = internal$1;
+const internal_js_1$h = internal$1;
 /**
  * Approve a delegate to transfer up to a maximum number of tokens from an account
  *
@@ -10800,10 +10886,10 @@ const internal_js_1$f = internal$1;
  * @return Signature of the confirmed transaction
  */
 function approve(connection_1, payer_1, account_1, delegate_1, owner_1, amount_1) {
-    return __awaiter$q(this, arguments, void 0, function* (connection, payer, account, delegate, owner, amount, multiSigners = [], confirmOptions, programId = constants_js_1$u.TOKEN_PROGRAM_ID) {
-        const [ownerPublicKey, signers] = (0, internal_js_1$f.getSigners)(owner, multiSigners);
-        const transaction = new web3_js_1$u.Transaction().add((0, approve_js_1$1.createApproveInstruction)(account, delegate, ownerPublicKey, amount, multiSigners, programId));
-        return yield (0, web3_js_1$u.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$s(this, arguments, void 0, function* (connection, payer, account, delegate, owner, amount, multiSigners = [], confirmOptions, programId = constants_js_1$w.TOKEN_PROGRAM_ID) {
+        const [ownerPublicKey, signers] = (0, internal_js_1$h.getSigners)(owner, multiSigners);
+        const transaction = new web3_js_1$w.Transaction().add((0, approve_js_1$1.createApproveInstruction)(account, delegate, ownerPublicKey, amount, multiSigners, programId));
+        return yield (0, web3_js_1$w.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
@@ -10912,7 +10998,7 @@ var approveChecked$1 = {};
 	
 } (approveChecked$1));
 
-var __awaiter$p = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$r = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -10923,10 +11009,10 @@ var __awaiter$p = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(approveChecked$2, "__esModule", { value: true });
 approveChecked$2.approveChecked = approveChecked;
-const web3_js_1$t = require$$0__default["default"];
-const constants_js_1$t = constants$1;
+const web3_js_1$v = require$$0__default["default"];
+const constants_js_1$v = constants$1;
 const approveChecked_js_1$1 = approveChecked$1;
-const internal_js_1$e = internal$1;
+const internal_js_1$g = internal$1;
 /**
  * Approve a delegate to transfer up to a maximum number of tokens from an account, asserting the token mint and
  * decimals
@@ -10946,10 +11032,10 @@ const internal_js_1$e = internal$1;
  * @return Signature of the confirmed transaction
  */
 function approveChecked(connection_1, payer_1, mint_1, account_1, delegate_1, owner_1, amount_1, decimals_1) {
-    return __awaiter$p(this, arguments, void 0, function* (connection, payer, mint, account, delegate, owner, amount, decimals, multiSigners = [], confirmOptions, programId = constants_js_1$t.TOKEN_PROGRAM_ID) {
-        const [ownerPublicKey, signers] = (0, internal_js_1$e.getSigners)(owner, multiSigners);
-        const transaction = new web3_js_1$t.Transaction().add((0, approveChecked_js_1$1.createApproveCheckedInstruction)(account, mint, delegate, ownerPublicKey, amount, decimals, multiSigners, programId));
-        return yield (0, web3_js_1$t.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$r(this, arguments, void 0, function* (connection, payer, mint, account, delegate, owner, amount, decimals, multiSigners = [], confirmOptions, programId = constants_js_1$v.TOKEN_PROGRAM_ID) {
+        const [ownerPublicKey, signers] = (0, internal_js_1$g.getSigners)(owner, multiSigners);
+        const transaction = new web3_js_1$v.Transaction().add((0, approveChecked_js_1$1.createApproveCheckedInstruction)(account, mint, delegate, ownerPublicKey, amount, decimals, multiSigners, programId));
+        return yield (0, web3_js_1$v.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
@@ -11048,7 +11134,7 @@ var burn$1 = {};
 	
 } (burn$1));
 
-var __awaiter$o = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$q = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -11059,10 +11145,10 @@ var __awaiter$o = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(burn$2, "__esModule", { value: true });
 burn$2.burn = burn;
-const web3_js_1$s = require$$0__default["default"];
-const constants_js_1$s = constants$1;
+const web3_js_1$u = require$$0__default["default"];
+const constants_js_1$u = constants$1;
 const burn_js_1$1 = burn$1;
-const internal_js_1$d = internal$1;
+const internal_js_1$f = internal$1;
 /**
  * Burn tokens from an account
  *
@@ -11079,10 +11165,10 @@ const internal_js_1$d = internal$1;
  * @return Signature of the confirmed transaction
  */
 function burn(connection_1, payer_1, account_1, mint_1, owner_1, amount_1) {
-    return __awaiter$o(this, arguments, void 0, function* (connection, payer, account, mint, owner, amount, multiSigners = [], confirmOptions, programId = constants_js_1$s.TOKEN_PROGRAM_ID) {
-        const [ownerPublicKey, signers] = (0, internal_js_1$d.getSigners)(owner, multiSigners);
-        const transaction = new web3_js_1$s.Transaction().add((0, burn_js_1$1.createBurnInstruction)(account, mint, ownerPublicKey, amount, multiSigners, programId));
-        return yield (0, web3_js_1$s.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$q(this, arguments, void 0, function* (connection, payer, account, mint, owner, amount, multiSigners = [], confirmOptions, programId = constants_js_1$u.TOKEN_PROGRAM_ID) {
+        const [ownerPublicKey, signers] = (0, internal_js_1$f.getSigners)(owner, multiSigners);
+        const transaction = new web3_js_1$u.Transaction().add((0, burn_js_1$1.createBurnInstruction)(account, mint, ownerPublicKey, amount, multiSigners, programId));
+        return yield (0, web3_js_1$u.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
@@ -11187,7 +11273,7 @@ var burnChecked$1 = {};
 	
 } (burnChecked$1));
 
-var __awaiter$n = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$p = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -11198,10 +11284,10 @@ var __awaiter$n = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(burnChecked$2, "__esModule", { value: true });
 burnChecked$2.burnChecked = burnChecked;
-const web3_js_1$r = require$$0__default["default"];
-const constants_js_1$r = constants$1;
+const web3_js_1$t = require$$0__default["default"];
+const constants_js_1$t = constants$1;
 const burnChecked_js_1$1 = burnChecked$1;
-const internal_js_1$c = internal$1;
+const internal_js_1$e = internal$1;
 /**
  * Burn tokens from an account, asserting the token mint and decimals
  *
@@ -11219,10 +11305,10 @@ const internal_js_1$c = internal$1;
  * @return Signature of the confirmed transaction
  */
 function burnChecked(connection_1, payer_1, account_1, mint_1, owner_1, amount_1, decimals_1) {
-    return __awaiter$n(this, arguments, void 0, function* (connection, payer, account, mint, owner, amount, decimals, multiSigners = [], confirmOptions, programId = constants_js_1$r.TOKEN_PROGRAM_ID) {
-        const [ownerPublicKey, signers] = (0, internal_js_1$c.getSigners)(owner, multiSigners);
-        const transaction = new web3_js_1$r.Transaction().add((0, burnChecked_js_1$1.createBurnCheckedInstruction)(account, mint, ownerPublicKey, amount, decimals, multiSigners, programId));
-        return yield (0, web3_js_1$r.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$p(this, arguments, void 0, function* (connection, payer, account, mint, owner, amount, decimals, multiSigners = [], confirmOptions, programId = constants_js_1$t.TOKEN_PROGRAM_ID) {
+        const [ownerPublicKey, signers] = (0, internal_js_1$e.getSigners)(owner, multiSigners);
+        const transaction = new web3_js_1$t.Transaction().add((0, burnChecked_js_1$1.createBurnCheckedInstruction)(account, mint, ownerPublicKey, amount, decimals, multiSigners, programId));
+        return yield (0, web3_js_1$t.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
@@ -11316,7 +11402,7 @@ var closeAccount$1 = {};
 	
 } (closeAccount$1));
 
-var __awaiter$m = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$o = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -11327,10 +11413,10 @@ var __awaiter$m = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(closeAccount$2, "__esModule", { value: true });
 closeAccount$2.closeAccount = closeAccount;
-const web3_js_1$q = require$$0__default["default"];
-const constants_js_1$q = constants$1;
+const web3_js_1$s = require$$0__default["default"];
+const constants_js_1$s = constants$1;
 const closeAccount_js_1$1 = closeAccount$1;
-const internal_js_1$b = internal$1;
+const internal_js_1$d = internal$1;
 /**
  * Close a token account
  *
@@ -11346,10 +11432,10 @@ const internal_js_1$b = internal$1;
  * @return Signature of the confirmed transaction
  */
 function closeAccount(connection_1, payer_1, account_1, destination_1, authority_1) {
-    return __awaiter$m(this, arguments, void 0, function* (connection, payer, account, destination, authority, multiSigners = [], confirmOptions, programId = constants_js_1$q.TOKEN_PROGRAM_ID) {
-        const [authorityPublicKey, signers] = (0, internal_js_1$b.getSigners)(authority, multiSigners);
-        const transaction = new web3_js_1$q.Transaction().add((0, closeAccount_js_1$1.createCloseAccountInstruction)(account, destination, authorityPublicKey, multiSigners, programId));
-        return yield (0, web3_js_1$q.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$o(this, arguments, void 0, function* (connection, payer, account, destination, authority, multiSigners = [], confirmOptions, programId = constants_js_1$s.TOKEN_PROGRAM_ID) {
+        const [authorityPublicKey, signers] = (0, internal_js_1$d.getSigners)(authority, multiSigners);
+        const transaction = new web3_js_1$s.Transaction().add((0, closeAccount_js_1$1.createCloseAccountInstruction)(account, destination, authorityPublicKey, multiSigners, programId));
+        return yield (0, web3_js_1$s.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
@@ -11452,8 +11538,8 @@ associatedTokenAccount.createAssociatedTokenAccountInstruction = createAssociate
 associatedTokenAccount.createAssociatedTokenAccountIdempotentInstruction = createAssociatedTokenAccountIdempotentInstruction;
 associatedTokenAccount.createAssociatedTokenAccountIdempotentInstructionWithDerivation = createAssociatedTokenAccountIdempotentInstructionWithDerivation;
 associatedTokenAccount.createRecoverNestedInstruction = createRecoverNestedInstruction;
-const web3_js_1$p = require$$0__default["default"];
-const constants_js_1$p = constants$1;
+const web3_js_1$r = require$$0__default["default"];
+const constants_js_1$r = constants$1;
 const mint_js_1$8 = requireMint();
 /**
  * Construct a CreateAssociatedTokenAccount instruction
@@ -11467,7 +11553,7 @@ const mint_js_1$8 = requireMint();
  *
  * @return Instruction to add to a transaction
  */
-function createAssociatedTokenAccountInstruction$2(payer, associatedToken, owner, mint, programId = constants_js_1$p.TOKEN_PROGRAM_ID, associatedTokenProgramId = constants_js_1$p.ASSOCIATED_TOKEN_PROGRAM_ID) {
+function createAssociatedTokenAccountInstruction$2(payer, associatedToken, owner, mint, programId = constants_js_1$r.TOKEN_PROGRAM_ID, associatedTokenProgramId = constants_js_1$r.ASSOCIATED_TOKEN_PROGRAM_ID) {
     return buildAssociatedTokenAccountInstruction(payer, associatedToken, owner, mint, Buffer.alloc(0), programId, associatedTokenProgramId);
 }
 /**
@@ -11482,7 +11568,7 @@ function createAssociatedTokenAccountInstruction$2(payer, associatedToken, owner
  *
  * @return Instruction to add to a transaction
  */
-function createAssociatedTokenAccountIdempotentInstruction(payer, associatedToken, owner, mint, programId = constants_js_1$p.TOKEN_PROGRAM_ID, associatedTokenProgramId = constants_js_1$p.ASSOCIATED_TOKEN_PROGRAM_ID) {
+function createAssociatedTokenAccountIdempotentInstruction(payer, associatedToken, owner, mint, programId = constants_js_1$r.TOKEN_PROGRAM_ID, associatedTokenProgramId = constants_js_1$r.ASSOCIATED_TOKEN_PROGRAM_ID) {
     return buildAssociatedTokenAccountInstruction(payer, associatedToken, owner, mint, Buffer.from([1]), programId, associatedTokenProgramId);
 }
 /**
@@ -11497,20 +11583,20 @@ function createAssociatedTokenAccountIdempotentInstruction(payer, associatedToke
  *
  * @return Instruction to add to a transaction
  */
-function createAssociatedTokenAccountIdempotentInstructionWithDerivation(payer, owner, mint, allowOwnerOffCurve = true, programId = constants_js_1$p.TOKEN_PROGRAM_ID, associatedTokenProgramId = constants_js_1$p.ASSOCIATED_TOKEN_PROGRAM_ID) {
+function createAssociatedTokenAccountIdempotentInstructionWithDerivation(payer, owner, mint, allowOwnerOffCurve = true, programId = constants_js_1$r.TOKEN_PROGRAM_ID, associatedTokenProgramId = constants_js_1$r.ASSOCIATED_TOKEN_PROGRAM_ID) {
     const associatedToken = (0, mint_js_1$8.getAssociatedTokenAddressSync)(mint, owner, allowOwnerOffCurve);
     return createAssociatedTokenAccountIdempotentInstruction(payer, associatedToken, owner, mint, programId, associatedTokenProgramId);
 }
-function buildAssociatedTokenAccountInstruction(payer, associatedToken, owner, mint, instructionData, programId = constants_js_1$p.TOKEN_PROGRAM_ID, associatedTokenProgramId = constants_js_1$p.ASSOCIATED_TOKEN_PROGRAM_ID) {
+function buildAssociatedTokenAccountInstruction(payer, associatedToken, owner, mint, instructionData, programId = constants_js_1$r.TOKEN_PROGRAM_ID, associatedTokenProgramId = constants_js_1$r.ASSOCIATED_TOKEN_PROGRAM_ID) {
     const keys = [
         { pubkey: payer, isSigner: true, isWritable: true },
         { pubkey: associatedToken, isSigner: false, isWritable: true },
         { pubkey: owner, isSigner: false, isWritable: false },
         { pubkey: mint, isSigner: false, isWritable: false },
-        { pubkey: web3_js_1$p.SystemProgram.programId, isSigner: false, isWritable: false },
+        { pubkey: web3_js_1$r.SystemProgram.programId, isSigner: false, isWritable: false },
         { pubkey: programId, isSigner: false, isWritable: false },
     ];
-    return new web3_js_1$p.TransactionInstruction({
+    return new web3_js_1$r.TransactionInstruction({
         keys,
         programId: associatedTokenProgramId,
         data: instructionData,
@@ -11530,7 +11616,7 @@ function buildAssociatedTokenAccountInstruction(payer, associatedToken, owner, m
  *
  * @return Instruction to add to a transaction
  */
-function createRecoverNestedInstruction(nestedAssociatedToken, nestedMint, destinationAssociatedToken, ownerAssociatedToken, ownerMint, owner, programId = constants_js_1$p.TOKEN_PROGRAM_ID, associatedTokenProgramId = constants_js_1$p.ASSOCIATED_TOKEN_PROGRAM_ID) {
+function createRecoverNestedInstruction(nestedAssociatedToken, nestedMint, destinationAssociatedToken, ownerAssociatedToken, ownerMint, owner, programId = constants_js_1$r.TOKEN_PROGRAM_ID, associatedTokenProgramId = constants_js_1$r.ASSOCIATED_TOKEN_PROGRAM_ID) {
     const keys = [
         { pubkey: nestedAssociatedToken, isSigner: false, isWritable: true },
         { pubkey: nestedMint, isSigner: false, isWritable: false },
@@ -11540,14 +11626,14 @@ function createRecoverNestedInstruction(nestedAssociatedToken, nestedMint, desti
         { pubkey: owner, isSigner: true, isWritable: true },
         { pubkey: programId, isSigner: false, isWritable: false },
     ];
-    return new web3_js_1$p.TransactionInstruction({
+    return new web3_js_1$r.TransactionInstruction({
         keys,
         programId: associatedTokenProgramId,
         data: Buffer.from([2]),
     });
 }
 
-var __awaiter$l = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$n = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -11558,8 +11644,8 @@ var __awaiter$l = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(createAssociatedTokenAccount$1, "__esModule", { value: true });
 createAssociatedTokenAccount$1.createAssociatedTokenAccount = createAssociatedTokenAccount;
-const web3_js_1$o = require$$0__default["default"];
-const constants_js_1$o = constants$1;
+const web3_js_1$q = require$$0__default["default"];
+const constants_js_1$q = constants$1;
 const associatedTokenAccount_js_1$4 = associatedTokenAccount;
 const mint_js_1$7 = requireMint();
 /**
@@ -11577,15 +11663,15 @@ const mint_js_1$7 = requireMint();
  * @return Address of the new associated token account
  */
 function createAssociatedTokenAccount(connection_1, payer_1, mint_1, owner_1, confirmOptions_1) {
-    return __awaiter$l(this, arguments, void 0, function* (connection, payer, mint, owner, confirmOptions, programId = constants_js_1$o.TOKEN_PROGRAM_ID, associatedTokenProgramId = constants_js_1$o.ASSOCIATED_TOKEN_PROGRAM_ID, allowOwnerOffCurve = false) {
+    return __awaiter$n(this, arguments, void 0, function* (connection, payer, mint, owner, confirmOptions, programId = constants_js_1$q.TOKEN_PROGRAM_ID, associatedTokenProgramId = constants_js_1$q.ASSOCIATED_TOKEN_PROGRAM_ID, allowOwnerOffCurve = false) {
         const associatedToken = (0, mint_js_1$7.getAssociatedTokenAddressSync)(mint, owner, allowOwnerOffCurve, programId, associatedTokenProgramId);
-        const transaction = new web3_js_1$o.Transaction().add((0, associatedTokenAccount_js_1$4.createAssociatedTokenAccountInstruction)(payer.publicKey, associatedToken, owner, mint, programId, associatedTokenProgramId));
-        yield (0, web3_js_1$o.sendAndConfirmTransaction)(connection, transaction, [payer], confirmOptions);
+        const transaction = new web3_js_1$q.Transaction().add((0, associatedTokenAccount_js_1$4.createAssociatedTokenAccountInstruction)(payer.publicKey, associatedToken, owner, mint, programId, associatedTokenProgramId));
+        yield (0, web3_js_1$q.sendAndConfirmTransaction)(connection, transaction, [payer], confirmOptions);
         return associatedToken;
     });
 }
 
-var __awaiter$k = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$m = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -11596,8 +11682,8 @@ var __awaiter$k = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(createAccount$1, "__esModule", { value: true });
 createAccount$1.createAccount = createAccount;
-const web3_js_1$n = require$$0__default["default"];
-const constants_js_1$n = constants$1;
+const web3_js_1$p = require$$0__default["default"];
+const constants_js_1$p = constants$1;
 const extensionType_js_1$3 = requireExtensionType();
 const initializeAccount_js_1$2 = initializeAccount;
 const mint_js_1$6 = requireMint();
@@ -11616,7 +11702,7 @@ const createAssociatedTokenAccount_js_1 = createAssociatedTokenAccount$1;
  * @return Address of the new token account
  */
 function createAccount(connection_1, payer_1, mint_1, owner_1, keypair_1, confirmOptions_1) {
-    return __awaiter$k(this, arguments, void 0, function* (connection, payer, mint, owner, keypair, confirmOptions, programId = constants_js_1$n.TOKEN_PROGRAM_ID) {
+    return __awaiter$m(this, arguments, void 0, function* (connection, payer, mint, owner, keypair, confirmOptions, programId = constants_js_1$p.TOKEN_PROGRAM_ID) {
         // If a keypair isn't provided, create the associated token account and return its address
         if (!keypair)
             return yield (0, createAssociatedTokenAccount_js_1.createAssociatedTokenAccount)(connection, payer, mint, owner, confirmOptions, programId);
@@ -11624,21 +11710,21 @@ function createAccount(connection_1, payer_1, mint_1, owner_1, keypair_1, confir
         const mintState = yield (0, mint_js_1$6.getMint)(connection, mint, confirmOptions === null || confirmOptions === void 0 ? void 0 : confirmOptions.commitment, programId);
         const space = (0, extensionType_js_1$3.getAccountLenForMint)(mintState);
         const lamports = yield connection.getMinimumBalanceForRentExemption(space);
-        const transaction = new web3_js_1$n.Transaction().add(web3_js_1$n.SystemProgram.createAccount({
+        const transaction = new web3_js_1$p.Transaction().add(web3_js_1$p.SystemProgram.createAccount({
             fromPubkey: payer.publicKey,
             newAccountPubkey: keypair.publicKey,
             space,
             lamports,
             programId,
         }), (0, initializeAccount_js_1$2.createInitializeAccountInstruction)(keypair.publicKey, mint, owner, programId));
-        yield (0, web3_js_1$n.sendAndConfirmTransaction)(connection, transaction, [payer, keypair], confirmOptions);
+        yield (0, web3_js_1$p.sendAndConfirmTransaction)(connection, transaction, [payer, keypair], confirmOptions);
         return keypair.publicKey;
     });
 }
 
 var createAssociatedTokenAccountIdempotent$1 = {};
 
-var __awaiter$j = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$l = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -11649,8 +11735,8 @@ var __awaiter$j = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(createAssociatedTokenAccountIdempotent$1, "__esModule", { value: true });
 createAssociatedTokenAccountIdempotent$1.createAssociatedTokenAccountIdempotent = createAssociatedTokenAccountIdempotent;
-const web3_js_1$m = require$$0__default["default"];
-const constants_js_1$m = constants$1;
+const web3_js_1$o = require$$0__default["default"];
+const constants_js_1$o = constants$1;
 const associatedTokenAccount_js_1$3 = associatedTokenAccount;
 const mint_js_1$5 = requireMint();
 /**
@@ -11669,10 +11755,10 @@ const mint_js_1$5 = requireMint();
  * @return Address of the new or existing associated token account
  */
 function createAssociatedTokenAccountIdempotent(connection_1, payer_1, mint_1, owner_1, confirmOptions_1) {
-    return __awaiter$j(this, arguments, void 0, function* (connection, payer, mint, owner, confirmOptions, programId = constants_js_1$m.TOKEN_PROGRAM_ID, associatedTokenProgramId = constants_js_1$m.ASSOCIATED_TOKEN_PROGRAM_ID, allowOwnerOffCurve = false) {
+    return __awaiter$l(this, arguments, void 0, function* (connection, payer, mint, owner, confirmOptions, programId = constants_js_1$o.TOKEN_PROGRAM_ID, associatedTokenProgramId = constants_js_1$o.ASSOCIATED_TOKEN_PROGRAM_ID, allowOwnerOffCurve = false) {
         const associatedToken = (0, mint_js_1$5.getAssociatedTokenAddressSync)(mint, owner, allowOwnerOffCurve, programId, associatedTokenProgramId);
-        const transaction = new web3_js_1$m.Transaction().add((0, associatedTokenAccount_js_1$3.createAssociatedTokenAccountIdempotentInstruction)(payer.publicKey, associatedToken, owner, mint, programId, associatedTokenProgramId));
-        yield (0, web3_js_1$m.sendAndConfirmTransaction)(connection, transaction, [payer], confirmOptions);
+        const transaction = new web3_js_1$o.Transaction().add((0, associatedTokenAccount_js_1$3.createAssociatedTokenAccountIdempotentInstruction)(payer.publicKey, associatedToken, owner, mint, programId, associatedTokenProgramId));
+        yield (0, web3_js_1$o.sendAndConfirmTransaction)(connection, transaction, [payer], confirmOptions);
         return associatedToken;
     });
 }
@@ -11738,7 +11824,7 @@ var initializeMint2 = {};
 	function decodeInitializeMint2Instruction(instruction, programId = constants_js_1.TOKEN_PROGRAM_ID) {
 	    if (!instruction.programId.equals(programId))
 	        throw new errors_js_1.TokenInvalidInstructionProgramError();
-	    if (instruction.data.length !== exports.initializeMint2InstructionData.getSpan(instruction.data))
+	    if (instruction.data.length < exports.initializeMint2InstructionData.getSpan(instruction.data))
 	        throw new errors_js_1.TokenInvalidInstructionDataError();
 	    const { keys: { mint }, data, } = decodeInitializeMint2InstructionUnchecked(instruction);
 	    if (data.instruction !== types_js_1.TokenInstruction.InitializeMint2)
@@ -11778,7 +11864,7 @@ var initializeMint2 = {};
 	
 } (initializeMint2));
 
-var __awaiter$i = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$k = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -11789,8 +11875,8 @@ var __awaiter$i = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(createMint$1, "__esModule", { value: true });
 createMint$1.createMint = createMint;
-const web3_js_1$l = require$$0__default["default"];
-const constants_js_1$l = constants$1;
+const web3_js_1$n = require$$0__default["default"];
+const constants_js_1$n = constants$1;
 const initializeMint2_js_1$1 = initializeMint2;
 const mint_js_1$4 = requireMint();
 /**
@@ -11808,16 +11894,16 @@ const mint_js_1$4 = requireMint();
  * @return Address of the new mint
  */
 function createMint(connection_1, payer_1, mintAuthority_1, freezeAuthority_1, decimals_1) {
-    return __awaiter$i(this, arguments, void 0, function* (connection, payer, mintAuthority, freezeAuthority, decimals, keypair = web3_js_1$l.Keypair.generate(), confirmOptions, programId = constants_js_1$l.TOKEN_PROGRAM_ID) {
+    return __awaiter$k(this, arguments, void 0, function* (connection, payer, mintAuthority, freezeAuthority, decimals, keypair = web3_js_1$n.Keypair.generate(), confirmOptions, programId = constants_js_1$n.TOKEN_PROGRAM_ID) {
         const lamports = yield (0, mint_js_1$4.getMinimumBalanceForRentExemptMint)(connection);
-        const transaction = new web3_js_1$l.Transaction().add(web3_js_1$l.SystemProgram.createAccount({
+        const transaction = new web3_js_1$n.Transaction().add(web3_js_1$n.SystemProgram.createAccount({
             fromPubkey: payer.publicKey,
             newAccountPubkey: keypair.publicKey,
             space: mint_js_1$4.MINT_SIZE,
             lamports,
             programId,
         }), (0, initializeMint2_js_1$1.createInitializeMint2Instruction)(keypair.publicKey, decimals, mintAuthority, freezeAuthority, programId));
-        yield (0, web3_js_1$l.sendAndConfirmTransaction)(connection, transaction, [payer, keypair], confirmOptions);
+        yield (0, web3_js_1$n.sendAndConfirmTransaction)(connection, transaction, [payer, keypair], confirmOptions);
         return keypair.publicKey;
     });
 }
@@ -11921,7 +12007,7 @@ var initializeMultisig = {};
 	
 } (initializeMultisig));
 
-var __awaiter$h = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$j = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -11932,8 +12018,8 @@ var __awaiter$h = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(createMultisig$1, "__esModule", { value: true });
 createMultisig$1.createMultisig = createMultisig;
-const web3_js_1$k = require$$0__default["default"];
-const constants_js_1$k = constants$1;
+const web3_js_1$m = require$$0__default["default"];
+const constants_js_1$m = constants$1;
 const initializeMultisig_js_1$1 = initializeMultisig;
 const multisig_js_1 = multisig;
 /**
@@ -11950,16 +12036,16 @@ const multisig_js_1 = multisig;
  * @return Address of the new multisig
  */
 function createMultisig(connection_1, payer_1, signers_1, m_1) {
-    return __awaiter$h(this, arguments, void 0, function* (connection, payer, signers, m, keypair = web3_js_1$k.Keypair.generate(), confirmOptions, programId = constants_js_1$k.TOKEN_PROGRAM_ID) {
+    return __awaiter$j(this, arguments, void 0, function* (connection, payer, signers, m, keypair = web3_js_1$m.Keypair.generate(), confirmOptions, programId = constants_js_1$m.TOKEN_PROGRAM_ID) {
         const lamports = yield (0, multisig_js_1.getMinimumBalanceForRentExemptMultisig)(connection);
-        const transaction = new web3_js_1$k.Transaction().add(web3_js_1$k.SystemProgram.createAccount({
+        const transaction = new web3_js_1$m.Transaction().add(web3_js_1$m.SystemProgram.createAccount({
             fromPubkey: payer.publicKey,
             newAccountPubkey: keypair.publicKey,
             space: multisig_js_1.MULTISIG_SIZE,
             lamports,
             programId,
         }), (0, initializeMultisig_js_1$1.createInitializeMultisigInstruction)(keypair.publicKey, signers, m, programId));
-        yield (0, web3_js_1$k.sendAndConfirmTransaction)(connection, transaction, [payer, keypair], confirmOptions);
+        yield (0, web3_js_1$m.sendAndConfirmTransaction)(connection, transaction, [payer, keypair], confirmOptions);
         return keypair.publicKey;
     });
 }
@@ -12005,7 +12091,7 @@ var createNativeMint$1 = {};
 	
 } (createNativeMint$1));
 
-var __awaiter$g = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$i = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -12016,8 +12102,8 @@ var __awaiter$g = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(createNativeMint$2, "__esModule", { value: true });
 createNativeMint$2.createNativeMint = createNativeMint;
-const web3_js_1$j = require$$0__default["default"];
-const constants_js_1$j = constants$1;
+const web3_js_1$l = require$$0__default["default"];
+const constants_js_1$l = constants$1;
 const createNativeMint_js_1 = createNativeMint$1;
 /**
  * Create native mint
@@ -12029,9 +12115,9 @@ const createNativeMint_js_1 = createNativeMint$1;
  * @param nativeMint               Native mint id associated with program
  */
 function createNativeMint(connection_1, payer_1, confirmOptions_1) {
-    return __awaiter$g(this, arguments, void 0, function* (connection, payer, confirmOptions, nativeMint = constants_js_1$j.NATIVE_MINT_2022, programId = constants_js_1$j.TOKEN_2022_PROGRAM_ID) {
-        const transaction = new web3_js_1$j.Transaction().add((0, createNativeMint_js_1.createCreateNativeMintInstruction)(payer.publicKey, nativeMint, programId));
-        yield (0, web3_js_1$j.sendAndConfirmTransaction)(connection, transaction, [payer], confirmOptions);
+    return __awaiter$i(this, arguments, void 0, function* (connection, payer, confirmOptions, nativeMint = constants_js_1$l.NATIVE_MINT_2022, programId = constants_js_1$l.TOKEN_2022_PROGRAM_ID) {
+        const transaction = new web3_js_1$l.Transaction().add((0, createNativeMint_js_1.createCreateNativeMintInstruction)(payer.publicKey, nativeMint, programId));
+        yield (0, web3_js_1$l.sendAndConfirmTransaction)(connection, transaction, [payer], confirmOptions);
     });
 }
 
@@ -12112,7 +12198,7 @@ var syncNative$2 = {};
 	
 } (syncNative$2));
 
-var __awaiter$f = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$h = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -12123,8 +12209,8 @@ var __awaiter$f = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(createWrappedNativeAccount$1, "__esModule", { value: true });
 createWrappedNativeAccount$1.createWrappedNativeAccount = createWrappedNativeAccount;
-const web3_js_1$i = require$$0__default["default"];
-const constants_js_1$i = constants$1;
+const web3_js_1$k = require$$0__default["default"];
+const constants_js_1$k = constants$1;
 const associatedTokenAccount_js_1$2 = associatedTokenAccount;
 const initializeAccount_js_1$1 = initializeAccount;
 const syncNative_js_1$2 = syncNative$2;
@@ -12145,35 +12231,35 @@ const createAccount_js_1 = createAccount$1;
  * @return Address of the new wrapped native SOL account
  */
 function createWrappedNativeAccount(connection_1, payer_1, owner_1, amount_1, keypair_1, confirmOptions_1) {
-    return __awaiter$f(this, arguments, void 0, function* (connection, payer, owner, amount, keypair, confirmOptions, programId = constants_js_1$i.TOKEN_PROGRAM_ID, nativeMint = constants_js_1$i.NATIVE_MINT) {
+    return __awaiter$h(this, arguments, void 0, function* (connection, payer, owner, amount, keypair, confirmOptions, programId = constants_js_1$k.TOKEN_PROGRAM_ID, nativeMint = constants_js_1$k.NATIVE_MINT) {
         // If the amount provided is explicitly 0 or NaN, just create the account without funding it
         if (!amount)
             return yield (0, createAccount_js_1.createAccount)(connection, payer, nativeMint, owner, keypair, confirmOptions, programId);
         // If a keypair isn't provided, create the account at the owner's ATA for the native mint and return its address
         if (!keypair) {
-            const associatedToken = (0, mint_js_1$3.getAssociatedTokenAddressSync)(nativeMint, owner, false, programId, constants_js_1$i.ASSOCIATED_TOKEN_PROGRAM_ID);
-            const transaction = new web3_js_1$i.Transaction().add((0, associatedTokenAccount_js_1$2.createAssociatedTokenAccountInstruction)(payer.publicKey, associatedToken, owner, nativeMint, programId, constants_js_1$i.ASSOCIATED_TOKEN_PROGRAM_ID), web3_js_1$i.SystemProgram.transfer({
+            const associatedToken = (0, mint_js_1$3.getAssociatedTokenAddressSync)(nativeMint, owner, false, programId, constants_js_1$k.ASSOCIATED_TOKEN_PROGRAM_ID);
+            const transaction = new web3_js_1$k.Transaction().add((0, associatedTokenAccount_js_1$2.createAssociatedTokenAccountInstruction)(payer.publicKey, associatedToken, owner, nativeMint, programId, constants_js_1$k.ASSOCIATED_TOKEN_PROGRAM_ID), web3_js_1$k.SystemProgram.transfer({
                 fromPubkey: payer.publicKey,
                 toPubkey: associatedToken,
                 lamports: amount,
             }), (0, syncNative_js_1$2.createSyncNativeInstruction)(associatedToken, programId));
-            yield (0, web3_js_1$i.sendAndConfirmTransaction)(connection, transaction, [payer], confirmOptions);
+            yield (0, web3_js_1$k.sendAndConfirmTransaction)(connection, transaction, [payer], confirmOptions);
             return associatedToken;
         }
         // Otherwise, create the account with the provided keypair and return its public key
         const lamports = yield (0, account_js_1$1.getMinimumBalanceForRentExemptAccount)(connection);
-        const transaction = new web3_js_1$i.Transaction().add(web3_js_1$i.SystemProgram.createAccount({
+        const transaction = new web3_js_1$k.Transaction().add(web3_js_1$k.SystemProgram.createAccount({
             fromPubkey: payer.publicKey,
             newAccountPubkey: keypair.publicKey,
             space: account_js_1$1.ACCOUNT_SIZE,
             lamports,
             programId,
-        }), web3_js_1$i.SystemProgram.transfer({
+        }), web3_js_1$k.SystemProgram.transfer({
             fromPubkey: payer.publicKey,
             toPubkey: keypair.publicKey,
             lamports: amount,
         }), (0, initializeAccount_js_1$1.createInitializeAccountInstruction)(keypair.publicKey, nativeMint, owner, programId));
-        yield (0, web3_js_1$i.sendAndConfirmTransaction)(connection, transaction, [payer, keypair], confirmOptions);
+        yield (0, web3_js_1$k.sendAndConfirmTransaction)(connection, transaction, [payer, keypair], confirmOptions);
         return keypair.publicKey;
     });
 }
@@ -12268,7 +12354,7 @@ var freezeAccount$1 = {};
 	
 } (freezeAccount$1));
 
-var __awaiter$e = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$g = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -12279,10 +12365,10 @@ var __awaiter$e = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(freezeAccount$2, "__esModule", { value: true });
 freezeAccount$2.freezeAccount = freezeAccount;
-const web3_js_1$h = require$$0__default["default"];
-const constants_js_1$h = constants$1;
+const web3_js_1$j = require$$0__default["default"];
+const constants_js_1$j = constants$1;
 const freezeAccount_js_1$1 = freezeAccount$1;
-const internal_js_1$a = internal$1;
+const internal_js_1$c = internal$1;
 /**
  * Freeze a token account
  *
@@ -12298,16 +12384,16 @@ const internal_js_1$a = internal$1;
  * @return Signature of the confirmed transaction
  */
 function freezeAccount(connection_1, payer_1, account_1, mint_1, authority_1) {
-    return __awaiter$e(this, arguments, void 0, function* (connection, payer, account, mint, authority, multiSigners = [], confirmOptions, programId = constants_js_1$h.TOKEN_PROGRAM_ID) {
-        const [authorityPublicKey, signers] = (0, internal_js_1$a.getSigners)(authority, multiSigners);
-        const transaction = new web3_js_1$h.Transaction().add((0, freezeAccount_js_1$1.createFreezeAccountInstruction)(account, mint, authorityPublicKey, multiSigners, programId));
-        return yield (0, web3_js_1$h.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$g(this, arguments, void 0, function* (connection, payer, account, mint, authority, multiSigners = [], confirmOptions, programId = constants_js_1$j.TOKEN_PROGRAM_ID) {
+        const [authorityPublicKey, signers] = (0, internal_js_1$c.getSigners)(authority, multiSigners);
+        const transaction = new web3_js_1$j.Transaction().add((0, freezeAccount_js_1$1.createFreezeAccountInstruction)(account, mint, authorityPublicKey, multiSigners, programId));
+        return yield (0, web3_js_1$j.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
 var getOrCreateAssociatedTokenAccount$1 = {};
 
-var __awaiter$d = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$f = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -12318,9 +12404,9 @@ var __awaiter$d = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(getOrCreateAssociatedTokenAccount$1, "__esModule", { value: true });
 getOrCreateAssociatedTokenAccount$1.getOrCreateAssociatedTokenAccount = getOrCreateAssociatedTokenAccount;
-const web3_js_1$g = require$$0__default["default"];
-const constants_js_1$g = constants$1;
-const errors_js_1$4 = errors$4;
+const web3_js_1$i = require$$0__default["default"];
+const constants_js_1$i = constants$1;
+const errors_js_1$5 = errors$4;
 const associatedTokenAccount_js_1$1 = associatedTokenAccount;
 const account_js_1 = requireAccount();
 const mint_js_1$2 = requireMint();
@@ -12340,7 +12426,7 @@ const mint_js_1$2 = requireMint();
  * @return Address of the new associated token account
  */
 function getOrCreateAssociatedTokenAccount(connection_1, payer_1, mint_1, owner_1) {
-    return __awaiter$d(this, arguments, void 0, function* (connection, payer, mint, owner, allowOwnerOffCurve = false, commitment, confirmOptions, programId = constants_js_1$g.TOKEN_PROGRAM_ID, associatedTokenProgramId = constants_js_1$g.ASSOCIATED_TOKEN_PROGRAM_ID) {
+    return __awaiter$f(this, arguments, void 0, function* (connection, payer, mint, owner, allowOwnerOffCurve = false, commitment, confirmOptions, programId = constants_js_1$i.TOKEN_PROGRAM_ID, associatedTokenProgramId = constants_js_1$i.ASSOCIATED_TOKEN_PROGRAM_ID) {
         const associatedToken = (0, mint_js_1$2.getAssociatedTokenAddressSync)(mint, owner, allowOwnerOffCurve, programId, associatedTokenProgramId);
         // This is the optimal logic, considering TX fee, client-side computation, RPC roundtrips and guaranteed idempotent.
         // Sadly we can't do this atomically.
@@ -12352,11 +12438,11 @@ function getOrCreateAssociatedTokenAccount(connection_1, payer_1, mint_1, owner_
             // TokenAccountNotFoundError can be possible if the associated address has already received some lamports,
             // becoming a system account. Assuming program derived addressing is safe, this is the only case for the
             // TokenInvalidAccountOwnerError in this code path.
-            if (error instanceof errors_js_1$4.TokenAccountNotFoundError || error instanceof errors_js_1$4.TokenInvalidAccountOwnerError) {
+            if (error instanceof errors_js_1$5.TokenAccountNotFoundError || error instanceof errors_js_1$5.TokenInvalidAccountOwnerError) {
                 // As this isn't atomic, it's possible others can create associated accounts meanwhile.
                 try {
-                    const transaction = new web3_js_1$g.Transaction().add((0, associatedTokenAccount_js_1$1.createAssociatedTokenAccountInstruction)(payer.publicKey, associatedToken, owner, mint, programId, associatedTokenProgramId));
-                    yield (0, web3_js_1$g.sendAndConfirmTransaction)(connection, transaction, [payer], confirmOptions);
+                    const transaction = new web3_js_1$i.Transaction().add((0, associatedTokenAccount_js_1$1.createAssociatedTokenAccountInstruction)(payer.publicKey, associatedToken, owner, mint, programId, associatedTokenProgramId));
+                    yield (0, web3_js_1$i.sendAndConfirmTransaction)(connection, transaction, [payer], confirmOptions);
                 }
                 catch (error) {
                     // Ignore all errors; for now there is no API-compatible way to selectively ignore the expected
@@ -12370,9 +12456,9 @@ function getOrCreateAssociatedTokenAccount(connection_1, payer_1, mint_1, owner_
             }
         }
         if (!account.mint.equals(mint))
-            throw new errors_js_1$4.TokenInvalidMintError();
+            throw new errors_js_1$5.TokenInvalidMintError();
         if (!account.owner.equals(owner))
-            throw new errors_js_1$4.TokenInvalidOwnerError();
+            throw new errors_js_1$5.TokenInvalidOwnerError();
         return account;
     });
 }
@@ -12472,7 +12558,7 @@ var mintTo$1 = {};
 	
 } (mintTo$1));
 
-var __awaiter$c = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$e = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -12483,10 +12569,10 @@ var __awaiter$c = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(mintTo$2, "__esModule", { value: true });
 mintTo$2.mintTo = mintTo;
-const web3_js_1$f = require$$0__default["default"];
-const constants_js_1$f = constants$1;
+const web3_js_1$h = require$$0__default["default"];
+const constants_js_1$h = constants$1;
 const mintTo_js_1$1 = mintTo$1;
-const internal_js_1$9 = internal$1;
+const internal_js_1$b = internal$1;
 /**
  * Mint tokens to an account
  *
@@ -12503,10 +12589,10 @@ const internal_js_1$9 = internal$1;
  * @return Signature of the confirmed transaction
  */
 function mintTo(connection_1, payer_1, mint_1, destination_1, authority_1, amount_1) {
-    return __awaiter$c(this, arguments, void 0, function* (connection, payer, mint, destination, authority, amount, multiSigners = [], confirmOptions, programId = constants_js_1$f.TOKEN_PROGRAM_ID) {
-        const [authorityPublicKey, signers] = (0, internal_js_1$9.getSigners)(authority, multiSigners);
-        const transaction = new web3_js_1$f.Transaction().add((0, mintTo_js_1$1.createMintToInstruction)(mint, destination, authorityPublicKey, amount, multiSigners, programId));
-        return yield (0, web3_js_1$f.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$e(this, arguments, void 0, function* (connection, payer, mint, destination, authority, amount, multiSigners = [], confirmOptions, programId = constants_js_1$h.TOKEN_PROGRAM_ID) {
+        const [authorityPublicKey, signers] = (0, internal_js_1$b.getSigners)(authority, multiSigners);
+        const transaction = new web3_js_1$h.Transaction().add((0, mintTo_js_1$1.createMintToInstruction)(mint, destination, authorityPublicKey, amount, multiSigners, programId));
+        return yield (0, web3_js_1$h.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
@@ -12611,7 +12697,7 @@ var mintToChecked$1 = {};
 	
 } (mintToChecked$1));
 
-var __awaiter$b = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$d = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -12622,10 +12708,10 @@ var __awaiter$b = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(mintToChecked$2, "__esModule", { value: true });
 mintToChecked$2.mintToChecked = mintToChecked;
-const web3_js_1$e = require$$0__default["default"];
-const constants_js_1$e = constants$1;
+const web3_js_1$g = require$$0__default["default"];
+const constants_js_1$g = constants$1;
 const mintToChecked_js_1$1 = mintToChecked$1;
-const internal_js_1$8 = internal$1;
+const internal_js_1$a = internal$1;
 /**
  * Mint tokens to an account, asserting the token mint and decimals
  *
@@ -12643,16 +12729,16 @@ const internal_js_1$8 = internal$1;
  * @return Signature of the confirmed transaction
  */
 function mintToChecked(connection_1, payer_1, mint_1, destination_1, authority_1, amount_1, decimals_1) {
-    return __awaiter$b(this, arguments, void 0, function* (connection, payer, mint, destination, authority, amount, decimals, multiSigners = [], confirmOptions, programId = constants_js_1$e.TOKEN_PROGRAM_ID) {
-        const [authorityPublicKey, signers] = (0, internal_js_1$8.getSigners)(authority, multiSigners);
-        const transaction = new web3_js_1$e.Transaction().add((0, mintToChecked_js_1$1.createMintToCheckedInstruction)(mint, destination, authorityPublicKey, amount, decimals, multiSigners, programId));
-        return yield (0, web3_js_1$e.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$d(this, arguments, void 0, function* (connection, payer, mint, destination, authority, amount, decimals, multiSigners = [], confirmOptions, programId = constants_js_1$g.TOKEN_PROGRAM_ID) {
+        const [authorityPublicKey, signers] = (0, internal_js_1$a.getSigners)(authority, multiSigners);
+        const transaction = new web3_js_1$g.Transaction().add((0, mintToChecked_js_1$1.createMintToCheckedInstruction)(mint, destination, authorityPublicKey, amount, decimals, multiSigners, programId));
+        return yield (0, web3_js_1$g.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
 var recoverNested$1 = {};
 
-var __awaiter$a = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$c = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -12663,8 +12749,8 @@ var __awaiter$a = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(recoverNested$1, "__esModule", { value: true });
 recoverNested$1.recoverNested = recoverNested;
-const web3_js_1$d = require$$0__default["default"];
-const constants_js_1$d = constants$1;
+const web3_js_1$f = require$$0__default["default"];
+const constants_js_1$f = constants$1;
 const associatedTokenAccount_js_1 = associatedTokenAccount;
 const mint_js_1$1 = requireMint();
 /**
@@ -12682,12 +12768,12 @@ const mint_js_1$1 = requireMint();
  * @return Signature of the confirmed transaction
  */
 function recoverNested(connection_1, payer_1, owner_1, mint_1, nestedMint_1, confirmOptions_1) {
-    return __awaiter$a(this, arguments, void 0, function* (connection, payer, owner, mint, nestedMint, confirmOptions, programId = constants_js_1$d.TOKEN_PROGRAM_ID, associatedTokenProgramId = constants_js_1$d.ASSOCIATED_TOKEN_PROGRAM_ID) {
+    return __awaiter$c(this, arguments, void 0, function* (connection, payer, owner, mint, nestedMint, confirmOptions, programId = constants_js_1$f.TOKEN_PROGRAM_ID, associatedTokenProgramId = constants_js_1$f.ASSOCIATED_TOKEN_PROGRAM_ID) {
         const ownerAssociatedToken = (0, mint_js_1$1.getAssociatedTokenAddressSync)(mint, owner.publicKey, false, programId, associatedTokenProgramId);
         const destinationAssociatedToken = (0, mint_js_1$1.getAssociatedTokenAddressSync)(nestedMint, owner.publicKey, false, programId, associatedTokenProgramId);
         const nestedAssociatedToken = (0, mint_js_1$1.getAssociatedTokenAddressSync)(nestedMint, ownerAssociatedToken, true, programId, associatedTokenProgramId);
-        const transaction = new web3_js_1$d.Transaction().add((0, associatedTokenAccount_js_1.createRecoverNestedInstruction)(nestedAssociatedToken, nestedMint, destinationAssociatedToken, ownerAssociatedToken, mint, owner.publicKey, programId, associatedTokenProgramId));
-        return yield (0, web3_js_1$d.sendAndConfirmTransaction)(connection, transaction, [payer, owner], confirmOptions);
+        const transaction = new web3_js_1$f.Transaction().add((0, associatedTokenAccount_js_1.createRecoverNestedInstruction)(nestedAssociatedToken, nestedMint, destinationAssociatedToken, ownerAssociatedToken, mint, owner.publicKey, programId, associatedTokenProgramId));
+        return yield (0, web3_js_1$f.sendAndConfirmTransaction)(connection, transaction, [payer, owner], confirmOptions);
     });
 }
 
@@ -12775,7 +12861,7 @@ var revoke$1 = {};
 	
 } (revoke$1));
 
-var __awaiter$9 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$b = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -12786,10 +12872,10 @@ var __awaiter$9 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(revoke$2, "__esModule", { value: true });
 revoke$2.revoke = revoke;
-const web3_js_1$c = require$$0__default["default"];
-const constants_js_1$c = constants$1;
+const web3_js_1$e = require$$0__default["default"];
+const constants_js_1$e = constants$1;
 const revoke_js_1$1 = revoke$1;
-const internal_js_1$7 = internal$1;
+const internal_js_1$9 = internal$1;
 /**
  * Revoke approval for the transfer of tokens from an account
  *
@@ -12804,10 +12890,10 @@ const internal_js_1$7 = internal$1;
  * @return Signature of the confirmed transaction
  */
 function revoke(connection_1, payer_1, account_1, owner_1) {
-    return __awaiter$9(this, arguments, void 0, function* (connection, payer, account, owner, multiSigners = [], confirmOptions, programId = constants_js_1$c.TOKEN_PROGRAM_ID) {
-        const [ownerPublicKey, signers] = (0, internal_js_1$7.getSigners)(owner, multiSigners);
-        const transaction = new web3_js_1$c.Transaction().add((0, revoke_js_1$1.createRevokeInstruction)(account, ownerPublicKey, multiSigners, programId));
-        return yield (0, web3_js_1$c.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$b(this, arguments, void 0, function* (connection, payer, account, owner, multiSigners = [], confirmOptions, programId = constants_js_1$e.TOKEN_PROGRAM_ID) {
+        const [ownerPublicKey, signers] = (0, internal_js_1$9.getSigners)(owner, multiSigners);
+        const transaction = new web3_js_1$e.Transaction().add((0, revoke_js_1$1.createRevokeInstruction)(account, ownerPublicKey, multiSigners, programId));
+        return yield (0, web3_js_1$e.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
@@ -12848,6 +12934,7 @@ var setAuthority$1 = {};
 	    AuthorityType[AuthorityType["GroupMemberPointer"] = 14] = "GroupMemberPointer";
 	    AuthorityType[AuthorityType["ScaledUiAmountConfig"] = 15] = "ScaledUiAmountConfig";
 	    AuthorityType[AuthorityType["PausableConfig"] = 16] = "PausableConfig";
+	    AuthorityType[AuthorityType["PermissionedBurn"] = 17] = "PermissionedBurn";
 	})(AuthorityType || (exports.AuthorityType = AuthorityType = {}));
 	/** TODO: docs */
 	exports.setAuthorityInstructionData = (0, buffer_layout_1.struct)([
@@ -12892,7 +12979,7 @@ var setAuthority$1 = {};
 	function decodeSetAuthorityInstruction(instruction, programId = constants_js_1.TOKEN_PROGRAM_ID) {
 	    if (!instruction.programId.equals(programId))
 	        throw new errors_js_1.TokenInvalidInstructionProgramError();
-	    if (instruction.data.length !== exports.setAuthorityInstructionData.getSpan(instruction.data))
+	    if (instruction.data.length < exports.setAuthorityInstructionData.getSpan(instruction.data))
 	        throw new errors_js_1.TokenInvalidInstructionDataError();
 	    const { keys: { account, currentAuthority, multiSigners }, data, } = decodeSetAuthorityInstructionUnchecked(instruction);
 	    if (data.instruction !== types_js_1.TokenInstruction.SetAuthority)
@@ -12936,7 +13023,7 @@ var setAuthority$1 = {};
 	
 } (setAuthority$1));
 
-var __awaiter$8 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$a = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -12947,10 +13034,10 @@ var __awaiter$8 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(setAuthority$2, "__esModule", { value: true });
 setAuthority$2.setAuthority = setAuthority;
-const web3_js_1$b = require$$0__default["default"];
-const constants_js_1$b = constants$1;
+const web3_js_1$d = require$$0__default["default"];
+const constants_js_1$d = constants$1;
 const setAuthority_js_1$1 = setAuthority$1;
-const internal_js_1$6 = internal$1;
+const internal_js_1$8 = internal$1;
 /**
  * Assign a new authority to the account
  *
@@ -12967,16 +13054,16 @@ const internal_js_1$6 = internal$1;
  * @return Signature of the confirmed transaction
  */
 function setAuthority(connection_1, payer_1, account_1, currentAuthority_1, authorityType_1, newAuthority_1) {
-    return __awaiter$8(this, arguments, void 0, function* (connection, payer, account, currentAuthority, authorityType, newAuthority, multiSigners = [], confirmOptions, programId = constants_js_1$b.TOKEN_PROGRAM_ID) {
-        const [currentAuthorityPublicKey, signers] = (0, internal_js_1$6.getSigners)(currentAuthority, multiSigners);
-        const transaction = new web3_js_1$b.Transaction().add((0, setAuthority_js_1$1.createSetAuthorityInstruction)(account, currentAuthorityPublicKey, authorityType, newAuthority, multiSigners, programId));
-        return yield (0, web3_js_1$b.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$a(this, arguments, void 0, function* (connection, payer, account, currentAuthority, authorityType, newAuthority, multiSigners = [], confirmOptions, programId = constants_js_1$d.TOKEN_PROGRAM_ID) {
+        const [currentAuthorityPublicKey, signers] = (0, internal_js_1$8.getSigners)(currentAuthority, multiSigners);
+        const transaction = new web3_js_1$d.Transaction().add((0, setAuthority_js_1$1.createSetAuthorityInstruction)(account, currentAuthorityPublicKey, authorityType, newAuthority, multiSigners, programId));
+        return yield (0, web3_js_1$d.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
 var syncNative$1 = {};
 
-var __awaiter$7 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$9 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -12987,8 +13074,8 @@ var __awaiter$7 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(syncNative$1, "__esModule", { value: true });
 syncNative$1.syncNative = syncNative;
-const web3_js_1$a = require$$0__default["default"];
-const constants_js_1$a = constants$1;
+const web3_js_1$c = require$$0__default["default"];
+const constants_js_1$c = constants$1;
 const syncNative_js_1$1 = syncNative$2;
 /**
  * Sync the balance of a native SPL token account to the underlying system account's lamports
@@ -13002,9 +13089,9 @@ const syncNative_js_1$1 = syncNative$2;
  * @return Signature of the confirmed transaction
  */
 function syncNative(connection_1, payer_1, account_1, confirmOptions_1) {
-    return __awaiter$7(this, arguments, void 0, function* (connection, payer, account, confirmOptions, programId = constants_js_1$a.TOKEN_PROGRAM_ID) {
-        const transaction = new web3_js_1$a.Transaction().add((0, syncNative_js_1$1.createSyncNativeInstruction)(account, programId));
-        return yield (0, web3_js_1$a.sendAndConfirmTransaction)(connection, transaction, [payer], confirmOptions);
+    return __awaiter$9(this, arguments, void 0, function* (connection, payer, account, confirmOptions, programId = constants_js_1$c.TOKEN_PROGRAM_ID) {
+        const transaction = new web3_js_1$c.Transaction().add((0, syncNative_js_1$1.createSyncNativeInstruction)(account, programId));
+        return yield (0, web3_js_1$c.sendAndConfirmTransaction)(connection, transaction, [payer], confirmOptions);
     });
 }
 
@@ -13098,7 +13185,7 @@ var thawAccount$1 = {};
 	
 } (thawAccount$1));
 
-var __awaiter$6 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$8 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -13109,10 +13196,10 @@ var __awaiter$6 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(thawAccount$2, "__esModule", { value: true });
 thawAccount$2.thawAccount = thawAccount;
-const web3_js_1$9 = require$$0__default["default"];
-const constants_js_1$9 = constants$1;
+const web3_js_1$b = require$$0__default["default"];
+const constants_js_1$b = constants$1;
 const thawAccount_js_1$1 = thawAccount$1;
-const internal_js_1$5 = internal$1;
+const internal_js_1$7 = internal$1;
 /**
  * Thaw (unfreeze) a token account
  *
@@ -13128,10 +13215,10 @@ const internal_js_1$5 = internal$1;
  * @return Signature of the confirmed transaction
  */
 function thawAccount(connection_1, payer_1, account_1, mint_1, authority_1) {
-    return __awaiter$6(this, arguments, void 0, function* (connection, payer, account, mint, authority, multiSigners = [], confirmOptions, programId = constants_js_1$9.TOKEN_PROGRAM_ID) {
-        const [authorityPublicKey, signers] = (0, internal_js_1$5.getSigners)(authority, multiSigners);
-        const transaction = new web3_js_1$9.Transaction().add((0, thawAccount_js_1$1.createThawAccountInstruction)(account, mint, authorityPublicKey, multiSigners, programId));
-        return yield (0, web3_js_1$9.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$8(this, arguments, void 0, function* (connection, payer, account, mint, authority, multiSigners = [], confirmOptions, programId = constants_js_1$b.TOKEN_PROGRAM_ID) {
+        const [authorityPublicKey, signers] = (0, internal_js_1$7.getSigners)(authority, multiSigners);
+        const transaction = new web3_js_1$b.Transaction().add((0, thawAccount_js_1$1.createThawAccountInstruction)(account, mint, authorityPublicKey, multiSigners, programId));
+        return yield (0, web3_js_1$b.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
@@ -13230,7 +13317,7 @@ var transfer$1 = {};
 	
 } (transfer$1));
 
-var __awaiter$5 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$7 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -13241,10 +13328,10 @@ var __awaiter$5 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(transfer$2, "__esModule", { value: true });
 transfer$2.transfer = transfer;
-const web3_js_1$8 = require$$0__default["default"];
-const constants_js_1$8 = constants$1;
+const web3_js_1$a = require$$0__default["default"];
+const constants_js_1$a = constants$1;
 const transfer_js_1$1 = transfer$1;
-const internal_js_1$4 = internal$1;
+const internal_js_1$6 = internal$1;
 /**
  * Transfer tokens from one account to another
  *
@@ -13261,16 +13348,16 @@ const internal_js_1$4 = internal$1;
  * @return Signature of the confirmed transaction
  */
 function transfer(connection_1, payer_1, source_1, destination_1, owner_1, amount_1) {
-    return __awaiter$5(this, arguments, void 0, function* (connection, payer, source, destination, owner, amount, multiSigners = [], confirmOptions, programId = constants_js_1$8.TOKEN_PROGRAM_ID) {
-        const [ownerPublicKey, signers] = (0, internal_js_1$4.getSigners)(owner, multiSigners);
-        const transaction = new web3_js_1$8.Transaction().add((0, transfer_js_1$1.createTransferInstruction)(source, destination, ownerPublicKey, amount, multiSigners, programId));
-        return yield (0, web3_js_1$8.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$7(this, arguments, void 0, function* (connection, payer, source, destination, owner, amount, multiSigners = [], confirmOptions, programId = constants_js_1$a.TOKEN_PROGRAM_ID) {
+        const [ownerPublicKey, signers] = (0, internal_js_1$6.getSigners)(owner, multiSigners);
+        const transaction = new web3_js_1$a.Transaction().add((0, transfer_js_1$1.createTransferInstruction)(source, destination, ownerPublicKey, amount, multiSigners, programId));
+        return yield (0, web3_js_1$a.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
 var transferChecked$1 = {};
 
-var __awaiter$4 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$6 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -13281,10 +13368,10 @@ var __awaiter$4 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(transferChecked$1, "__esModule", { value: true });
 transferChecked$1.transferChecked = transferChecked;
-const web3_js_1$7 = require$$0__default["default"];
-const constants_js_1$7 = constants$1;
+const web3_js_1$9 = require$$0__default["default"];
+const constants_js_1$9 = constants$1;
 const transferChecked_js_1$1 = transferChecked$2;
-const internal_js_1$3 = internal$1;
+const internal_js_1$5 = internal$1;
 /**
  * Transfer tokens from one account to another, asserting the token mint and decimals
  *
@@ -13303,10 +13390,10 @@ const internal_js_1$3 = internal$1;
  * @return Signature of the confirmed transaction
  */
 function transferChecked(connection_1, payer_1, source_1, mint_1, destination_1, owner_1, amount_1, decimals_1) {
-    return __awaiter$4(this, arguments, void 0, function* (connection, payer, source, mint, destination, owner, amount, decimals, multiSigners = [], confirmOptions, programId = constants_js_1$7.TOKEN_PROGRAM_ID) {
-        const [ownerPublicKey, signers] = (0, internal_js_1$3.getSigners)(owner, multiSigners);
-        const transaction = new web3_js_1$7.Transaction().add((0, transferChecked_js_1$1.createTransferCheckedInstruction)(source, mint, destination, ownerPublicKey, amount, decimals, multiSigners, programId));
-        return yield (0, web3_js_1$7.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+    return __awaiter$6(this, arguments, void 0, function* (connection, payer, source, mint, destination, owner, amount, decimals, multiSigners = [], confirmOptions, programId = constants_js_1$9.TOKEN_PROGRAM_ID) {
+        const [ownerPublicKey, signers] = (0, internal_js_1$5.getSigners)(owner, multiSigners);
+        const transaction = new web3_js_1$9.Transaction().add((0, transferChecked_js_1$1.createTransferCheckedInstruction)(source, mint, destination, ownerPublicKey, amount, decimals, multiSigners, programId));
+        return yield (0, web3_js_1$9.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
@@ -13318,11 +13405,11 @@ Object.defineProperty(uiAmountToAmount$1, "__esModule", { value: true });
 uiAmountToAmount$1.createUiAmountToAmountInstruction = createUiAmountToAmountInstruction;
 uiAmountToAmount$1.decodeUiAmountToAmountInstruction = decodeUiAmountToAmountInstruction;
 uiAmountToAmount$1.decodeUiAmountToAmountInstructionUnchecked = decodeUiAmountToAmountInstructionUnchecked;
-const buffer_layout_1$2 = Layout$1;
-const web3_js_1$6 = require$$0__default["default"];
-const constants_js_1$6 = constants$1;
-const errors_js_1$3 = errors$4;
-const types_js_1$2 = types$2;
+const buffer_layout_1$3 = Layout$1;
+const web3_js_1$8 = require$$0__default["default"];
+const constants_js_1$8 = constants$1;
+const errors_js_1$4 = errors$4;
+const types_js_1$3 = types$2;
 /** TODO: docs */
 /**
  * Construct a UiAmountToAmount instruction
@@ -13333,19 +13420,19 @@ const types_js_1$2 = types$2;
  *
  * @return Instruction to add to a transaction
  */
-function createUiAmountToAmountInstruction(mint, amount, programId = constants_js_1$6.TOKEN_PROGRAM_ID) {
+function createUiAmountToAmountInstruction(mint, amount, programId = constants_js_1$8.TOKEN_PROGRAM_ID) {
     const keys = [{ pubkey: mint, isSigner: false, isWritable: false }];
     const buf = Buffer.from(amount, 'utf8');
-    const uiAmountToAmountInstructionData = (0, buffer_layout_1$2.struct)([
-        (0, buffer_layout_1$2.u8)('instruction'),
-        (0, buffer_layout_1$2.blob)(buf.length, 'amount'),
+    const uiAmountToAmountInstructionData = (0, buffer_layout_1$3.struct)([
+        (0, buffer_layout_1$3.u8)('instruction'),
+        (0, buffer_layout_1$3.blob)(buf.length, 'amount'),
     ]);
     const data = Buffer.alloc(uiAmountToAmountInstructionData.span);
     uiAmountToAmountInstructionData.encode({
-        instruction: types_js_1$2.TokenInstruction.UiAmountToAmount,
+        instruction: types_js_1$3.TokenInstruction.UiAmountToAmount,
         amount: buf,
     }, data);
-    return new web3_js_1$6.TransactionInstruction({ keys, programId, data });
+    return new web3_js_1$8.TransactionInstruction({ keys, programId, data });
 }
 /**
  * Decode a UiAmountToAmount instruction and validate it
@@ -13355,20 +13442,20 @@ function createUiAmountToAmountInstruction(mint, amount, programId = constants_j
  *
  * @return Decoded, valid instruction
  */
-function decodeUiAmountToAmountInstruction(instruction, programId = constants_js_1$6.TOKEN_PROGRAM_ID) {
+function decodeUiAmountToAmountInstruction(instruction, programId = constants_js_1$8.TOKEN_PROGRAM_ID) {
     if (!instruction.programId.equals(programId))
-        throw new errors_js_1$3.TokenInvalidInstructionProgramError();
-    const uiAmountToAmountInstructionData = (0, buffer_layout_1$2.struct)([
-        (0, buffer_layout_1$2.u8)('instruction'),
-        (0, buffer_layout_1$2.blob)(instruction.data.length - 1, 'amount'),
+        throw new errors_js_1$4.TokenInvalidInstructionProgramError();
+    const uiAmountToAmountInstructionData = (0, buffer_layout_1$3.struct)([
+        (0, buffer_layout_1$3.u8)('instruction'),
+        (0, buffer_layout_1$3.blob)(instruction.data.length - 1, 'amount'),
     ]);
     if (instruction.data.length !== uiAmountToAmountInstructionData.span)
-        throw new errors_js_1$3.TokenInvalidInstructionDataError();
+        throw new errors_js_1$4.TokenInvalidInstructionDataError();
     const { keys: { mint }, data, } = decodeUiAmountToAmountInstructionUnchecked(instruction);
-    if (data.instruction !== types_js_1$2.TokenInstruction.UiAmountToAmount)
-        throw new errors_js_1$3.TokenInvalidInstructionTypeError();
+    if (data.instruction !== types_js_1$3.TokenInstruction.UiAmountToAmount)
+        throw new errors_js_1$4.TokenInvalidInstructionTypeError();
     if (!mint)
-        throw new errors_js_1$3.TokenInvalidInstructionKeysError();
+        throw new errors_js_1$4.TokenInvalidInstructionKeysError();
     return {
         programId,
         keys: {
@@ -13385,9 +13472,9 @@ function decodeUiAmountToAmountInstruction(instruction, programId = constants_js
  * @return Decoded, non-validated instruction
  */
 function decodeUiAmountToAmountInstructionUnchecked({ programId, keys: [mint], data, }) {
-    const uiAmountToAmountInstructionData = (0, buffer_layout_1$2.struct)([
-        (0, buffer_layout_1$2.u8)('instruction'),
-        (0, buffer_layout_1$2.blob)(data.length - 1, 'amount'),
+    const uiAmountToAmountInstructionData = (0, buffer_layout_1$3.struct)([
+        (0, buffer_layout_1$3.u8)('instruction'),
+        (0, buffer_layout_1$3.blob)(data.length - 1, 'amount'),
     ]);
     return {
         programId,
@@ -13398,7 +13485,7 @@ function decodeUiAmountToAmountInstructionUnchecked({ programId, keys: [mint], d
     };
 }
 
-var __awaiter$3 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$5 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -13409,9 +13496,9 @@ var __awaiter$3 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 };
 Object.defineProperty(uiAmountToAmount$2, "__esModule", { value: true });
 uiAmountToAmount$2.uiAmountToAmount = uiAmountToAmount;
-const buffer_layout_utils_1 = cjs$2;
-const web3_js_1$5 = require$$0__default["default"];
-const constants_js_1$5 = constants$1;
+const buffer_layout_utils_1$1 = cjs$2;
+const web3_js_1$7 = require$$0__default["default"];
+const constants_js_1$7 = constants$1;
 const uiAmountToAmount_js_1$1 = uiAmountToAmount$1;
 /**
  * Amount as a string using mint-prescribed decimals
@@ -13425,14 +13512,148 @@ const uiAmountToAmount_js_1$1 = uiAmountToAmount$1;
  * @return Ui Amount generated
  */
 function uiAmountToAmount(connection_1, payer_1, mint_1, amount_1) {
-    return __awaiter$3(this, arguments, void 0, function* (connection, payer, mint, amount, programId = constants_js_1$5.TOKEN_PROGRAM_ID) {
-        const transaction = new web3_js_1$5.Transaction().add((0, uiAmountToAmount_js_1$1.createUiAmountToAmountInstruction)(mint, amount, programId));
+    return __awaiter$5(this, arguments, void 0, function* (connection, payer, mint, amount, programId = constants_js_1$7.TOKEN_PROGRAM_ID) {
+        const transaction = new web3_js_1$7.Transaction().add((0, uiAmountToAmount_js_1$1.createUiAmountToAmountInstruction)(mint, amount, programId));
         const { returnData, err } = (yield connection.simulateTransaction(transaction, [payer], false)).value;
         if (returnData) {
             const data = Buffer.from(returnData.data[0], returnData.data[1]);
-            return (0, buffer_layout_utils_1.u64)().decode(data);
+            return (0, buffer_layout_utils_1$1.u64)().decode(data);
         }
         return err;
+    });
+}
+
+var unwrapLamports$2 = {};
+
+var unwrapLamports$1 = {};
+
+(function (exports) {
+	Object.defineProperty(exports, "__esModule", { value: true });
+	exports.unwrapLamportsInstructionData = void 0;
+	exports.createUnwrapLamportsInstruction = createUnwrapLamportsInstruction;
+	exports.decodeUnwrapLamportsInstruction = decodeUnwrapLamportsInstruction;
+	exports.decodeUnwrapLamportsInstructionUnchecked = decodeUnwrapLamportsInstructionUnchecked;
+	const buffer_layout_1 = Layout$1;
+	const web3_js_1 = require$$0__default["default"];
+	const errors_js_1 = errors$4;
+	const internal_js_1 = internal;
+	const types_js_1 = types$2;
+	const serialization_js_1 = serialization;
+	/** TODO: docs */
+	exports.unwrapLamportsInstructionData = (0, buffer_layout_1.struct)([
+	    (0, buffer_layout_1.u8)('instruction'),
+	    new serialization_js_1.COptionU64Layout('amount'),
+	]);
+	/**
+	 * Construct a UnwrapLamports instruction
+	 *
+	 * @param source       Native source account
+	 * @param destination  Account receiving the lamports
+	 * @param owner        Owner of the source account
+	 * @param amount       Amount of lamports to unwrap
+	 * @param multiSigners Signing accounts if `owner` is a multisig
+	 * @param programId    SPL Token program account
+	 *
+	 * @return Instruction to add to a transaction
+	 */
+	function createUnwrapLamportsInstruction(source, destination, owner, amount, multiSigners = [], programId) {
+	    const keys = (0, internal_js_1.addSigners)([
+	        { pubkey: source, isSigner: false, isWritable: true },
+	        { pubkey: destination, isSigner: false, isWritable: true },
+	    ], owner, multiSigners);
+	    const data = Buffer.alloc(10); // worst-case
+	    exports.unwrapLamportsInstructionData.encode({
+	        instruction: types_js_1.TokenInstruction.UnwrapLamports,
+	        amount,
+	    }, data);
+	    return new web3_js_1.TransactionInstruction({ keys, programId, data });
+	}
+	/**
+	 * Decode a UnwrapLamports instruction and validate it
+	 *
+	 * @param instruction Transaction instruction to decode
+	 * @param programId   SPL Token program account
+	 *
+	 * @return Decoded, valid instruction
+	 */
+	function decodeUnwrapLamportsInstruction(instruction, programId) {
+	    if (!instruction.programId.equals(programId))
+	        throw new errors_js_1.TokenInvalidInstructionProgramError();
+	    if (instruction.data.length < exports.unwrapLamportsInstructionData.getSpan(instruction.data))
+	        throw new errors_js_1.TokenInvalidInstructionDataError();
+	    const { keys: { source, destination, owner, multiSigners }, data, } = decodeUnwrapLamportsInstructionUnchecked(instruction);
+	    if (data.instruction !== types_js_1.TokenInstruction.UnwrapLamports)
+	        throw new errors_js_1.TokenInvalidInstructionTypeError();
+	    if (!source || !destination || !owner)
+	        throw new errors_js_1.TokenInvalidInstructionKeysError();
+	    return {
+	        programId,
+	        keys: {
+	            source,
+	            destination,
+	            owner,
+	            multiSigners,
+	        },
+	        data,
+	    };
+	}
+	/**
+	 * Decode a UnwrapLamports instruction without validating it
+	 *
+	 * @param instruction Transaction instruction to decode
+	 *
+	 * @return Decoded, non-validated instruction
+	 */
+	function decodeUnwrapLamportsInstructionUnchecked({ programId, keys: [source, destination, owner, ...multiSigners], data, }) {
+	    return {
+	        programId,
+	        keys: {
+	            source,
+	            destination,
+	            owner,
+	            multiSigners,
+	        },
+	        data: exports.unwrapLamportsInstructionData.decode(data),
+	    };
+	}
+	
+} (unwrapLamports$1));
+
+var __awaiter$4 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(unwrapLamports$2, "__esModule", { value: true });
+unwrapLamports$2.unwrapLamports = unwrapLamports;
+const web3_js_1$6 = require$$0__default["default"];
+const constants_js_1$6 = constants$1;
+const internal_js_1$4 = internal$1;
+const unwrapLamports_js_1 = unwrapLamports$1;
+/**
+ * Unwrap lamports to an account
+ *
+ * @param connection     Connection to use
+ * @param payer          Payer of the transaction fees
+ * @param source         Native source account
+ * @param destination    Account receiving the lamports
+ * @param owner          Owner of the source account
+ * @param amount         Amount of lamports to unwrap
+ * @param multiSigners   Signing accounts if `owner` is a multisig
+ * @param confirmOptions Options for confirming the transaction
+ * @param programId      SPL Token program account
+ *
+ * @return Signature of the confirmed transaction
+ */
+function unwrapLamports(connection_1, payer_1, source_1, destination_1, owner_1, amount_1) {
+    return __awaiter$4(this, arguments, void 0, function* (connection, payer, source, destination, owner, amount, multiSigners = [], confirmOptions, programId = constants_js_1$6.TOKEN_2022_PROGRAM_ID) {
+        const [ownerPublicKey, signers] = (0, internal_js_1$4.getSigners)(owner, multiSigners);
+        const transaction = new web3_js_1$6.Transaction().add((0, unwrapLamports_js_1.createUnwrapLamportsInstruction)(source, destination, ownerPublicKey, amount, multiSigners, programId));
+        return yield (0, web3_js_1$6.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
@@ -13477,6 +13698,7 @@ function uiAmountToAmount(connection_1, payer_1, mint_1, amount_1) {
 	__exportStar(transfer$2, exports);
 	__exportStar(transferChecked$1, exports);
 	__exportStar(uiAmountToAmount$2, exports);
+	__exportStar(unwrapLamports$2, exports);
 	
 } (actions$a));
 
@@ -13484,7 +13706,7 @@ var extensions = {};
 
 var groupMemberPointer = {};
 
-var instructions$6 = {};
+var instructions$7 = {};
 
 (function (exports) {
 	Object.defineProperty(exports, "__esModule", { value: true });
@@ -13554,7 +13776,7 @@ var instructions$6 = {};
 	    return new web3_js_1.TransactionInstruction({ keys, programId, data: data });
 	}
 	
-} (instructions$6));
+} (instructions$7));
 
 (function (exports) {
 	var __createBinding = (commonjsGlobal && commonjsGlobal.__createBinding) || (Object.create ? (function(o, m, k, k2) {
@@ -13572,14 +13794,14 @@ var instructions$6 = {};
 	    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 	};
 	Object.defineProperty(exports, "__esModule", { value: true });
-	__exportStar(instructions$6, exports);
-	__exportStar(requireState$8(), exports);
+	__exportStar(instructions$7, exports);
+	__exportStar(requireState$9(), exports);
 	
 } (groupMemberPointer));
 
 var groupPointer = {};
 
-var instructions$5 = {};
+var instructions$6 = {};
 
 (function (exports) {
 	Object.defineProperty(exports, "__esModule", { value: true });
@@ -13649,7 +13871,7 @@ var instructions$5 = {};
 	    return new web3_js_1.TransactionInstruction({ keys, programId, data: data });
 	}
 	
-} (instructions$5));
+} (instructions$6));
 
 (function (exports) {
 	var __createBinding = (commonjsGlobal && commonjsGlobal.__createBinding) || (Object.create ? (function(o, m, k, k2) {
@@ -13667,8 +13889,8 @@ var instructions$5 = {};
 	    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 	};
 	Object.defineProperty(exports, "__esModule", { value: true });
-	__exportStar(instructions$5, exports);
-	__exportStar(requireState$7(), exports);
+	__exportStar(instructions$6, exports);
+	__exportStar(requireState$8(), exports);
 	
 } (groupPointer));
 
@@ -13738,7 +13960,7 @@ var initializeMint = {};
 	function decodeInitializeMintInstruction(instruction, programId = constants_js_1.TOKEN_PROGRAM_ID) {
 	    if (!instruction.programId.equals(programId))
 	        throw new errors_js_1.TokenInvalidInstructionProgramError();
-	    if (instruction.data.length !== exports.initializeMintInstructionData.getSpan(instruction.data))
+	    if (instruction.data.length < exports.initializeMintInstructionData.getSpan(instruction.data))
 	        throw new errors_js_1.TokenInvalidInstructionDataError();
 	    const { keys: { mint, rent }, data, } = decodeInitializeMintInstructionUnchecked(instruction);
 	    if (data.instruction !== types_js_1.TokenInstruction.InitializeMint)
@@ -13781,7 +14003,7 @@ var initializeMint = {};
 	
 } (initializeMint));
 
-var instructions$4 = {};
+var instructions$5 = {};
 
 (function (exports) {
 	Object.defineProperty(exports, "__esModule", { value: true });
@@ -13857,9 +14079,9 @@ var instructions$4 = {};
 	    return new web3_js_1.TransactionInstruction({ keys, programId, data });
 	}
 	
-} (instructions$4));
+} (instructions$5));
 
-var __awaiter$2 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$3 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -13871,12 +14093,12 @@ var __awaiter$2 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (this
 Object.defineProperty(actions$1, "__esModule", { value: true });
 actions$1.createInterestBearingMint = createInterestBearingMint;
 actions$1.updateRateInterestBearingMint = updateRateInterestBearingMint;
-const web3_js_1$4 = require$$0__default["default"];
-const internal_js_1$2 = internal$1;
-const constants_js_1$4 = constants$1;
+const web3_js_1$5 = require$$0__default["default"];
+const internal_js_1$3 = internal$1;
+const constants_js_1$5 = constants$1;
 const initializeMint_js_1$1 = initializeMint;
 const extensionType_js_1$2 = requireExtensionType();
-const instructions_js_1 = instructions$4;
+const instructions_js_1 = instructions$5;
 /**
  * Initialize an interest bearing account on a mint
  *
@@ -13894,17 +14116,17 @@ const instructions_js_1 = instructions$4;
  * @return Public key of the mint
  */
 function createInterestBearingMint(connection_1, payer_1, mintAuthority_1, freezeAuthority_1, rateAuthority_1, rate_1, decimals_1) {
-    return __awaiter$2(this, arguments, void 0, function* (connection, payer, mintAuthority, freezeAuthority, rateAuthority, rate, decimals, keypair = web3_js_1$4.Keypair.generate(), confirmOptions, programId = constants_js_1$4.TOKEN_2022_PROGRAM_ID) {
+    return __awaiter$3(this, arguments, void 0, function* (connection, payer, mintAuthority, freezeAuthority, rateAuthority, rate, decimals, keypair = web3_js_1$5.Keypair.generate(), confirmOptions, programId = constants_js_1$5.TOKEN_2022_PROGRAM_ID) {
         const mintLen = (0, extensionType_js_1$2.getMintLen)([extensionType_js_1$2.ExtensionType.InterestBearingConfig]);
         const lamports = yield connection.getMinimumBalanceForRentExemption(mintLen);
-        const transaction = new web3_js_1$4.Transaction().add(web3_js_1$4.SystemProgram.createAccount({
+        const transaction = new web3_js_1$5.Transaction().add(web3_js_1$5.SystemProgram.createAccount({
             fromPubkey: payer.publicKey,
             newAccountPubkey: keypair.publicKey,
             space: mintLen,
             lamports,
             programId,
         }), (0, instructions_js_1.createInitializeInterestBearingMintInstruction)(keypair.publicKey, rateAuthority, rate, programId), (0, initializeMint_js_1$1.createInitializeMintInstruction)(keypair.publicKey, decimals, mintAuthority, freezeAuthority, programId));
-        yield (0, web3_js_1$4.sendAndConfirmTransaction)(connection, transaction, [payer, keypair], confirmOptions);
+        yield (0, web3_js_1$5.sendAndConfirmTransaction)(connection, transaction, [payer, keypair], confirmOptions);
         return keypair.publicKey;
     });
 }
@@ -13923,10 +14145,10 @@ function createInterestBearingMint(connection_1, payer_1, mintAuthority_1, freez
  * @return Signature of the confirmed transaction
  */
 function updateRateInterestBearingMint(connection_1, payer_1, mint_1, rateAuthority_1, rate_1) {
-    return __awaiter$2(this, arguments, void 0, function* (connection, payer, mint, rateAuthority, rate, multiSigners = [], confirmOptions, programId = constants_js_1$4.TOKEN_2022_PROGRAM_ID) {
-        const [rateAuthorityPublicKey, signers] = (0, internal_js_1$2.getSigners)(rateAuthority, multiSigners);
-        const transaction = new web3_js_1$4.Transaction().add((0, instructions_js_1.createUpdateRateInterestBearingMintInstruction)(mint, rateAuthorityPublicKey, rate, signers, programId));
-        return yield (0, web3_js_1$4.sendAndConfirmTransaction)(connection, transaction, [payer, rateAuthority, ...signers], confirmOptions);
+    return __awaiter$3(this, arguments, void 0, function* (connection, payer, mint, rateAuthority, rate, multiSigners = [], confirmOptions, programId = constants_js_1$5.TOKEN_2022_PROGRAM_ID) {
+        const [rateAuthorityPublicKey, signers] = (0, internal_js_1$3.getSigners)(rateAuthority, multiSigners);
+        const transaction = new web3_js_1$5.Transaction().add((0, instructions_js_1.createUpdateRateInterestBearingMintInstruction)(mint, rateAuthorityPublicKey, rate, signers, programId));
+        return yield (0, web3_js_1$5.sendAndConfirmTransaction)(connection, transaction, [payer, rateAuthority, ...signers], confirmOptions);
     });
 }
 
@@ -13947,14 +14169,14 @@ function updateRateInterestBearingMint(connection_1, payer_1, mint_1, rateAuthor
 	};
 	Object.defineProperty(exports, "__esModule", { value: true });
 	__exportStar(actions$1, exports);
-	__exportStar(instructions$4, exports);
-	__exportStar(requireState$6(), exports);
+	__exportStar(instructions$5, exports);
+	__exportStar(requireState$7(), exports);
 	
 } (interestBearingMint));
 
 var metadataPointer = {};
 
-var instructions$3 = {};
+var instructions$4 = {};
 
 (function (exports) {
 	Object.defineProperty(exports, "__esModule", { value: true });
@@ -14024,7 +14246,7 @@ var instructions$3 = {};
 	    return new web3_js_1.TransactionInstruction({ keys, programId, data: data });
 	}
 	
-} (instructions$3));
+} (instructions$4));
 
 (function (exports) {
 	var __createBinding = (commonjsGlobal && commonjsGlobal.__createBinding) || (Object.create ? (function(o, m, k, k2) {
@@ -14042,8 +14264,8 @@ var instructions$3 = {};
 	    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 	};
 	Object.defineProperty(exports, "__esModule", { value: true });
-	__exportStar(instructions$3, exports);
-	__exportStar(requireState$4(), exports);
+	__exportStar(instructions$4, exports);
+	__exportStar(requireState$5(), exports);
 	
 } (metadataPointer));
 
@@ -14158,7 +14380,7 @@ instruction.createRemoveKeyInstruction = createRemoveKeyInstruction;
 instruction.createUpdateAuthorityInstruction = createUpdateAuthorityInstruction;
 instruction.createEmitInstruction = createEmitInstruction;
 const codecs_1$1 = require$$0__default$2["default"];
-const web3_js_1$3 = require$$0__default["default"];
+const web3_js_1$4 = require$$0__default["default"];
 const field_js_1 = field;
 function getInstructionEncoder(discriminator, dataEncoder) {
     return (0, codecs_1$1.transformEncoder)((0, codecs_1$1.getTupleEncoder)([(0, codecs_1$1.getBytesEncoder)(), dataEncoder]), (data) => [
@@ -14174,7 +14396,7 @@ function getStringEncoder() {
 }
 function createInitializeInstruction(args) {
     const { programId, metadata, updateAuthority, mint, mintAuthority, name, symbol, uri } = args;
-    return new web3_js_1$3.TransactionInstruction({
+    return new web3_js_1$4.TransactionInstruction({
         programId,
         keys: [
             { isSigner: false, isWritable: true, pubkey: metadata },
@@ -14194,7 +14416,7 @@ function createInitializeInstruction(args) {
 }
 function createUpdateFieldInstruction(args) {
     const { programId, metadata, updateAuthority, field, value } = args;
-    return new web3_js_1$3.TransactionInstruction({
+    return new web3_js_1$4.TransactionInstruction({
         programId,
         keys: [
             { isSigner: false, isWritable: true, pubkey: metadata },
@@ -14211,7 +14433,7 @@ function createUpdateFieldInstruction(args) {
 }
 function createRemoveKeyInstruction(args) {
     const { programId, metadata, updateAuthority, key, idempotent } = args;
-    return new web3_js_1$3.TransactionInstruction({
+    return new web3_js_1$4.TransactionInstruction({
         programId,
         keys: [
             { isSigner: false, isWritable: true, pubkey: metadata },
@@ -14228,7 +14450,7 @@ function createRemoveKeyInstruction(args) {
 }
 function createUpdateAuthorityInstruction(args) {
     const { programId, metadata, oldAuthority, newAuthority } = args;
-    return new web3_js_1$3.TransactionInstruction({
+    return new web3_js_1$4.TransactionInstruction({
         programId,
         keys: [
             { isSigner: false, isWritable: true, pubkey: metadata },
@@ -14237,12 +14459,12 @@ function createUpdateAuthorityInstruction(args) {
         data: Buffer.from(getInstructionEncoder(new Uint8Array([
             /* await splDiscriminate('spl_token_metadata_interface:update_the_authority') */
             215, 228, 166, 228, 84, 100, 86, 123,
-        ]), (0, codecs_1$1.getStructEncoder)([['newAuthority', getPublicKeyEncoder()]])).encode({ newAuthority: newAuthority !== null && newAuthority !== void 0 ? newAuthority : web3_js_1$3.SystemProgram.programId })),
+        ]), (0, codecs_1$1.getStructEncoder)([['newAuthority', getPublicKeyEncoder()]])).encode({ newAuthority: newAuthority !== null && newAuthority !== void 0 ? newAuthority : web3_js_1$4.SystemProgram.programId })),
     });
 }
 function createEmitInstruction(args) {
     const { programId, metadata, start, end } = args;
-    return new web3_js_1$3.TransactionInstruction({
+    return new web3_js_1$4.TransactionInstruction({
         programId,
         keys: [{ isSigner: false, isWritable: false, pubkey: metadata }],
         data: Buffer.from(getInstructionEncoder(new Uint8Array([
@@ -14261,7 +14483,7 @@ Object.defineProperty(state$3, "__esModule", { value: true });
 state$3.TOKEN_METADATA_DISCRIMINATOR = void 0;
 state$3.pack = pack;
 state$3.unpack = unpack;
-const web3_js_1$2 = require$$0__default["default"];
+const web3_js_1$3 = require$$0__default["default"];
 const codecs_1 = require$$0__default$2["default"];
 state$3.TOKEN_METADATA_DISCRIMINATOR = Buffer.from([112, 132, 90, 90, 11, 88, 157, 87]);
 function getStringCodec() {
@@ -14288,7 +14510,7 @@ function isNonePubkey(buffer) {
 function pack(meta) {
     var _a;
     // If no updateAuthority given, set it to the None/Zero PublicKey for encoding
-    const updateAuthority = (_a = meta.updateAuthority) !== null && _a !== void 0 ? _a : web3_js_1$2.PublicKey.default;
+    const updateAuthority = (_a = meta.updateAuthority) !== null && _a !== void 0 ? _a : web3_js_1$3.PublicKey.default;
     return tokenMetadataCodec.encode(Object.assign(Object.assign({}, meta), { updateAuthority: updateAuthority.toBuffer(), mint: meta.mint.toBuffer() }));
 }
 // unpack byte slab into TokenMetadata
@@ -14296,15 +14518,15 @@ function unpack(buffer) {
     const data = tokenMetadataCodec.decode(buffer);
     return isNonePubkey(data.updateAuthority)
         ? {
-            mint: new web3_js_1$2.PublicKey(data.mint),
+            mint: new web3_js_1$3.PublicKey(data.mint),
             name: data.name,
             symbol: data.symbol,
             uri: data.uri,
             additionalMetadata: data.additionalMetadata,
         }
         : {
-            updateAuthority: new web3_js_1$2.PublicKey(data.updateAuthority),
-            mint: new web3_js_1$2.PublicKey(data.mint),
+            updateAuthority: new web3_js_1$3.PublicKey(data.updateAuthority),
+            mint: new web3_js_1$3.PublicKey(data.mint),
             name: data.name,
             symbol: data.symbol,
             uri: data.uri,
@@ -14337,7 +14559,7 @@ function unpack(buffer) {
 
 var state$2 = {};
 
-var __awaiter$1 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$2 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -14350,7 +14572,7 @@ Object.defineProperty(state$2, "__esModule", { value: true });
 state$2.updateTokenMetadata = updateTokenMetadata;
 state$2.getTokenMetadata = getTokenMetadata;
 const spl_token_metadata_1$1 = cjs;
-const constants_js_1$3 = constants$1;
+const constants_js_1$4 = constants$1;
 const extensionType_js_1$1 = requireExtensionType();
 const mint_js_1 = requireMint();
 const getNormalizedTokenMetadataField = (field) => {
@@ -14398,7 +14620,7 @@ function updateTokenMetadata(current, key, value) {
  * @return Token Metadata information
  */
 function getTokenMetadata(connection_1, address_1, commitment_1) {
-    return __awaiter$1(this, arguments, void 0, function* (connection, address, commitment, programId = constants_js_1$3.TOKEN_2022_PROGRAM_ID) {
+    return __awaiter$2(this, arguments, void 0, function* (connection, address, commitment, programId = constants_js_1$4.TOKEN_2022_PROGRAM_ID) {
         const mintInfo = yield (0, mint_js_1.getMint)(connection, address, commitment, programId);
         const data = (0, extensionType_js_1$1.getExtensionData)(extensionType_js_1$1.ExtensionType.TokenMetadata, mintInfo.tlvData);
         if (data === null) {
@@ -14432,7 +14654,7 @@ var state$1 = {};
 	
 } (state$1));
 
-var __awaiter = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$1 = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -14448,19 +14670,19 @@ actions.tokenMetadataUpdateField = tokenMetadataUpdateField;
 actions.tokenMetadataUpdateFieldWithRentTransfer = tokenMetadataUpdateFieldWithRentTransfer;
 actions.tokenMetadataRemoveKey = tokenMetadataRemoveKey;
 actions.tokenMetadataUpdateAuthority = tokenMetadataUpdateAuthority;
-const web3_js_1$1 = require$$0__default["default"];
+const web3_js_1$2 = require$$0__default["default"];
 const spl_token_metadata_1 = cjs;
-const constants_js_1$2 = constants$1;
-const internal_js_1$1 = internal$1;
+const constants_js_1$3 = constants$1;
+const internal_js_1$2 = internal$1;
 const extensionType_js_1 = requireExtensionType();
 const state_js_1 = state$2;
-const errors_js_1$2 = errors$4;
+const errors_js_1$3 = errors$4;
 const index_js_1 = state$1;
 function getAdditionalRentForNewMetadata(connection_1, address_1, tokenMetadata_1) {
-    return __awaiter(this, arguments, void 0, function* (connection, address, tokenMetadata, programId = constants_js_1$2.TOKEN_2022_PROGRAM_ID) {
+    return __awaiter$1(this, arguments, void 0, function* (connection, address, tokenMetadata, programId = constants_js_1$3.TOKEN_2022_PROGRAM_ID) {
         const info = yield connection.getAccountInfo(address);
         if (!info) {
-            throw new errors_js_1$2.TokenAccountNotFoundError();
+            throw new errors_js_1$3.TokenAccountNotFoundError();
         }
         const extensionLen = (0, spl_token_metadata_1.pack)(tokenMetadata).length;
         const newAccountLen = (0, extensionType_js_1.getNewAccountLenForExtensionLen)(info, address, extensionType_js_1.ExtensionType.TokenMetadata, extensionLen, programId);
@@ -14472,10 +14694,10 @@ function getAdditionalRentForNewMetadata(connection_1, address_1, tokenMetadata_
     });
 }
 function getAdditionalRentForUpdatedMetadata(connection_1, address_1, field_1, value_1) {
-    return __awaiter(this, arguments, void 0, function* (connection, address, field, value, programId = constants_js_1$2.TOKEN_2022_PROGRAM_ID) {
+    return __awaiter$1(this, arguments, void 0, function* (connection, address, field, value, programId = constants_js_1$3.TOKEN_2022_PROGRAM_ID) {
         const info = yield connection.getAccountInfo(address);
         if (!info) {
-            throw new errors_js_1$2.TokenAccountNotFoundError();
+            throw new errors_js_1$3.TokenAccountNotFoundError();
         }
         const mint = (0, index_js_1.unpackMint)(address, info, programId);
         const extensionData = (0, extensionType_js_1.getExtensionData)(extensionType_js_1.ExtensionType.TokenMetadata, mint.tlvData);
@@ -14510,9 +14732,9 @@ function getAdditionalRentForUpdatedMetadata(connection_1, address_1, field_1, v
  * @return Signature of the confirmed transaction
  */
 function tokenMetadataInitialize(connection_1, payer_1, mint_1, updateAuthority_1, mintAuthority_1, name_1, symbol_1, uri_1) {
-    return __awaiter(this, arguments, void 0, function* (connection, payer, mint, updateAuthority, mintAuthority, name, symbol, uri, multiSigners = [], confirmOptions, programId = constants_js_1$2.TOKEN_2022_PROGRAM_ID) {
-        const [mintAuthorityPublicKey, signers] = (0, internal_js_1$1.getSigners)(mintAuthority, multiSigners);
-        const transaction = new web3_js_1$1.Transaction().add((0, spl_token_metadata_1.createInitializeInstruction)({
+    return __awaiter$1(this, arguments, void 0, function* (connection, payer, mint, updateAuthority, mintAuthority, name, symbol, uri, multiSigners = [], confirmOptions, programId = constants_js_1$3.TOKEN_2022_PROGRAM_ID) {
+        const [mintAuthorityPublicKey, signers] = (0, internal_js_1$2.getSigners)(mintAuthority, multiSigners);
+        const transaction = new web3_js_1$2.Transaction().add((0, spl_token_metadata_1.createInitializeInstruction)({
             programId,
             metadata: mint,
             updateAuthority,
@@ -14522,7 +14744,7 @@ function tokenMetadataInitialize(connection_1, payer_1, mint_1, updateAuthority_
             symbol,
             uri,
         }));
-        return yield (0, web3_js_1$1.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+        return yield (0, web3_js_1$2.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 /**
@@ -14544,9 +14766,9 @@ function tokenMetadataInitialize(connection_1, payer_1, mint_1, updateAuthority_
  * @return Signature of the confirmed transaction
  */
 function tokenMetadataInitializeWithRentTransfer(connection_1, payer_1, mint_1, updateAuthority_1, mintAuthority_1, name_1, symbol_1, uri_1) {
-    return __awaiter(this, arguments, void 0, function* (connection, payer, mint, updateAuthority, mintAuthority, name, symbol, uri, multiSigners = [], confirmOptions, programId = constants_js_1$2.TOKEN_2022_PROGRAM_ID) {
-        const [mintAuthorityPublicKey, signers] = (0, internal_js_1$1.getSigners)(mintAuthority, multiSigners);
-        const transaction = new web3_js_1$1.Transaction();
+    return __awaiter$1(this, arguments, void 0, function* (connection, payer, mint, updateAuthority, mintAuthority, name, symbol, uri, multiSigners = [], confirmOptions, programId = constants_js_1$3.TOKEN_2022_PROGRAM_ID) {
+        const [mintAuthorityPublicKey, signers] = (0, internal_js_1$2.getSigners)(mintAuthority, multiSigners);
+        const transaction = new web3_js_1$2.Transaction();
         const lamports = yield getAdditionalRentForNewMetadata(connection, mint, {
             updateAuthority,
             mint,
@@ -14556,7 +14778,7 @@ function tokenMetadataInitializeWithRentTransfer(connection_1, payer_1, mint_1, 
             additionalMetadata: [],
         }, programId);
         if (lamports > 0) {
-            transaction.add(web3_js_1$1.SystemProgram.transfer({ fromPubkey: payer.publicKey, toPubkey: mint, lamports: lamports }));
+            transaction.add(web3_js_1$2.SystemProgram.transfer({ fromPubkey: payer.publicKey, toPubkey: mint, lamports: lamports }));
         }
         transaction.add((0, spl_token_metadata_1.createInitializeInstruction)({
             programId,
@@ -14568,7 +14790,7 @@ function tokenMetadataInitializeWithRentTransfer(connection_1, payer_1, mint_1, 
             symbol,
             uri,
         }));
-        return yield (0, web3_js_1$1.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+        return yield (0, web3_js_1$2.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 /**
@@ -14591,16 +14813,16 @@ function tokenMetadataInitializeWithRentTransfer(connection_1, payer_1, mint_1, 
  * @return Signature of the confirmed transaction
  */
 function tokenMetadataUpdateField(connection_1, payer_1, mint_1, updateAuthority_1, field_1, value_1) {
-    return __awaiter(this, arguments, void 0, function* (connection, payer, mint, updateAuthority, field, value, multiSigners = [], confirmOptions, programId = constants_js_1$2.TOKEN_2022_PROGRAM_ID) {
-        const [updateAuthorityPublicKey, signers] = (0, internal_js_1$1.getSigners)(updateAuthority, multiSigners);
-        const transaction = new web3_js_1$1.Transaction().add((0, spl_token_metadata_1.createUpdateFieldInstruction)({
+    return __awaiter$1(this, arguments, void 0, function* (connection, payer, mint, updateAuthority, field, value, multiSigners = [], confirmOptions, programId = constants_js_1$3.TOKEN_2022_PROGRAM_ID) {
+        const [updateAuthorityPublicKey, signers] = (0, internal_js_1$2.getSigners)(updateAuthority, multiSigners);
+        const transaction = new web3_js_1$2.Transaction().add((0, spl_token_metadata_1.createUpdateFieldInstruction)({
             programId,
             metadata: mint,
             updateAuthority: updateAuthorityPublicKey,
             field,
             value,
         }));
-        return yield (0, web3_js_1$1.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+        return yield (0, web3_js_1$2.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 /**
@@ -14624,12 +14846,12 @@ function tokenMetadataUpdateField(connection_1, payer_1, mint_1, updateAuthority
  * @return Signature of the confirmed transaction
  */
 function tokenMetadataUpdateFieldWithRentTransfer(connection_1, payer_1, mint_1, updateAuthority_1, field_1, value_1) {
-    return __awaiter(this, arguments, void 0, function* (connection, payer, mint, updateAuthority, field, value, multiSigners = [], confirmOptions, programId = constants_js_1$2.TOKEN_2022_PROGRAM_ID) {
-        const [updateAuthorityPublicKey, signers] = (0, internal_js_1$1.getSigners)(updateAuthority, multiSigners);
-        const transaction = new web3_js_1$1.Transaction();
+    return __awaiter$1(this, arguments, void 0, function* (connection, payer, mint, updateAuthority, field, value, multiSigners = [], confirmOptions, programId = constants_js_1$3.TOKEN_2022_PROGRAM_ID) {
+        const [updateAuthorityPublicKey, signers] = (0, internal_js_1$2.getSigners)(updateAuthority, multiSigners);
+        const transaction = new web3_js_1$2.Transaction();
         const lamports = yield getAdditionalRentForUpdatedMetadata(connection, mint, field, value, programId);
         if (lamports > 0) {
-            transaction.add(web3_js_1$1.SystemProgram.transfer({ fromPubkey: payer.publicKey, toPubkey: mint, lamports: lamports }));
+            transaction.add(web3_js_1$2.SystemProgram.transfer({ fromPubkey: payer.publicKey, toPubkey: mint, lamports: lamports }));
         }
         transaction.add((0, spl_token_metadata_1.createUpdateFieldInstruction)({
             programId,
@@ -14638,7 +14860,7 @@ function tokenMetadataUpdateFieldWithRentTransfer(connection_1, payer_1, mint_1,
             field,
             value,
         }));
-        return yield (0, web3_js_1$1.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+        return yield (0, web3_js_1$2.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 /**
@@ -14659,16 +14881,16 @@ function tokenMetadataUpdateFieldWithRentTransfer(connection_1, payer_1, mint_1,
  * @return Signature of the confirmed transaction
  */
 function tokenMetadataRemoveKey(connection_1, payer_1, mint_1, updateAuthority_1, key_1, idempotent_1) {
-    return __awaiter(this, arguments, void 0, function* (connection, payer, mint, updateAuthority, key, idempotent, multiSigners = [], confirmOptions, programId = constants_js_1$2.TOKEN_2022_PROGRAM_ID) {
-        const [updateAuthorityPublicKey, signers] = (0, internal_js_1$1.getSigners)(updateAuthority, multiSigners);
-        const transaction = new web3_js_1$1.Transaction().add((0, spl_token_metadata_1.createRemoveKeyInstruction)({
+    return __awaiter$1(this, arguments, void 0, function* (connection, payer, mint, updateAuthority, key, idempotent, multiSigners = [], confirmOptions, programId = constants_js_1$3.TOKEN_2022_PROGRAM_ID) {
+        const [updateAuthorityPublicKey, signers] = (0, internal_js_1$2.getSigners)(updateAuthority, multiSigners);
+        const transaction = new web3_js_1$2.Transaction().add((0, spl_token_metadata_1.createRemoveKeyInstruction)({
             programId,
             metadata: mint,
             updateAuthority: updateAuthorityPublicKey,
             key,
             idempotent,
         }));
-        return yield (0, web3_js_1$1.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+        return yield (0, web3_js_1$2.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 /**
@@ -14686,15 +14908,15 @@ function tokenMetadataRemoveKey(connection_1, payer_1, mint_1, updateAuthority_1
  * @return Signature of the confirmed transaction
  */
 function tokenMetadataUpdateAuthority(connection_1, payer_1, mint_1, updateAuthority_1, newAuthority_1) {
-    return __awaiter(this, arguments, void 0, function* (connection, payer, mint, updateAuthority, newAuthority, multiSigners = [], confirmOptions, programId = constants_js_1$2.TOKEN_2022_PROGRAM_ID) {
-        const [updateAuthorityPublicKey, signers] = (0, internal_js_1$1.getSigners)(updateAuthority, multiSigners);
-        const transaction = new web3_js_1$1.Transaction().add((0, spl_token_metadata_1.createUpdateAuthorityInstruction)({
+    return __awaiter$1(this, arguments, void 0, function* (connection, payer, mint, updateAuthority, newAuthority, multiSigners = [], confirmOptions, programId = constants_js_1$3.TOKEN_2022_PROGRAM_ID) {
+        const [updateAuthorityPublicKey, signers] = (0, internal_js_1$2.getSigners)(updateAuthority, multiSigners);
+        const transaction = new web3_js_1$2.Transaction().add((0, spl_token_metadata_1.createUpdateAuthorityInstruction)({
             programId,
             metadata: mint,
             oldAuthority: updateAuthorityPublicKey,
             newAuthority,
         }));
-        return yield (0, web3_js_1$1.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
+        return yield (0, web3_js_1$2.sendAndConfirmTransaction)(connection, transaction, [payer, ...signers], confirmOptions);
     });
 }
 
@@ -14718,6 +14940,144 @@ function tokenMetadataUpdateAuthority(connection_1, payer_1, mint_1, updateAutho
 	__exportStar(state$2, exports);
 	
 } (tokenMetadata));
+
+var permissionedBurn = {};
+
+var instructions$3 = {};
+
+Object.defineProperty(instructions$3, "__esModule", { value: true });
+instructions$3.PermissionedBurnInstruction = void 0;
+instructions$3.createInitializePermissionedBurnInstruction = createInitializePermissionedBurnInstruction;
+instructions$3.createPermissionedBurnInstruction = createPermissionedBurnInstruction;
+instructions$3.createPermissionedBurnCheckedInstruction = createPermissionedBurnCheckedInstruction;
+const buffer_layout_1$2 = Layout$1;
+const buffer_layout_utils_1 = cjs$2;
+const web3_js_1$1 = require$$0__default["default"];
+const constants_js_1$2 = constants$1;
+const errors_js_1$2 = errors$4;
+const internal_js_1$1 = internal;
+const types_js_1$2 = types$2;
+var PermissionedBurnInstruction;
+(function (PermissionedBurnInstruction) {
+    PermissionedBurnInstruction[PermissionedBurnInstruction["Initialize"] = 0] = "Initialize";
+    PermissionedBurnInstruction[PermissionedBurnInstruction["Burn"] = 1] = "Burn";
+    PermissionedBurnInstruction[PermissionedBurnInstruction["BurnChecked"] = 2] = "BurnChecked";
+})(PermissionedBurnInstruction || (instructions$3.PermissionedBurnInstruction = PermissionedBurnInstruction = {}));
+const initializePermissionedBurnInstructionData = (0, buffer_layout_1$2.struct)([
+    (0, buffer_layout_1$2.u8)('instruction'),
+    (0, buffer_layout_1$2.u8)('permissionedBurnInstruction'),
+    (0, buffer_layout_utils_1.publicKey)('authority'),
+]);
+/**
+ * Construct a InitializePermissionedBurnConfig instruction
+ *
+ * @param mint          Token mint account
+ * @param authority     The permissioned burn mint's authority
+ * @param programId     SPL Token program account
+ */
+function createInitializePermissionedBurnInstruction(mint, authority, programId = constants_js_1$2.TOKEN_2022_PROGRAM_ID) {
+    if (!(0, constants_js_1$2.programSupportsExtensions)(programId)) {
+        throw new errors_js_1$2.TokenUnsupportedInstructionError();
+    }
+    const keys = [{ pubkey: mint, isSigner: false, isWritable: true }];
+    const data = Buffer.alloc(initializePermissionedBurnInstructionData.span);
+    initializePermissionedBurnInstructionData.encode({
+        instruction: types_js_1$2.TokenInstruction.PermissionedBurnExtension,
+        permissionedBurnInstruction: PermissionedBurnInstruction.Initialize,
+        authority,
+    }, data);
+    return new web3_js_1$1.TransactionInstruction({ keys, programId, data });
+}
+const permissionedBurnInstructionData = (0, buffer_layout_1$2.struct)([
+    (0, buffer_layout_1$2.u8)('instruction'),
+    (0, buffer_layout_1$2.u8)('permissionedBurnInstruction'),
+    (0, buffer_layout_utils_1.u64)('amount'),
+]);
+/**
+ * Construct a permissioned burn instruction
+ *
+ * @param account                       Token account to update
+ * @param mint                          Token mint account
+ * @param owner                         The account's owner/delegate
+ * @param permissionedBurnAuthority     Authority configured on the mint for permissioned burns
+ * @param amount                        Amount to burn
+ * @param multiSigners                  The signer account(s)
+ * @param programId                     SPL Token program account
+ */
+function createPermissionedBurnInstruction(account, mint, owner, permissionedBurnAuthority, amount, multiSigners = [], programId = constants_js_1$2.TOKEN_2022_PROGRAM_ID) {
+    if (!(0, constants_js_1$2.programSupportsExtensions)(programId)) {
+        throw new errors_js_1$2.TokenUnsupportedInstructionError();
+    }
+    const keys = (0, internal_js_1$1.addSigners)([
+        { pubkey: account, isSigner: false, isWritable: true },
+        { pubkey: mint, isSigner: false, isWritable: true },
+        { pubkey: permissionedBurnAuthority, isSigner: true, isWritable: false },
+    ], owner, multiSigners);
+    const data = Buffer.alloc(permissionedBurnInstructionData.span);
+    permissionedBurnInstructionData.encode({
+        instruction: types_js_1$2.TokenInstruction.PermissionedBurnExtension,
+        permissionedBurnInstruction: PermissionedBurnInstruction.Burn,
+        amount: BigInt(amount),
+    }, data);
+    return new web3_js_1$1.TransactionInstruction({ keys, programId, data });
+}
+const permissionedBurnCheckedInstructionData = (0, buffer_layout_1$2.struct)([
+    (0, buffer_layout_1$2.u8)('instruction'),
+    (0, buffer_layout_1$2.u8)('permissionedBurnInstruction'),
+    (0, buffer_layout_utils_1.u64)('amount'),
+    (0, buffer_layout_1$2.u8)('decimals'),
+]);
+/**
+ * Construct a checked permissioned burn instruction
+ *
+ * @param account                       Token account to update
+ * @param mint                          Token mint account
+ * @param owner                         The account's owner/delegate
+ * @param permissionedBurnAuthority     Authority configured on the mint for permissioned burns
+ * @param amount                        Amount to burn
+ * @param decimals                      Number of the decimals of the mint
+ * @param multiSigners                  The signer account(s)
+ * @param programId                     SPL Token program account
+ */
+function createPermissionedBurnCheckedInstruction(account, mint, owner, permissionedBurnAuthority, amount, decimals, multiSigners = [], programId = constants_js_1$2.TOKEN_2022_PROGRAM_ID) {
+    if (!(0, constants_js_1$2.programSupportsExtensions)(programId)) {
+        throw new errors_js_1$2.TokenUnsupportedInstructionError();
+    }
+    const keys = (0, internal_js_1$1.addSigners)([
+        { pubkey: account, isSigner: false, isWritable: true },
+        { pubkey: mint, isSigner: false, isWritable: true },
+        { pubkey: permissionedBurnAuthority, isSigner: true, isWritable: false },
+    ], owner, multiSigners);
+    const data = Buffer.alloc(permissionedBurnCheckedInstructionData.span);
+    permissionedBurnCheckedInstructionData.encode({
+        instruction: types_js_1$2.TokenInstruction.PermissionedBurnExtension,
+        permissionedBurnInstruction: PermissionedBurnInstruction.BurnChecked,
+        amount: BigInt(amount),
+        decimals,
+    }, data);
+    return new web3_js_1$1.TransactionInstruction({ keys, programId, data });
+}
+
+(function (exports) {
+	var __createBinding = (commonjsGlobal && commonjsGlobal.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+	    if (k2 === undefined) k2 = k;
+	    var desc = Object.getOwnPropertyDescriptor(m, k);
+	    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+	      desc = { enumerable: true, get: function() { return m[k]; } };
+	    }
+	    Object.defineProperty(o, k2, desc);
+	}) : (function(o, m, k, k2) {
+	    if (k2 === undefined) k2 = k;
+	    o[k2] = m[k];
+	}));
+	var __exportStar = (commonjsGlobal && commonjsGlobal.__exportStar) || function(m, exports) {
+	    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+	};
+	Object.defineProperty(exports, "__esModule", { value: true });
+	__exportStar(instructions$3, exports);
+	__exportStar(requireState$3(), exports);
+	
+} (permissionedBurn));
 
 (function (exports) {
 	var __createBinding = (commonjsGlobal && commonjsGlobal.__createBinding) || (Object.create ? (function(o, m, k, k2) {
@@ -14754,6 +15114,7 @@ function tokenMetadataUpdateAuthority(connection_1, payer_1, mint_1, updateAutho
 	__exportStar(requirePermanentDelegate(), exports);
 	__exportStar(requireTransferHook(), exports);
 	__exportStar(requirePausable(), exports);
+	__exportStar(permissionedBurn, exports);
 	
 } (extensions));
 
@@ -14957,7 +15318,7 @@ decode.isSyncNativeInstruction = isSyncNativeInstruction;
 decode.isInitializeAccount3Instruction = isInitializeAccount3Instruction;
 decode.isInitializeMint2Instruction = isInitializeMint2Instruction;
 decode.isAmountToUiAmountInstruction = isAmountToUiAmountInstruction;
-decode.isUiamountToAmountInstruction = isUiamountToAmountInstruction;
+decode.isUiAmountToAmountInstruction = isUiAmountToAmountInstruction;
 const buffer_layout_1$1 = Layout$1;
 const constants_js_1$1 = constants$1;
 const errors_js_1$1 = errors$4;
@@ -15129,7 +15490,7 @@ function isAmountToUiAmountInstruction(decoded) {
     return decoded.data.instruction === types_js_1$1.TokenInstruction.AmountToUiAmount;
 }
 /** TODO: docs */
-function isUiamountToAmountInstruction(decoded) {
+function isUiAmountToAmountInstruction(decoded) {
     return decoded.data.instruction === types_js_1$1.TokenInstruction.UiAmountToAmount;
 }
 
@@ -15272,7 +15633,7 @@ var initializeMintCloseAuthority = {};
 	function decodeInitializeMintCloseAuthorityInstruction(instruction, programId) {
 	    if (!instruction.programId.equals(programId))
 	        throw new errors_js_1.TokenInvalidInstructionProgramError();
-	    if (instruction.data.length !== exports.initializeMintCloseAuthorityInstructionData.getSpan(instruction.data))
+	    if (instruction.data.length < exports.initializeMintCloseAuthorityInstructionData.getSpan(instruction.data))
 	        throw new errors_js_1.TokenInvalidInstructionDataError();
 	    const { keys: { mint }, data, } = decodeInitializeMintCloseAuthorityInstructionUnchecked(instruction);
 	    if (data.instruction !== types_js_1.TokenInstruction.InitializeMintCloseAuthority)
@@ -15570,10 +15931,9 @@ var initializePermanentDelegate = {};
 const LIQUIDITY_RESERVATION$1 = 100;  // 100%
 
 // Price adjustment percentage
-const PRICE_ADJUSTMENT_PERCENTAGE$1 = 15; //  5就是 0.5%
+const PRICE_ADJUSTMENT_PERCENTAGE$1 = 15; //  5 means 0.5%
 
 // Minimum stop loss percentage - stop loss price must be at least this far from current price
-// 最小止损百分比 - 止损价格必须与当前价格至少相差此百分比
 // Example: 40 means 4.0% (calculation: 40/1000 = 0.04 = 4%)
 const MIN_STOP_LOSS_PERCENT$1 = 40; // 4.0%
 
@@ -15625,11 +15985,11 @@ var utils$2 = {
 const { ComputeBudgetProgram: ComputeBudgetProgram$1, PublicKey: PublicKey$6, Transaction: Transaction$3, SystemProgram: SystemProgram$3, SYSVAR_RENT_PUBKEY: SYSVAR_RENT_PUBKEY$2 } = require$$0__default["default"];
 const { createAssociatedTokenAccountInstruction: createAssociatedTokenAccountInstruction$1, getAssociatedTokenAddress: getAssociatedTokenAddress$2, TOKEN_PROGRAM_ID: TOKEN_PROGRAM_ID$2, ASSOCIATED_TOKEN_PROGRAM_ID: ASSOCIATED_TOKEN_PROGRAM_ID$2 } = cjs$3;
 const anchor$4 = require$$0__default$3["default"];
-// 统一使用 buffer 包，所有平台一致
+// Use the buffer package uniformly, consistent across all platforms
 const { Buffer: Buffer$6 } = require$$3__default["default"];
 const { MAX_CANDIDATE_INDICES: MAX_CANDIDATE_INDICES$2 } = utils$2;
 
-// 环境检测和条件加载
+// Environment detection and conditional loading
 typeof process !== 'undefined' && process.versions && process.versions.node;
 
 /**
@@ -15917,11 +16277,11 @@ class TradingModule$1 {
    * Margin Long
    * @param {Object} params - Long parameters
    * @param {string|PublicKey} params.mintAccount - Token mint account address
-   * @param {anchor.BN} params.buyTokenAmount - Amount of tokens to buy (确定值)
-   * @param {anchor.BN} params.maxSolAmount - Maximum SOL to spend (实际有可能会少点)
-   * @param {anchor.BN} params.marginSol - Margin amount (保证金数量 SOL)
-   * @param {anchor.BN} params.closePrice - Close price (平仓价格/止损价格)
-   * @param {Array<number>} params.closeInsertIndices - Close insert indices array (平仓时插入订单簿的位置索引数组)
+   * @param {anchor.BN} params.buyTokenAmount - Amount of tokens to buy (fixed value)
+   * @param {anchor.BN} params.maxSolAmount - Maximum SOL to spend (the actual amount may be slightly less)
+   * @param {anchor.BN} params.marginSol - Margin amount (margin in SOL)
+   * @param {anchor.BN} params.closePrice - Close price (close price / stop loss price)
+   * @param {Array<number>} params.closeInsertIndices - Close insert indices array (position indices for inserting into the orderbook at close)
    * @param {PublicKey} params.payer - Payer public key
    * @param {Object} options - Optional parameters
    * @param {number} options.computeUnits - Compute units limit, default 1400000
@@ -15934,14 +16294,14 @@ class TradingModule$1 {
    *   maxSolAmount: new anchor.BN("1100000000"),
    *   marginSol: new anchor.BN("2200000000"),
    *   closePrice: new anchor.BN("1000000000000000"),
-   *   closeInsertIndices: [0, 1, 2], // 插入位置索引数组
+   *   closeInsertIndices: [0, 1, 2], // insert position index array
    *   payer: wallet.publicKey
    * });
    */
   async long({ mintAccount, buyTokenAmount, maxSolAmount, marginSol, closePrice, closeInsertIndices, payer }, options = {}) {
     const { computeUnits = 1400000 } = options;
 
-    // 1. 参数验证和转换
+    // 1. Parameter validation and conversion
     const mint = typeof mintAccount === 'string' ? new PublicKey$6(mintAccount) : mintAccount;
 
     if (!anchor$4.BN.isBN(buyTokenAmount) || !anchor$4.BN.isBN(maxSolAmount) ||
@@ -16026,18 +16386,18 @@ class TradingModule$1 {
   }
 
   /**
-   * 保证金做空 / Margin Short
-   * @param {Object} params - 做空参数 / Short parameters
-   * @param {string|PublicKey} params.mintAccount - 代币铸造账户地址 / Token mint account address
-   * @param {anchor.BN} params.borrowSellTokenAmount - 借出卖出的代币数量 (希望卖出的token数量) / Borrowed token amount to sell
-   * @param {anchor.BN} params.minSolOutput - 最小 SOL 输出 (卖出后最少得到的sol数量) / Minimum SOL output
-   * @param {anchor.BN} params.marginSol - 保证金数量 (SOL) / Margin amount
-   * @param {anchor.BN} params.closePrice - 平仓价格 (止损价格) / Close price
-   * @param {Array<number>} params.closeInsertIndices - Close insert indices array (平仓时插入订单簿的位置索引数组)
-   * @param {PublicKey} params.payer - 支付者公钥 / Payer public key
-   * @param {Object} options - 可选参数 / Optional parameters
-   * @param {number} options.computeUnits - 计算单元限制，默认 1400000 / Compute units limit, default 1400000
-   * @returns {Promise<Object>} 包含交易对象、签名者和账户信息的对象 / Object containing transaction, signers and account info
+   * Margin Short
+   * @param {Object} params - Short parameters
+   * @param {string|PublicKey} params.mintAccount - Token mint account address
+   * @param {anchor.BN} params.borrowSellTokenAmount - Borrowed token amount to sell (the amount of tokens you wish to sell)
+   * @param {anchor.BN} params.minSolOutput - Minimum SOL output (the minimum SOL received after selling)
+   * @param {anchor.BN} params.marginSol - Margin amount (SOL)
+   * @param {anchor.BN} params.closePrice - Close price (stop loss price)
+   * @param {Array<number>} params.closeInsertIndices - Close insert indices array (position indices for inserting into the orderbook at close)
+   * @param {PublicKey} params.payer - Payer public key
+   * @param {Object} options - Optional parameters
+   * @param {number} options.computeUnits - Compute units limit, default 1400000
+   * @returns {Promise<Object>} Object containing transaction, signers and account info
    *
    * @example
    * const result = await sdk.trading.short({
@@ -16046,14 +16406,14 @@ class TradingModule$1 {
    *   minSolOutput: new anchor.BN("100"),
    *   marginSol: new anchor.BN("2200000000"),
    *   closePrice: new anchor.BN("1000000000000000"),
-   *   closeInsertIndices: [0, 1, 2], // 插入位置索引数组
+   *   closeInsertIndices: [0, 1, 2], // insert position index array
    *   payer: wallet.publicKey
    * });
    */
   async short({ mintAccount, borrowSellTokenAmount, minSolOutput, marginSol, closePrice, closeInsertIndices, payer }, options = {}) {
     const { computeUnits = 1400000 } = options;
 
-    // 1. 参数验证和转换 / Parameter validation and conversion
+    // 1. Parameter validation and conversion
     const mint = typeof mintAccount === 'string' ? new PublicKey$6(mintAccount) : mintAccount;
 
     if (!anchor$4.BN.isBN(borrowSellTokenAmount) || !anchor$4.BN.isBN(minSolOutput) ||
@@ -16069,7 +16429,7 @@ class TradingModule$1 {
       throw new Error('closeInsertIndices array cannot exceed 20 elements');
     }
 
-    // 2. 计算 PDA 账户 / Calculate PDA accounts
+    // 2. Calculate PDA accounts
     const accounts = this._calculatePDAAccounts(mint);
 
     // 3. Calculate OrderBook PDA addresses
@@ -16083,7 +16443,7 @@ class TradingModule$1 {
       this.sdk.programId
     );
 
-    // 4. 构建交易指令 / Build transaction instructions
+    // 4. Build transaction instructions
     const modifyComputeUnits = ComputeBudgetProgram$1.setComputeUnitLimit({
       units: computeUnits
     });
@@ -16113,15 +16473,15 @@ class TradingModule$1 {
       })
       .instruction();
 
-    // 5. 创建交易并添加指令 / Create transaction and add instructions
+    // 5. Create transaction and add instructions
     const transaction = new Transaction$3();
     transaction.add(modifyComputeUnits);
     transaction.add(shortIx);
 
-    // 6. 返回交易对象和相关信息 / Return transaction object and related info
+    // 6. Return transaction object and related info
     return {
       transaction,
-      signers: [], // 做空交易不需要额外的签名者，只需要 payer 签名 / Short transaction doesn't need additional signers, only payer signature
+      signers: [], // Short transaction doesn't need additional signers, only payer signature
       accounts: {
         mint: mint,
         curveAccount: accounts.curveAccount,
@@ -16138,26 +16498,26 @@ class TradingModule$1 {
   }
 
   /**
-   * 平仓做多 / Close Long Position
-   * @param {Object} params - 平仓参数 / Close position parameters
-   * @param {string|PublicKey} params.mintAccount - 代币铸造账户地址 / Token mint account address
-   * @param {anchor.BN} params.sellTokenAmount - 希望卖出的token数量 / Amount of tokens to sell
-   * @param {anchor.BN} params.minSolOutput - 卖出后最少得到的sol数量 / Minimum SOL output after selling
-   * @param {number|anchor.BN} params.closeOrderId - 订单的唯一编号 / Order unique ID
-   * @param {Array<number>} params.closeOrderIndices - 平仓时订单的位置索引数组 / Close order position indices array
-   * @param {PublicKey} params.payer - 支付者公钥 / Payer public key
-   * @param {PublicKey} params.userSolAccount - 开仓用户的SOL账户（接收资金）/ User SOL account to receive funds (must be order opener)
-   * @param {Object} options - 可选参数 / Optional parameters
-   * @param {number} options.computeUnits - 计算单元限制，默认1400000 / Compute units limit, default 1400000
-   * @returns {Promise<Object>} 包含交易对象、签名者和账户信息的对象 / Object containing transaction, signers and account info
+   * Close Long Position
+   * @param {Object} params - Close position parameters
+   * @param {string|PublicKey} params.mintAccount - Token mint account address
+   * @param {anchor.BN} params.sellTokenAmount - Amount of tokens to sell
+   * @param {anchor.BN} params.minSolOutput - Minimum SOL output after selling
+   * @param {number|anchor.BN} params.closeOrderId - Order unique ID
+   * @param {Array<number>} params.closeOrderIndices - Close order position indices array
+   * @param {PublicKey} params.payer - Payer public key
+   * @param {PublicKey} params.userSolAccount - User SOL account to receive funds (must be order opener)
+   * @param {Object} options - Optional parameters
+   * @param {number} options.computeUnits - Compute units limit, default 1400000
+   * @returns {Promise<Object>} Object containing transaction, signers and account info
    *
    * @example
    * const result = await sdk.trading.closeLong({
    *   mintAccount: "HZBos3RNhExDcAtzmdKXhTd4sVcQFBiT3FDBgmBBMk7",
    *   sellTokenAmount: new anchor.BN("1000000000"),
    *   minSolOutput: new anchor.BN("100000000"),
-   *   closeOrderId: 12345,  // 订单唯一编号
-   *   closeOrderIndices: [10, 11, 12],  // 候选索引数组
+   *   closeOrderId: 12345,  // order unique ID
+   *   closeOrderIndices: [10, 11, 12],  // candidate index array
    *   payer: wallet.publicKey,
    *   userSolAccount: orderOwnerPublicKey
    * });
@@ -16165,17 +16525,17 @@ class TradingModule$1 {
   async closeLong({ mintAccount, sellTokenAmount, minSolOutput, closeOrderId, closeOrderIndices, payer, userSolAccount }, options = {}) {
     const { computeUnits = 1400000 } = options;
 
-    // 1. 参数验证和转换 / Parameter validation and conversion
+    // 1. Parameter validation and conversion
     const mint = typeof mintAccount === 'string' ? new PublicKey$6(mintAccount) : mintAccount;
 
     if (!anchor$4.BN.isBN(sellTokenAmount) || !anchor$4.BN.isBN(minSolOutput)) {
       throw new Error('sellTokenAmount and minSolOutput must be anchor.BN type');
     }
 
-    // 转换 closeOrderId 为 anchor.BN (u64)
+    // Convert closeOrderId to anchor.BN (u64)
     const closeOrderIdBN = anchor$4.BN.isBN(closeOrderId) ? closeOrderId : new anchor$4.BN(closeOrderId);
 
-    // 验证 closeOrderIndices 参数
+    // Validate the closeOrderIndices parameter
     if (!Array.isArray(closeOrderIndices) || closeOrderIndices.length === 0) {
       throw new Error('closeOrderIndices must be a non-empty array');
     }
@@ -16184,7 +16544,7 @@ class TradingModule$1 {
       throw new Error(`closeOrderIndices array cannot exceed ${MAX_CANDIDATE_INDICES$2} elements`);
     }
 
-    // 验证和转换 userSolAccount - 支持字符串或 PublicKey 对象
+    // Validate and convert userSolAccount - supports string or PublicKey object
     let userSolAccountPubkey;
     if (!userSolAccount) {
       throw new Error('userSolAccount is required');
@@ -16199,7 +16559,7 @@ class TradingModule$1 {
     } else if (userSolAccount instanceof PublicKey$6) {
       userSolAccountPubkey = userSolAccount;
     } else if (userSolAccount.constructor && userSolAccount.constructor.name === 'PublicKey') {
-      // 处理跨包 PublicKey 实例 - 提取字符串后重新创建
+      // Handle cross-package PublicKey instances - extract the string and recreate
       try {
         userSolAccountPubkey = new PublicKey$6(userSolAccount.toString());
       } catch (error) {
@@ -16209,10 +16569,10 @@ class TradingModule$1 {
       throw new Error('userSolAccount must be a valid PublicKey or PublicKey string');
     }
 
-    // 2. 计算 PDA 账户 / Calculate PDA accounts
+    // 2. Calculate PDA accounts
     const accounts = this._calculatePDAAccounts(mint);
 
-    // 3. 计算 OrderBook PDA 地址 / Calculate OrderBook PDA addresses
+    // 3. Calculate OrderBook PDA addresses
     const [upOrderbook] = PublicKey$6.findProgramAddressSync(
       [Buffer$6.from('up_orderbook'), mint.toBuffer()],
       this.sdk.programId
@@ -16223,22 +16583,22 @@ class TradingModule$1 {
       this.sdk.programId
     );
 
-    // 4. 从 curve account 获取手续费接收账户 / Get fee recipient accounts from curve account (skipBalances: only need addresses)
+    // 4. Get fee recipient accounts from curve account (skipBalances: only need addresses)
     const curveAccountInfo = await this.sdk.chain.getCurveAccount(mint, { skipBalances: true });
     const feeRecipientAccount = new PublicKey$6(curveAccountInfo.feeRecipient);
     const baseFeeRecipientAccount = new PublicKey$6(curveAccountInfo.baseFeeRecipient);
 
-    // 5. 构建交易指令 / Build transaction instructions
+    // 5. Build transaction instructions
     const modifyComputeUnits = ComputeBudgetProgram$1.setComputeUnitLimit({
       units: computeUnits
     });
 
     const closeLongIx = await this.sdk.program.methods
       .closeLong(
-        sellTokenAmount,       // sell_token_amount: 希望卖出的token数量 / Amount of tokens to sell
-        minSolOutput,          // min_sol_output: 卖出后最少得到的sol数量 / Minimum SOL output
-        closeOrderIdBN,        // close_order_id: 订单的唯一编号 / Order unique ID
-        closeOrderIndices      // close_order_indices: 平仓时订单的位置索引数组 / Close order indices array
+        sellTokenAmount,       // sell_token_amount: amount of tokens to sell
+        minSolOutput,          // min_sol_output: minimum SOL output
+        closeOrderIdBN,        // close_order_id: order unique ID
+        closeOrderIndices      // close_order_indices: close order indices array
       )
       .accounts({
         payer: payer,
@@ -16247,7 +16607,7 @@ class TradingModule$1 {
         poolTokenAccount: accounts.poolTokenAccount,
         poolBorrowTokenAccount: accounts.poolBorrowTokenAccount,
         poolSolAccount: accounts.poolSolAccount,
-        userSolAccount: userSolAccountPubkey,  // 开仓用户的SOL账户 / User SOL account (must be order opener)
+        userSolAccount: userSolAccountPubkey,  // User SOL account (must be order opener)
         tokenProgram: TOKEN_PROGRAM_ID$2,
         systemProgram: SystemProgram$3.programId,
         rent: SYSVAR_RENT_PUBKEY$2,
@@ -16258,15 +16618,15 @@ class TradingModule$1 {
       })
       .instruction();
 
-    // 6. 创建交易并添加指令 / Create transaction and add instructions
+    // 6. Create transaction and add instructions
     const transaction = new Transaction$3();
     transaction.add(modifyComputeUnits);
     transaction.add(closeLongIx);
 
-    // 7. 返回交易对象和相关信息 / Return transaction object and related info
+    // 7. Return transaction object and related info
     return {
       transaction,
-      signers: [], // 平仓做多交易不需要额外的签名者，只需要 payer 签名 / Close long transaction doesn't need additional signers, only payer signature
+      signers: [], // Close long transaction doesn't need additional signers, only payer signature
       accounts: {
         mint: mint,
         curveAccount: accounts.curveAccount,
@@ -16288,26 +16648,26 @@ class TradingModule$1 {
 
 
   /**
-   * 平仓做空 / Close Short Position
-   * @param {Object} params - 平仓参数 / Close position parameters
-   * @param {string|PublicKey} params.mintAccount - 代币铸造账户地址 / Token mint account address
-   * @param {anchor.BN} params.buyTokenAmount - 希望买入的token数量 / Amount of tokens to buy
-   * @param {anchor.BN} params.maxSolAmount - 愿意给出的最大sol数量 / Maximum SOL amount to spend
-   * @param {number|anchor.BN} params.closeOrderId - 订单的唯一编号 / Order unique ID
-   * @param {Array<number>} params.closeOrderIndices - 平仓时订单的位置索引数组 / Close order position indices array
-   * @param {PublicKey} params.payer - 支付者公钥 / Payer public key
-   * @param {PublicKey} params.userSolAccount - 开仓用户的SOL账户（接收资金）/ User SOL account to receive funds (must be order opener)
-   * @param {Object} options - 可选参数 / Optional parameters
-   * @param {number} options.computeUnits - 计算单元限制，默认1400000 / Compute units limit, default 1400000
-   * @returns {Promise<Object>} 包含交易对象、签名者和账户信息的对象 / Object containing transaction, signers and account info
+   * Close Short Position
+   * @param {Object} params - Close position parameters
+   * @param {string|PublicKey} params.mintAccount - Token mint account address
+   * @param {anchor.BN} params.buyTokenAmount - Amount of tokens to buy
+   * @param {anchor.BN} params.maxSolAmount - Maximum SOL amount to spend
+   * @param {number|anchor.BN} params.closeOrderId - Order unique ID
+   * @param {Array<number>} params.closeOrderIndices - Close order position indices array
+   * @param {PublicKey} params.payer - Payer public key
+   * @param {PublicKey} params.userSolAccount - User SOL account to receive funds (must be order opener)
+   * @param {Object} options - Optional parameters
+   * @param {number} options.computeUnits - Compute units limit, default 1400000
+   * @returns {Promise<Object>} Object containing transaction, signers and account info
    *
    * @example
    * const result = await sdk.trading.closeShort({
    *   mintAccount: "HZBos3RNhExDcAtzmdKXhTd4sVcQFBiT3FDBgmBBMk7",
    *   buyTokenAmount: new anchor.BN("1000000000"),
    *   maxSolAmount: new anchor.BN("100000000"),
-   *   closeOrderId: 12345,  // 订单唯一编号
-   *   closeOrderIndices: [10, 11, 12],  // 候选索引数组
+   *   closeOrderId: 12345,  // order unique ID
+   *   closeOrderIndices: [10, 11, 12],  // candidate index array
    *   payer: wallet.publicKey,
    *   userSolAccount: orderOwnerPublicKey
    * });
@@ -16315,17 +16675,17 @@ class TradingModule$1 {
   async closeShort({ mintAccount, buyTokenAmount, maxSolAmount, closeOrderId, closeOrderIndices, payer, userSolAccount }, options = {}) {
     const { computeUnits = 1400000 } = options;
 
-    // 1. 参数验证和转换 / Parameter validation and conversion
+    // 1. Parameter validation and conversion
     const mint = typeof mintAccount === 'string' ? new PublicKey$6(mintAccount) : mintAccount;
 
     if (!anchor$4.BN.isBN(buyTokenAmount) || !anchor$4.BN.isBN(maxSolAmount)) {
       throw new Error('buyTokenAmount and maxSolAmount must be anchor.BN type');
     }
 
-    // 转换 closeOrderId 为 anchor.BN (u64)
+    // Convert closeOrderId to anchor.BN (u64)
     const closeOrderIdBN = anchor$4.BN.isBN(closeOrderId) ? closeOrderId : new anchor$4.BN(closeOrderId);
 
-    // 验证 closeOrderIndices 参数
+    // Validate the closeOrderIndices parameter
     if (!Array.isArray(closeOrderIndices) || closeOrderIndices.length === 0) {
       throw new Error('closeOrderIndices must be a non-empty array');
     }
@@ -16334,7 +16694,7 @@ class TradingModule$1 {
       throw new Error(`closeOrderIndices array cannot exceed ${MAX_CANDIDATE_INDICES$2} elements`);
     }
 
-    // 验证和转换 userSolAccount - 支持字符串或 PublicKey 对象
+    // Validate and convert userSolAccount - supports string or PublicKey object
     let userSolAccountPubkey;
     if (!userSolAccount) {
       throw new Error('userSolAccount is required');
@@ -16349,7 +16709,7 @@ class TradingModule$1 {
     } else if (userSolAccount instanceof PublicKey$6) {
       userSolAccountPubkey = userSolAccount;
     } else if (userSolAccount.constructor && userSolAccount.constructor.name === 'PublicKey') {
-      // 处理跨包 PublicKey 实例 - 提取字符串后重新创建
+      // Handle cross-package PublicKey instances - extract the string and recreate
       try {
         userSolAccountPubkey = new PublicKey$6(userSolAccount.toString());
       } catch (error) {
@@ -16359,10 +16719,10 @@ class TradingModule$1 {
       throw new Error('userSolAccount must be a valid PublicKey or PublicKey string');
     }
 
-    // 2. 计算 PDA 账户 / Calculate PDA accounts
+    // 2. Calculate PDA accounts
     const accounts = this._calculatePDAAccounts(mint);
 
-    // 3. 计算 OrderBook PDA 地址 / Calculate OrderBook PDA addresses
+    // 3. Calculate OrderBook PDA addresses
     const [upOrderbook] = PublicKey$6.findProgramAddressSync(
       [Buffer$6.from('up_orderbook'), mint.toBuffer()],
       this.sdk.programId
@@ -16373,22 +16733,22 @@ class TradingModule$1 {
       this.sdk.programId
     );
 
-    // 4. 从 curve account 获取手续费接收账户 / Get fee recipient accounts from curve account (skipBalances: only need addresses)
+    // 4. Get fee recipient accounts from curve account (skipBalances: only need addresses)
     const curveAccountInfo = await this.sdk.chain.getCurveAccount(mint, { skipBalances: true });
     const feeRecipientAccount = new PublicKey$6(curveAccountInfo.feeRecipient);
     const baseFeeRecipientAccount = new PublicKey$6(curveAccountInfo.baseFeeRecipient);
 
-    // 5. 构建交易指令 / Build transaction instructions
+    // 5. Build transaction instructions
     const modifyComputeUnits = ComputeBudgetProgram$1.setComputeUnitLimit({
       units: computeUnits
     });
 
     const closeShortIx = await this.sdk.program.methods
       .closeShort(
-        buyTokenAmount,        // buy_token_amount: 希望买入的token数量 / Amount of tokens to buy
-        maxSolAmount,          // max_sol_amount: 愿意给出的最大sol数量 / Maximum SOL amount to spend
-        closeOrderIdBN,        // close_order_id: 订单的唯一编号 / Order unique ID
-        closeOrderIndices      // close_order_indices: 平仓时订单的位置索引数组 / Close order indices array
+        buyTokenAmount,        // buy_token_amount: amount of tokens to buy
+        maxSolAmount,          // max_sol_amount: maximum SOL amount to spend
+        closeOrderIdBN,        // close_order_id: order unique ID
+        closeOrderIndices      // close_order_indices: close order indices array
       )
       .accounts({
         payer: payer,
@@ -16397,7 +16757,7 @@ class TradingModule$1 {
         poolTokenAccount: accounts.poolTokenAccount,
         poolBorrowTokenAccount: accounts.poolBorrowTokenAccount,
         poolSolAccount: accounts.poolSolAccount,
-        userSolAccount: userSolAccountPubkey,  // 开仓用户的SOL账户 / User SOL account (must be order opener)
+        userSolAccount: userSolAccountPubkey,  // User SOL account (must be order opener)
         tokenProgram: TOKEN_PROGRAM_ID$2,
         systemProgram: SystemProgram$3.programId,
         rent: SYSVAR_RENT_PUBKEY$2,
@@ -16408,15 +16768,15 @@ class TradingModule$1 {
       })
       .instruction();
 
-    // 6. 创建交易并添加指令 / Create transaction and add instructions
+    // 6. Create transaction and add instructions
     const transaction = new Transaction$3();
     transaction.add(modifyComputeUnits);
     transaction.add(closeShortIx);
 
-    // 7. 返回交易对象和相关信息 / Return transaction object and related info
+    // 7. Return transaction object and related info
     return {
       transaction,
-      signers: [], // 平仓做空交易不需要额外的签名者，只需要 payer 签名 / Close short transaction doesn't need additional signers, only payer signature
+      signers: [], // Close short transaction doesn't need additional signers, only payer signature
       accounts: {
         mint: mint,
         curveAccount: accounts.curveAccount,
@@ -16439,31 +16799,31 @@ class TradingModule$1 {
   // ========== PDA Calculation Methods ==========
 
   /**
-   * 计算 PDA 账户
+   * Calculate PDA accounts
    * @private
-   * @param {PublicKey} mintAccount - 代币铸造账户
-   * @returns {Object} PDA 账户对象
+   * @param {PublicKey} mintAccount - Token mint account
+   * @returns {Object} PDA accounts object
    */
   _calculatePDAAccounts(mintAccount) {
-    // 计算曲线账户 PDA
+    // Calculate the curve account PDA
     const [curveAccount] = PublicKey$6.findProgramAddressSync(
       [Buffer$6.from('borrowing_curve'), mintAccount.toBuffer()],
       this.sdk.programId
     );
 
-    // 计算池子代币账户 PDA
+    // Calculate the pool token account PDA
     const [poolTokenAccount] = PublicKey$6.findProgramAddressSync(
       [Buffer$6.from('pool_token'), mintAccount.toBuffer()],
       this.sdk.programId
     );
 
-    // 计算借贷池专用代币账户 PDA
+    // Calculate the borrow-pool-specific token account PDA
     const [poolBorrowTokenAccount] = PublicKey$6.findProgramAddressSync(
       [Buffer$6.from('pool_borrow_token'), mintAccount.toBuffer()],
       this.sdk.programId
     );
 
-    // 计算池子 SOL 账户 PDA
+    // Calculate the pool SOL account PDA
     const [poolSolAccount] = PublicKey$6.findProgramAddressSync(
       [Buffer$6.from('pool_sol'), mintAccount.toBuffer()],
       this.sdk.programId
@@ -16487,10 +16847,10 @@ var trading = TradingModule$1;
 const { ComputeBudgetProgram, PublicKey: PublicKey$5, Transaction: Transaction$2, Keypair, SystemProgram: SystemProgram$2, SYSVAR_RENT_PUBKEY: SYSVAR_RENT_PUBKEY$1 } = require$$0__default["default"];
 const { TOKEN_PROGRAM_ID: TOKEN_PROGRAM_ID$1, getAssociatedTokenAddress: getAssociatedTokenAddress$1, createAssociatedTokenAccountInstruction, ASSOCIATED_TOKEN_PROGRAM_ID: ASSOCIATED_TOKEN_PROGRAM_ID$1 } = cjs$3;
 const anchor$3 = require$$0__default$3["default"];
-// 统一使用 buffer 包，所有平台一致
+// Uniformly use the buffer package, consistent across all platforms
 const { Buffer: Buffer$5 } = require$$3__default["default"];
 
-// Metaplex Token Metadata 程序ID
+// Metaplex Token Metadata program ID
 const METADATA_PROGRAM_ID = new PublicKey$5("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 
 /**
@@ -16503,42 +16863,42 @@ class TokenModule$1 {
   }
 
   /**
-   * 创建新代币
-   * @param {Object} params - 创建参数
-   * @param {Keypair} params.mint - 代币mint keypair
-   * @param {string} params.name - 代币名称
-   * @param {string} params.symbol - 代币符号
-   * @param {string} params.uri - 元数据URI
-   * @param {PublicKey} params.payer - 创建者公钥（付款方）
+   * Create a new token
+   * @param {Object} params - Creation parameters
+   * @param {Keypair} params.mint - Token mint keypair
+   * @param {string} params.name - Token name
+   * @param {string} params.symbol - Token symbol
+   * @param {string} params.uri - Metadata URI
+   * @param {PublicKey} params.payer - Creator public key (payer)
    *
-   * === 第二阶段新增：高级版池子可选参数（5个参数必须全部提供或全部不提供）===
-   * @param {anchor.BN} [params.customLpSol] - 自定义流动池SOL数量（lamports，9位精度）
-   *   - 不传或传null：创建普通版池子，使用默认值30 SOL
-   *   - 传入值：创建高级版池子，需在 10 SOL ~ 1000 SOL 范围内
-   *   - ⚠️ 必须与其他4个 custom 参数同时提供
+   * === Phase 2 addition: advanced pool optional parameters (all 5 must be provided together or none at all) ===
+   * @param {anchor.BN} [params.customLpSol] - Custom liquidity pool SOL amount (lamports, 9-digit precision)
+   *   - Not provided or null: creates a standard pool using the default value of 30 SOL
+   *   - Provided: creates an advanced pool, must be within the range 10 SOL ~ 1000 SOL
+   *   - ⚠️ Must be provided together with the other 4 custom parameters
    *
-   * @param {anchor.BN} [params.customLpToken] - 自定义流动池Token数量（最小单位，9位精度）
-   *   - 不传或传null：使用默认值10.73亿 Token
-   *   - 传入值：需在 1亿 ~ 100亿 Token 范围内
+   * @param {anchor.BN} [params.customLpToken] - Custom liquidity pool Token amount (smallest unit, 9-digit precision)
+   *   - Not provided or null: uses the default value of 1.073 billion Token
+   *   - Provided: must be within the range 100 million ~ 10 billion Token
    *
-   * @param {number} [params.customBorrowRatio] - 自定义借贷池代币占比（5-30表示5%-30%）
-   *   - 不传或传null：使用默认值20%
-   *   - 传入值：需在 5 ~ 30 范围内
+   * @param {number} [params.customBorrowRatio] - Custom borrow pool token ratio (5-30 means 5%-30%)
+   *   - Not provided or null: uses the default value of 20%
+   *   - Provided: must be within the range 5 ~ 30
    *
-   * @param {number} [params.customBorrowDuration] - 自定义借贷时长（秒）
-   *   - 不传或传null：使用Params账户配置的默认值
-   *   - 传入值：需在 3天(259200秒) ~ 6个月(15552000秒) 范围内
+   * @param {number} [params.customBorrowDuration] - Custom borrow duration (seconds)
+   *   - Not provided or null: uses the default value configured in the Params account
+   *   - Provided: must be within the range 3 days (259200 seconds) ~ 6 months (15552000 seconds)
    *
-   * @param {number} [params.customFee] - 自定义手续费率（单位：基点 basis points）
-   *   - 不传或传null：使用Params账户配置的默认手续费
-   *   - 传入值：需在 1000 ~ 5000 范围内（表示 1% ~ 5%）
-   *   - 示例：2000 表示 2%
-   *   - 借贷手续费会自动上浮20%（如设置2000，则 swap_fee=2000，borrow_fee=2400）
+   * @param {number} [params.customFee] - Custom fee rate (unit: basis points)
+   *   - Not provided or null: uses the default fee configured in the Params account
+   *   - Provided: must be within the range 1000 ~ 5000 (representing 1% ~ 5%)
+   *   - Example: 2000 means 2%
+   *   - Borrow fee is automatically increased by 20% (e.g. setting 2000 results in swap_fee=2000, borrow_fee=2400)
    *
-   * @returns {Promise<Object>} 包含transaction、signers和账户信息的对象
+   * @returns {Promise<Object>} Object containing transaction, signers and account info
    *
    * @example
-   * // 创建普通版代币（使用默认参数）
+   * // Create a standard token (using default parameters)
    * const result = await sdk.token.create({
    *   mint: mintKeypair,
    *   name: "My Token",
@@ -16548,7 +16908,7 @@ class TokenModule$1 {
    * });
    *
    * @example
-   * // 创建高级版代币（自定义流动池参数，必须提供全部5个参数）
+   * // Create an advanced token (custom liquidity pool parameters, all 5 parameters must be provided)
    * const anchor = require('@coral-xyz/anchor');
    * const result = await sdk.token.create({
    *   mint: mintKeypair,
@@ -16557,9 +16917,9 @@ class TokenModule$1 {
    *   uri: "https://example.com/metadata.json",
    *   payer: wallet.publicKey,
    *   customLpSol: new anchor.BN('60000000000'),              // 60 SOL
-   *   customLpToken: new anchor.BN('1073000000000000000'),    // 10.73亿 Token
+   *   customLpToken: new anchor.BN('1073000000000000000'),    // 1.073 billion Token
    *   customBorrowRatio: 15,                                   // 15%
-   *   customBorrowDuration: 7 * 24 * 3600,                     // 7天
+   *   customBorrowDuration: 7 * 24 * 3600,                     // 7 days
    *   customFee: 2000                                          // 2% (2000 basis points)
    * });
    */
@@ -16569,7 +16929,7 @@ class TokenModule$1 {
     symbol,
     uri,
     payer,
-    // 高级版池子可选参数（5个参数必须全部提供或全部不提供）
+    // Advanced pool optional parameters (all 5 must be provided together or none at all)
     customLpSol = null,
     customLpToken = null,
     customBorrowRatio = null,
@@ -16582,7 +16942,7 @@ class TokenModule$1 {
       symbol,
       uri,
       payer: payer.toString(),
-      // 高级版池子参数日志
+      // Advanced pool parameters log
       poolType: (customLpSol === null && customLpToken === null &&
                  customBorrowRatio === null && customBorrowDuration === null &&
                  customFee === null)
@@ -16678,7 +17038,7 @@ class TokenModule$1 {
       units: 400000
     });
 
-    // 构建创建代币指令（传入5个自定义参数）
+    // Build the create token instruction (passing in 5 custom parameters)
     const createIx = await this.sdk.program.methods
       .createToken(
         name,
@@ -16688,7 +17048,7 @@ class TokenModule$1 {
         customLpToken,         // Option<u64>
         customBorrowRatio,     // Option<u8>
         customBorrowDuration,  // Option<u32>
-        customFee              // Option<u16> - 新增参数
+        customFee              // Option<u16> - new parameter
       )
       .accounts({
         payer: payer,
@@ -16734,7 +17094,7 @@ class TokenModule$1 {
 
   /**
    * Create token and buy in one transaction
-   * 将 create 和 buy 两个指令合并到一个交易中，一次签名提交
+   * Merges the create and buy instructions into a single transaction, submitted with one signature
    *
    * @param {Object} params - Creation and buy parameters
    * @param {Keypair} params.mint - Token mint keypair
@@ -16745,12 +17105,12 @@ class TokenModule$1 {
    * @param {anchor.BN} params.buyTokenAmount - Amount of tokens to buy
    * @param {anchor.BN} params.maxSolAmount - Maximum SOL to spend
    *
-   * === 第二阶段新增：高级版池子可选参数（5个参数必须全部提供或全部不提供）===
-   * @param {anchor.BN} [params.customLpSol] - 自定义流动池SOL数量（lamports，9位精度）
-   * @param {anchor.BN} [params.customLpToken] - 自定义流动池Token数量（最小单位，9位精度）
-   * @param {number} [params.customBorrowRatio] - 自定义借贷池代币占比（5-30表示5%-30%）
-   * @param {number} [params.customBorrowDuration] - 自定义借贷时长（秒）
-   * @param {number} [params.customFee] - 自定义手续费率（1000-5000 basis points，表示1%-5%）
+   * === Phase 2 addition: advanced pool optional parameters (all 5 must be provided together or none at all) ===
+   * @param {anchor.BN} [params.customLpSol] - Custom liquidity pool SOL amount (lamports, 9-digit precision)
+   * @param {anchor.BN} [params.customLpToken] - Custom liquidity pool Token amount (smallest unit, 9-digit precision)
+   * @param {number} [params.customBorrowRatio] - Custom borrow pool token ratio (5-30 means 5%-30%)
+   * @param {number} [params.customBorrowDuration] - Custom borrow duration (seconds)
+   * @param {number} [params.customFee] - Custom fee rate (1000-5000 basis points, representing 1%-5%)
    *
    * @param {Object} options - Optional parameters
    * @param {number} options.computeUnits - Compute units limit, default 1800000
@@ -16764,7 +17124,7 @@ class TokenModule$1 {
     payer,
     buyTokenAmount,
     maxSolAmount,
-    // 高级版池子可选参数（5个参数必须全部提供或全部不提供）
+    // Advanced pool optional parameters (all 5 must be provided together or none at all)
     customLpSol = null,
     customLpToken = null,
     customBorrowRatio = null,
@@ -16783,12 +17143,12 @@ class TokenModule$1 {
       maxSolAmount: maxSolAmount.toString()
     });
 
-    // 1. 参数验证
+    // 1. Parameter validation
     if (!anchor$3.BN.isBN(buyTokenAmount) || !anchor$3.BN.isBN(maxSolAmount)) {
       throw new Error('buyTokenAmount and maxSolAmount must be anchor.BN type');
     }
 
-    // 2. 调用 create 方法获取 create 交易（传递所有自定义参数）
+    // 2. Call the create method to get the create transaction (passing all custom parameters)
     console.log('Step 1: Building create transaction...');
     const createResult = await this.create({
       mint,
@@ -16796,7 +17156,7 @@ class TokenModule$1 {
       symbol,
       uri,
       payer,
-      // 传递自定义流动池参数（5个参数）
+      // Pass custom liquidity pool parameters (5 parameters)
       customLpSol,
       customLpToken,
       customBorrowRatio,
@@ -16804,16 +17164,16 @@ class TokenModule$1 {
       customFee
     });
 
-    // 3. 从 params 账户读取手续费接收地址
-    // 因为此时 curve_account 还未创建，无法从链上读取
+    // 3. Read the fee recipient address from the params account
+    // Because curve_account has not been created yet, it cannot be read from chain
     console.log('Step 2: Fetching fee recipient accounts from params...');
 
-    // 直接从 SDK 配置中获取手续费接收账户（这些在 SDK 初始化时已经设置）
-    // 避免使用 program.account.params.fetch() 因为可能有 provider 配置问题
+    // Get the fee recipient accounts directly from the SDK configuration (these are set during SDK initialization)
+    // Avoid using program.account.params.fetch() because there may be provider configuration issues
     const feeRecipientAccount = this.sdk.feeRecipient;
     const baseFeeRecipientAccount = this.sdk.baseFeeRecipient;
 
-    // 验证这些账户已配置
+    // Validate that these accounts are configured
     if (!feeRecipientAccount || !baseFeeRecipientAccount) {
       throw new Error('Fee recipient accounts not configured in SDK options');
     }
@@ -16822,17 +17182,17 @@ class TokenModule$1 {
     console.log('  Partner fee recipient:', feeRecipientAccount.toString());
     console.log('  Base fee recipient:', baseFeeRecipientAccount.toString());
 
-    // 4. 准备 buy 所需的额外账户
+    // 4. Prepare the extra accounts required for buy
     console.log('Step 3: Calculating buy-related accounts...');
     const mintPubkey = mint.publicKey;
 
-    // 计算用户代币账户
+    // Calculate user token account
     const userTokenAccount = await getAssociatedTokenAddress$1(
       mintPubkey,
       payer
     );
 
-    // 计算 cooldown PDA
+    // Calculate cooldown PDA
     const [cooldownPDA] = PublicKey$5.findProgramAddressSync(
       [
         Buffer$5.from('trade_cooldown'),
@@ -16842,7 +17202,7 @@ class TokenModule$1 {
       this.sdk.programId
     );
 
-    // 计算 orderbook PDAs (复用 create 中计算的值)
+    // Calculate orderbook PDAs (reuse the values calculated in create)
     const [upOrderbook] = PublicKey$5.findProgramAddressSync(
       [Buffer$5.from('up_orderbook'), mintPubkey.toBuffer()],
       this.sdk.programId
@@ -16857,7 +17217,7 @@ class TokenModule$1 {
     console.log('  User token account:', userTokenAccount.toString());
     console.log('  Cooldown PDA:', cooldownPDA.toString());
 
-    // 5. 检查用户代币账户是否存在，创建 ATA 指令
+    // 5. Check if the user token account exists, create ATA instruction
     console.log('Step 4: Checking if user token account exists...');
     const userTokenAccountInfo = await this.sdk.connection.getAccountInfo(userTokenAccount);
     const createAtaIx = userTokenAccountInfo === null
@@ -16877,7 +17237,7 @@ class TokenModule$1 {
       console.log('  User token account already exists');
     }
 
-    // 6. 构建 buy 指令
+    // 6. Build the buy instruction
     console.log('Step 5: Building buy instruction...');
     const buyIx = await this.sdk.program.methods
       .buy(buyTokenAmount, maxSolAmount)
@@ -16901,31 +17261,31 @@ class TokenModule$1 {
       })
       .instruction();
 
-    // 7. 合并交易：create + buy
+    // 7. Merge transactions: create + buy
     console.log('Step 6: Merging create and buy transactions...');
     const transaction = new Transaction$2();
 
-    // 设置计算单元限制
+    // Set compute unit limit
     const modifyComputeUnits = ComputeBudgetProgram.setComputeUnitLimit({
       units: computeUnits
     });
     transaction.add(modifyComputeUnits);
 
-    // 添加 create 交易的所有指令（跳过 create 中的计算单元指令）
+    // Add all instructions from the create transaction (skip the compute unit instruction in create)
     createResult.transaction.instructions.forEach(ix => {
-      // 跳过 create 交易中的计算单元指令（我们已经添加了）
+      // Skip the compute unit instruction in the create transaction (we already added it)
       if (ix.programId.equals(ComputeBudgetProgram.programId)) {
         return;
       }
       transaction.add(ix);
     });
 
-    // 添加 ATA 创建指令（如果需要）
+    // Add ATA creation instruction (if needed)
     if (createAtaIx) {
       transaction.add(createAtaIx);
     }
 
-    // 添加 buy 指令 
+    // Add buy instruction
     transaction.add(buyIx);
 
     console.log('CreateAndBuy transaction built successfully:');
@@ -16933,14 +17293,14 @@ class TokenModule$1 {
     console.log('  Compute units:', computeUnits);
     console.log('  Signers required:', [payer.toString(), mint.publicKey.toString()]);
 
-    // 8. 返回合并后的交易
+    // 8. Return the merged transaction
     return {
       transaction,
-      signers: [mint],  // mint keypair 需要签名
+      signers: [mint],  // mint keypair needs to sign
       accounts: {
-        // create 的账户
+        // create accounts
         ...createResult.accounts,
-        // buy 的账户
+        // buy accounts
         userTokenAccount,
         cooldown: cooldownPDA,
         feeRecipientAccount,
@@ -16954,7 +17314,7 @@ class TokenModule$1 {
 var token = TokenModule$1;
 
 const { PublicKey: PublicKey$4, Transaction: Transaction$1, SystemProgram: SystemProgram$1 } = require$$0__default["default"];
-// 统一使用 buffer 包，所有平台一致
+// Use the buffer package consistently across all platforms
 const { Buffer: Buffer$4 } = require$$3__default["default"];
 
 /**
@@ -17027,7 +17387,7 @@ class ParamModule$1 {
    * @returns {Promise<Object>} Parameters account data
    */
   async getParams(partner) {
-    // 计算合作伙伴参数账户地址
+    // Calculate partner parameters account address
     const [paramsAccount] = PublicKey$4.findProgramAddressSync(
       [Buffer$4.from("params"), partner.toBuffer()],
       this.sdk.programId
@@ -17071,13 +17431,13 @@ class ParamModule$1 {
     );
 
     try {
-      // 检查账户是否存在
+      // Check if account exists
       const accountInfo = await this.sdk.connection.getAccountInfo(adminAccount);
       if (!accountInfo) {
         throw new Error('Admin account does not exist');
       }
-      
-      // 尝试使用 Anchor 解析数据
+
+      // Try to parse data using Anchor
       if (this.sdk.program.account.admin) {
         const adminData = await this.sdk.program.account.admin.fetch(adminAccount);
         return {
@@ -17085,7 +17445,7 @@ class ParamModule$1 {
           data: adminData
         };
       } else {
-        // 如果 Anchor 不可用，返回基本信息
+        // If Anchor is not available, return basic info
         return {
           address: adminAccount,
           accountInfo: accountInfo
@@ -29613,10 +29973,10 @@ var populate$1 = function (dst, src) {
 
 var CombinedStream = combined_stream;
 var util$1 = require$$1__default$1["default"];
-var path = require$$1__default["default"];
+var path$1 = require$$1__default["default"];
 var http$2 = require$$3__default$1["default"];
 var https$2 = require$$4__default["default"];
-var parseUrl$2 = require$$0__default$5["default"].parse;
+var parseUrl$2 = require$$2__default["default"].parse;
 var fs = require$$0__default$1["default"];
 var Stream = require$$0__default$4["default"].Stream;
 var crypto$2 = require$$8__default["default"];
@@ -29625,6 +29985,18 @@ var asynckit = asynckit$1;
 var setToStringTag = esSetTostringtag;
 var hasOwn = hasown;
 var populate = populate$1;
+
+/**
+ * Escape CR, LF, and `"` in a multipart `name`/`filename` parameter, so a field
+ * name or filename can not break out of its header line to inject headers or
+ * smuggle additional parts. Matches the WHATWG HTML multipart/form-data encoding.
+ *
+ * @param {string} str - the parameter value to escape
+ * @returns {string} the escaped value
+ */
+function escapeHeaderParam(str) {
+  return String(str).replace(/\r/g, '%0D').replace(/\n/g, '%0A').replace(/"/g, '%22');
+}
 
 /**
  * Create readable "multipart/form-data" streams.
@@ -29791,7 +30163,7 @@ FormData$2.prototype._multiPartHeader = function (field, value, options) {
   var contents = '';
   var headers = {
     // add custom disposition as third element or keep it two elements if not
-    'Content-Disposition': ['form-data', 'name="' + field + '"'].concat(contentDisposition || []),
+    'Content-Disposition': ['form-data', 'name="' + escapeHeaderParam(field) + '"'].concat(contentDisposition || []),
     // if no content type. allow it to be empty array
     'Content-Type': [].concat(contentType || [])
   };
@@ -29831,21 +30203,21 @@ FormData$2.prototype._getContentDisposition = function (value, options) { // esl
 
   if (typeof options.filepath === 'string') {
     // custom filepath for relative paths
-    filename = path.normalize(options.filepath).replace(/\\/g, '/');
+    filename = path$1.normalize(options.filepath).replace(/\\/g, '/');
   } else if (options.filename || (value && (value.name || value.path))) {
     /*
      * custom filename take precedence
      * formidable and the browser add a name property
      * fs- and request- streams have path property
      */
-    filename = path.basename(options.filename || (value && (value.name || value.path)));
+    filename = path$1.basename(options.filename || (value && (value.name || value.path)));
   } else if (value && value.readable && hasOwn(value, 'httpVersion')) {
     // or try http response
-    filename = path.basename(value.client._httpMessage.path || '');
+    filename = path$1.basename(value.client._httpMessage.path || '');
   }
 
   if (filename) {
-    return 'filename="' + filename + '"';
+    return 'filename="' + escapeHeaderParam(filename) + '"';
   }
 };
 
@@ -30075,7 +30447,7 @@ FormData$2.prototype.submit = function (params, cb) {
         request.removeListener('error', callback);
         request.removeListener('response', onResponse);
 
-        return cb.call(this, error, responce); // eslint-disable-line no-invalid-this
+        return cb.call(this, error, responce);
       };
 
       onResponse = callback.bind(this, null);
@@ -30099,123 +30471,14 @@ FormData$2.prototype._error = function (err) {
 FormData$2.prototype.toString = function () {
   return '[object FormData]';
 };
-setToStringTag(FormData$2, 'FormData');
+setToStringTag(FormData$2.prototype, 'FormData');
 
 // Public API
 var form_data = FormData$2;
 
-var proxyFromEnv$1 = {};
+var agent = {};
 
-var parseUrl$1 = require$$0__default$5["default"].parse;
-
-var DEFAULT_PORTS = {
-  ftp: 21,
-  gopher: 70,
-  http: 80,
-  https: 443,
-  ws: 80,
-  wss: 443,
-};
-
-var stringEndsWith = String.prototype.endsWith || function(s) {
-  return s.length <= this.length &&
-    this.indexOf(s, this.length - s.length) !== -1;
-};
-
-/**
- * @param {string|object} url - The URL, or the result from url.parse.
- * @return {string} The URL of the proxy that should handle the request to the
- *  given URL. If no proxy is set, this will be an empty string.
- */
-function getProxyForUrl(url) {
-  var parsedUrl = typeof url === 'string' ? parseUrl$1(url) : url || {};
-  var proto = parsedUrl.protocol;
-  var hostname = parsedUrl.host;
-  var port = parsedUrl.port;
-  if (typeof hostname !== 'string' || !hostname || typeof proto !== 'string') {
-    return '';  // Don't proxy URLs without a valid scheme or host.
-  }
-
-  proto = proto.split(':', 1)[0];
-  // Stripping ports in this way instead of using parsedUrl.hostname to make
-  // sure that the brackets around IPv6 addresses are kept.
-  hostname = hostname.replace(/:\d*$/, '');
-  port = parseInt(port) || DEFAULT_PORTS[proto] || 0;
-  if (!shouldProxy(hostname, port)) {
-    return '';  // Don't proxy URLs that match NO_PROXY.
-  }
-
-  var proxy =
-    getEnv('npm_config_' + proto + '_proxy') ||
-    getEnv(proto + '_proxy') ||
-    getEnv('npm_config_proxy') ||
-    getEnv('all_proxy');
-  if (proxy && proxy.indexOf('://') === -1) {
-    // Missing scheme in proxy, default to the requested URL's scheme.
-    proxy = proto + '://' + proxy;
-  }
-  return proxy;
-}
-
-/**
- * Determines whether a given URL should be proxied.
- *
- * @param {string} hostname - The host name of the URL.
- * @param {number} port - The effective port of the URL.
- * @returns {boolean} Whether the given URL should be proxied.
- * @private
- */
-function shouldProxy(hostname, port) {
-  var NO_PROXY =
-    (getEnv('npm_config_no_proxy') || getEnv('no_proxy')).toLowerCase();
-  if (!NO_PROXY) {
-    return true;  // Always proxy if NO_PROXY is not set.
-  }
-  if (NO_PROXY === '*') {
-    return false;  // Never proxy if wildcard is set.
-  }
-
-  return NO_PROXY.split(/[,\s]/).every(function(proxy) {
-    if (!proxy) {
-      return true;  // Skip zero-length hosts.
-    }
-    var parsedProxy = proxy.match(/^(.+):(\d+)$/);
-    var parsedProxyHostname = parsedProxy ? parsedProxy[1] : proxy;
-    var parsedProxyPort = parsedProxy ? parseInt(parsedProxy[2]) : 0;
-    if (parsedProxyPort && parsedProxyPort !== port) {
-      return true;  // Skip if ports don't match.
-    }
-
-    if (!/^[.*]/.test(parsedProxyHostname)) {
-      // No wildcards, so stop proxying if there is an exact match.
-      return hostname !== parsedProxyHostname;
-    }
-
-    if (parsedProxyHostname.charAt(0) === '*') {
-      // Remove leading wildcard.
-      parsedProxyHostname = parsedProxyHostname.slice(1);
-    }
-    // Stop proxying if the hostname ends with the no_proxy host.
-    return !stringEndsWith.call(hostname, parsedProxyHostname);
-  });
-}
-
-/**
- * Get the value for an environment variable.
- *
- * @param {string} key - The name of the environment variable.
- * @return {string} The value of the environment variable.
- * @private
- */
-function getEnv(key) {
-  return process.env[key.toLowerCase()] || process.env[key.toUpperCase()] || '';
-}
-
-proxyFromEnv$1.getProxyForUrl = getProxyForUrl;
-
-var followRedirects$1 = {exports: {}};
-
-var src$1 = {exports: {}};
+var src$2 = {exports: {}};
 
 var browser$1 = {exports: {}};
 
@@ -31019,7 +31282,7 @@ function requireNode () {
 	if (hasRequiredNode) return node.exports;
 	hasRequiredNode = 1;
 	(function (module, exports) {
-		const tty = require$$0__default$6["default"];
+		const tty = require$$0__default$5["default"];
 		const util = require$$1__default$1["default"];
 
 		/**
@@ -31287,18 +31550,492 @@ function requireNode () {
  * treat as a browser.
  */
 
-var hasRequiredSrc;
-
-function requireSrc () {
-	if (hasRequiredSrc) return src$1.exports;
-	hasRequiredSrc = 1;
-	if (typeof process === 'undefined' || process.type === 'renderer' || process.browser === true || process.__nwjs) {
-		src$1.exports = requireBrowser$1();
-	} else {
-		src$1.exports = requireNode();
-	}
-	return src$1.exports;
+if (typeof process === 'undefined' || process.type === 'renderer' || process.browser === true || process.__nwjs) {
+	src$2.exports = requireBrowser$1();
+} else {
+	src$2.exports = requireNode();
 }
+
+var srcExports = src$2.exports;
+
+var promisify$1 = {};
+
+Object.defineProperty(promisify$1, "__esModule", { value: true });
+function promisify(fn) {
+    return function (req, opts) {
+        return new Promise((resolve, reject) => {
+            fn.call(this, req, opts, (err, rtn) => {
+                if (err) {
+                    reject(err);
+                }
+                else {
+                    resolve(rtn);
+                }
+            });
+        });
+    };
+}
+promisify$1.default = promisify;
+
+var __importDefault$3 = (commonjsGlobal && commonjsGlobal.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+const events_1 = require$$0__default$6["default"];
+const debug_1$3 = __importDefault$3(srcExports);
+const promisify_1 = __importDefault$3(promisify$1);
+const debug$4 = debug_1$3.default('agent-base');
+function isAgent(v) {
+    return Boolean(v) && typeof v.addRequest === 'function';
+}
+function isSecureEndpoint() {
+    const { stack } = new Error();
+    if (typeof stack !== 'string')
+        return false;
+    return stack.split('\n').some(l => l.indexOf('(https.js:') !== -1 || l.indexOf('node:https:') !== -1);
+}
+function createAgent(callback, opts) {
+    return new createAgent.Agent(callback, opts);
+}
+(function (createAgent) {
+    /**
+     * Base `http.Agent` implementation.
+     * No pooling/keep-alive is implemented by default.
+     *
+     * @param {Function} callback
+     * @api public
+     */
+    class Agent extends events_1.EventEmitter {
+        constructor(callback, _opts) {
+            super();
+            let opts = _opts;
+            if (typeof callback === 'function') {
+                this.callback = callback;
+            }
+            else if (callback) {
+                opts = callback;
+            }
+            // Timeout for the socket to be returned from the callback
+            this.timeout = null;
+            if (opts && typeof opts.timeout === 'number') {
+                this.timeout = opts.timeout;
+            }
+            // These aren't actually used by `agent-base`, but are required
+            // for the TypeScript definition files in `@types/node` :/
+            this.maxFreeSockets = 1;
+            this.maxSockets = 1;
+            this.maxTotalSockets = Infinity;
+            this.sockets = {};
+            this.freeSockets = {};
+            this.requests = {};
+            this.options = {};
+        }
+        get defaultPort() {
+            if (typeof this.explicitDefaultPort === 'number') {
+                return this.explicitDefaultPort;
+            }
+            return isSecureEndpoint() ? 443 : 80;
+        }
+        set defaultPort(v) {
+            this.explicitDefaultPort = v;
+        }
+        get protocol() {
+            if (typeof this.explicitProtocol === 'string') {
+                return this.explicitProtocol;
+            }
+            return isSecureEndpoint() ? 'https:' : 'http:';
+        }
+        set protocol(v) {
+            this.explicitProtocol = v;
+        }
+        callback(req, opts, fn) {
+            throw new Error('"agent-base" has no default implementation, you must subclass and override `callback()`');
+        }
+        /**
+         * Called by node-core's "_http_client.js" module when creating
+         * a new HTTP request with this Agent instance.
+         *
+         * @api public
+         */
+        addRequest(req, _opts) {
+            const opts = Object.assign({}, _opts);
+            if (typeof opts.secureEndpoint !== 'boolean') {
+                opts.secureEndpoint = isSecureEndpoint();
+            }
+            if (opts.host == null) {
+                opts.host = 'localhost';
+            }
+            if (opts.port == null) {
+                opts.port = opts.secureEndpoint ? 443 : 80;
+            }
+            if (opts.protocol == null) {
+                opts.protocol = opts.secureEndpoint ? 'https:' : 'http:';
+            }
+            if (opts.host && opts.path) {
+                // If both a `host` and `path` are specified then it's most
+                // likely the result of a `url.parse()` call... we need to
+                // remove the `path` portion so that `net.connect()` doesn't
+                // attempt to open that as a unix socket file.
+                delete opts.path;
+            }
+            delete opts.agent;
+            delete opts.hostname;
+            delete opts._defaultAgent;
+            delete opts.defaultPort;
+            delete opts.createConnection;
+            // Hint to use "Connection: close"
+            // XXX: non-documented `http` module API :(
+            req._last = true;
+            req.shouldKeepAlive = false;
+            let timedOut = false;
+            let timeoutId = null;
+            const timeoutMs = opts.timeout || this.timeout;
+            const onerror = (err) => {
+                if (req._hadError)
+                    return;
+                req.emit('error', err);
+                // For Safety. Some additional errors might fire later on
+                // and we need to make sure we don't double-fire the error event.
+                req._hadError = true;
+            };
+            const ontimeout = () => {
+                timeoutId = null;
+                timedOut = true;
+                const err = new Error(`A "socket" was not created for HTTP request before ${timeoutMs}ms`);
+                err.code = 'ETIMEOUT';
+                onerror(err);
+            };
+            const callbackError = (err) => {
+                if (timedOut)
+                    return;
+                if (timeoutId !== null) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                }
+                onerror(err);
+            };
+            const onsocket = (socket) => {
+                if (timedOut)
+                    return;
+                if (timeoutId != null) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                }
+                if (isAgent(socket)) {
+                    // `socket` is actually an `http.Agent` instance, so
+                    // relinquish responsibility for this `req` to the Agent
+                    // from here on
+                    debug$4('Callback returned another Agent instance %o', socket.constructor.name);
+                    socket.addRequest(req, opts);
+                    return;
+                }
+                if (socket) {
+                    socket.once('free', () => {
+                        this.freeSocket(socket, opts);
+                    });
+                    req.onSocket(socket);
+                    return;
+                }
+                const err = new Error(`no Duplex stream was returned to agent-base for \`${req.method} ${req.path}\``);
+                onerror(err);
+            };
+            if (typeof this.callback !== 'function') {
+                onerror(new Error('`callback` is not defined'));
+                return;
+            }
+            if (!this.promisifiedCallback) {
+                if (this.callback.length >= 3) {
+                    debug$4('Converting legacy callback function to promise');
+                    this.promisifiedCallback = promisify_1.default(this.callback);
+                }
+                else {
+                    this.promisifiedCallback = this.callback;
+                }
+            }
+            if (typeof timeoutMs === 'number' && timeoutMs > 0) {
+                timeoutId = setTimeout(ontimeout, timeoutMs);
+            }
+            if ('port' in opts && typeof opts.port !== 'number') {
+                opts.port = Number(opts.port);
+            }
+            try {
+                debug$4('Resolving socket for %o request: %o', opts.protocol, `${req.method} ${req.path}`);
+                Promise.resolve(this.promisifiedCallback(req, opts)).then(onsocket, callbackError);
+            }
+            catch (err) {
+                Promise.reject(err).catch(callbackError);
+            }
+        }
+        freeSocket(socket, opts) {
+            debug$4('Freeing socket %o %o', socket.constructor.name, opts);
+            socket.destroy();
+        }
+        destroy() {
+            debug$4('Destroying agent %o', this.constructor.name);
+        }
+    }
+    createAgent.Agent = Agent;
+    // So that `instanceof` works correctly
+    createAgent.prototype = createAgent.Agent.prototype;
+})(createAgent || (createAgent = {}));
+var src$1 = createAgent;
+
+var parseProxyResponse$1 = {};
+
+var __importDefault$2 = (commonjsGlobal && commonjsGlobal.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(parseProxyResponse$1, "__esModule", { value: true });
+const debug_1$2 = __importDefault$2(srcExports);
+const debug$3 = debug_1$2.default('https-proxy-agent:parse-proxy-response');
+function parseProxyResponse(socket) {
+    return new Promise((resolve, reject) => {
+        // we need to buffer any HTTP traffic that happens with the proxy before we get
+        // the CONNECT response, so that if the response is anything other than an "200"
+        // response code, then we can re-play the "data" events on the socket once the
+        // HTTP parser is hooked up...
+        let buffersLength = 0;
+        const buffers = [];
+        function read() {
+            const b = socket.read();
+            if (b)
+                ondata(b);
+            else
+                socket.once('readable', read);
+        }
+        function cleanup() {
+            socket.removeListener('end', onend);
+            socket.removeListener('error', onerror);
+            socket.removeListener('close', onclose);
+            socket.removeListener('readable', read);
+        }
+        function onclose(err) {
+            debug$3('onclose had error %o', err);
+        }
+        function onend() {
+            debug$3('onend');
+        }
+        function onerror(err) {
+            cleanup();
+            debug$3('onerror %o', err);
+            reject(err);
+        }
+        function ondata(b) {
+            buffers.push(b);
+            buffersLength += b.length;
+            const buffered = Buffer.concat(buffers, buffersLength);
+            const endOfHeaders = buffered.indexOf('\r\n\r\n');
+            if (endOfHeaders === -1) {
+                // keep buffering
+                debug$3('have not received end of HTTP headers yet...');
+                read();
+                return;
+            }
+            const firstLine = buffered.toString('ascii', 0, buffered.indexOf('\r\n'));
+            const statusCode = +firstLine.split(' ')[1];
+            debug$3('got proxy server response: %o', firstLine);
+            resolve({
+                statusCode,
+                buffered
+            });
+        }
+        socket.on('error', onerror);
+        socket.on('close', onclose);
+        socket.on('end', onend);
+        read();
+    });
+}
+parseProxyResponse$1.default = parseProxyResponse;
+
+var __awaiter = (commonjsGlobal && commonjsGlobal.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __importDefault$1 = (commonjsGlobal && commonjsGlobal.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(agent, "__esModule", { value: true });
+const net_1 = __importDefault$1(require$$0__default$7["default"]);
+const tls_1 = __importDefault$1(require$$1__default$2["default"]);
+const url_1 = __importDefault$1(require$$2__default["default"]);
+const assert_1 = __importDefault$1(require$$3__default$2["default"]);
+const debug_1$1 = __importDefault$1(srcExports);
+const agent_base_1 = src$1;
+const parse_proxy_response_1 = __importDefault$1(parseProxyResponse$1);
+const debug$2 = debug_1$1.default('https-proxy-agent:agent');
+/**
+ * The `HttpsProxyAgent` implements an HTTP Agent subclass that connects to
+ * the specified "HTTP(s) proxy server" in order to proxy HTTPS requests.
+ *
+ * Outgoing HTTP requests are first tunneled through the proxy server using the
+ * `CONNECT` HTTP request method to establish a connection to the proxy server,
+ * and then the proxy server connects to the destination target and issues the
+ * HTTP request from the proxy server.
+ *
+ * `https:` requests have their socket connection upgraded to TLS once
+ * the connection to the proxy server has been established.
+ *
+ * @api public
+ */
+class HttpsProxyAgent$1 extends agent_base_1.Agent {
+    constructor(_opts) {
+        let opts;
+        if (typeof _opts === 'string') {
+            opts = url_1.default.parse(_opts);
+        }
+        else {
+            opts = _opts;
+        }
+        if (!opts) {
+            throw new Error('an HTTP(S) proxy server `host` and `port` must be specified!');
+        }
+        debug$2('creating new HttpsProxyAgent instance: %o', opts);
+        super(opts);
+        const proxy = Object.assign({}, opts);
+        // If `true`, then connect to the proxy server over TLS.
+        // Defaults to `false`.
+        this.secureProxy = opts.secureProxy || isHTTPS(proxy.protocol);
+        // Prefer `hostname` over `host`, and set the `port` if needed.
+        proxy.host = proxy.hostname || proxy.host;
+        if (typeof proxy.port === 'string') {
+            proxy.port = parseInt(proxy.port, 10);
+        }
+        if (!proxy.port && proxy.host) {
+            proxy.port = this.secureProxy ? 443 : 80;
+        }
+        // ALPN is supported by Node.js >= v5.
+        // attempt to negotiate http/1.1 for proxy servers that support http/2
+        if (this.secureProxy && !('ALPNProtocols' in proxy)) {
+            proxy.ALPNProtocols = ['http 1.1'];
+        }
+        if (proxy.host && proxy.path) {
+            // If both a `host` and `path` are specified then it's most likely
+            // the result of a `url.parse()` call... we need to remove the
+            // `path` portion so that `net.connect()` doesn't attempt to open
+            // that as a Unix socket file.
+            delete proxy.path;
+            delete proxy.pathname;
+        }
+        this.proxy = proxy;
+    }
+    /**
+     * Called when the node-core HTTP client library is creating a
+     * new HTTP request.
+     *
+     * @api protected
+     */
+    callback(req, opts) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const { proxy, secureProxy } = this;
+            // Create a socket connection to the proxy server.
+            let socket;
+            if (secureProxy) {
+                debug$2('Creating `tls.Socket`: %o', proxy);
+                socket = tls_1.default.connect(proxy);
+            }
+            else {
+                debug$2('Creating `net.Socket`: %o', proxy);
+                socket = net_1.default.connect(proxy);
+            }
+            const headers = Object.assign({}, proxy.headers);
+            const hostname = `${opts.host}:${opts.port}`;
+            let payload = `CONNECT ${hostname} HTTP/1.1\r\n`;
+            // Inject the `Proxy-Authorization` header if necessary.
+            if (proxy.auth) {
+                headers['Proxy-Authorization'] = `Basic ${Buffer.from(proxy.auth).toString('base64')}`;
+            }
+            // The `Host` header should only include the port
+            // number when it is not the default port.
+            let { host, port, secureEndpoint } = opts;
+            if (!isDefaultPort(port, secureEndpoint)) {
+                host += `:${port}`;
+            }
+            headers.Host = host;
+            headers.Connection = 'close';
+            for (const name of Object.keys(headers)) {
+                payload += `${name}: ${headers[name]}\r\n`;
+            }
+            const proxyResponsePromise = parse_proxy_response_1.default(socket);
+            socket.write(`${payload}\r\n`);
+            const { statusCode, buffered } = yield proxyResponsePromise;
+            if (statusCode === 200) {
+                req.once('socket', resume);
+                if (opts.secureEndpoint) {
+                    // The proxy is connecting to a TLS server, so upgrade
+                    // this socket connection to a TLS connection.
+                    debug$2('Upgrading socket connection to TLS');
+                    const servername = opts.servername || opts.host;
+                    return tls_1.default.connect(Object.assign(Object.assign({}, omit(opts, 'host', 'hostname', 'path', 'port')), { socket,
+                        servername }));
+                }
+                return socket;
+            }
+            // Some other status code that's not 200... need to re-play the HTTP
+            // header "data" events onto the socket once the HTTP machinery is
+            // attached so that the node core `http` can parse and handle the
+            // error status code.
+            // Close the original socket, and a new "fake" socket is returned
+            // instead, so that the proxy doesn't get the HTTP request
+            // written to it (which may contain `Authorization` headers or other
+            // sensitive data).
+            //
+            // See: https://hackerone.com/reports/541502
+            socket.destroy();
+            const fakeSocket = new net_1.default.Socket({ writable: false });
+            fakeSocket.readable = true;
+            // Need to wait for the "socket" event to re-play the "data" events.
+            req.once('socket', (s) => {
+                debug$2('replaying proxy buffer for failed request');
+                assert_1.default(s.listenerCount('data') > 0);
+                // Replay the "buffered" Buffer onto the fake `socket`, since at
+                // this point the HTTP module machinery has been hooked up for
+                // the user.
+                s.push(buffered);
+                s.push(null);
+            });
+            return fakeSocket;
+        });
+    }
+}
+agent.default = HttpsProxyAgent$1;
+function resume(socket) {
+    socket.resume();
+}
+function isDefaultPort(port, secure) {
+    return Boolean((!secure && port === 80) || (secure && port === 443));
+}
+function isHTTPS(protocol) {
+    return typeof protocol === 'string' ? /^https:?$/i.test(protocol) : false;
+}
+function omit(obj, ...keys) {
+    const ret = {};
+    let key;
+    for (key in obj) {
+        if (!keys.includes(key)) {
+            ret[key] = obj[key];
+        }
+    }
+    return ret;
+}
+
+var __importDefault = (commonjsGlobal && commonjsGlobal.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+const agent_1 = __importDefault(agent);
+function createHttpsProxyAgent(opts) {
+    return new agent_1.default(opts);
+}
+(function (createHttpsProxyAgent) {
+    createHttpsProxyAgent.HttpsProxyAgent = agent_1.default;
+    createHttpsProxyAgent.prototype = agent_1.default.prototype;
+})(createHttpsProxyAgent || (createHttpsProxyAgent = {}));
+var dist = createHttpsProxyAgent;
+
+var followRedirects$1 = {exports: {}};
 
 var debug$1;
 
@@ -31306,7 +32043,7 @@ var debug_1 = function () {
   if (!debug$1) {
     try {
       /* eslint global-require: off */
-      debug$1 = requireSrc()("follow-redirects");
+      debug$1 = srcExports("follow-redirects");
     }
     catch (error) { /* */ }
     if (typeof debug$1 !== "function") {
@@ -31316,12 +32053,12 @@ var debug_1 = function () {
   debug$1.apply(null, arguments);
 };
 
-var url$1 = require$$0__default$5["default"];
+var url$1 = require$$2__default["default"];
 var URL$1 = url$1.URL;
 var http$1 = require$$3__default$1["default"];
 var https$1 = require$$4__default["default"];
 var Writable = require$$0__default$4["default"].Writable;
-var assert = require$$4__default$1["default"];
+var assert = require$$3__default$2["default"];
 var debug = debug_1;
 
 // Preventive platform detection
@@ -31343,6 +32080,13 @@ try {
 catch (error) {
   useNativeURL = error.code === "ERR_INVALID_URL";
 }
+
+// HTTP headers to drop across HTTP/HTTPS and domain boundaries
+var sensitiveHeaders = [
+  "Authorization",
+  "Proxy-Authorization",
+  "Cookie",
+];
 
 // URL fields to preserve in copy operations
 var preservedUrlFields = [
@@ -31424,6 +32168,11 @@ function RedirectableRequest(options, responseCallback) {
         cause : new RedirectionError({ cause: cause }));
     }
   };
+
+  // Create filter for sensitive HTTP headers
+  this._headerFilter = new RegExp("^(?:" +
+      sensitiveHeaders.concat(options.sensitiveHeaders).map(escapeRegex).join("|") +
+    ")$", "i");
 
   // Perform the first request
   this._performRequest();
@@ -31608,6 +32357,9 @@ RedirectableRequest.prototype._sanitizeOptions = function (options) {
   if (!options.headers) {
     options.headers = {};
   }
+  if (!isArray$1(options.sensitiveHeaders)) {
+    options.sensitiveHeaders = [];
+  }
 
   // Since http.request treats host as an alias of hostname,
   // but the url module interprets host as hostname plus port,
@@ -31773,7 +32525,7 @@ RedirectableRequest.prototype._processResponse = function (response) {
   var currentHostHeader = removeMatchingHeaders(/^host$/i, this._options.headers);
 
   // If the redirect is relative, carry over the host of the last request
-  var currentUrlParts = parseUrl(this._currentUrl);
+  var currentUrlParts = parseUrl$1(this._currentUrl);
   var currentHost = currentHostHeader || currentUrlParts.host;
   var currentUrl = /^\w+:/.test(location) ? this._currentUrl :
     url$1.format(Object.assign(currentUrlParts, { host: currentHost }));
@@ -31790,7 +32542,7 @@ RedirectableRequest.prototype._processResponse = function (response) {
      redirectUrl.protocol !== "https:" ||
      redirectUrl.host !== currentHost &&
      !isSubdomain(redirectUrl.host, currentHost)) {
-    removeMatchingHeaders(/^(?:(?:proxy-)?authorization|cookie)$/i, this._options.headers);
+    removeMatchingHeaders(this._headerFilter, this._options.headers);
   }
 
   // Evaluate the beforeRedirect callback
@@ -31834,7 +32586,7 @@ function wrap(protocols) {
         input = spreadUrlObject(input);
       }
       else if (isString$1(input)) {
-        input = spreadUrlObject(parseUrl(input));
+        input = spreadUrlObject(parseUrl$1(input));
       }
       else {
         callback = options;
@@ -31879,7 +32631,7 @@ function wrap(protocols) {
 
 function noop$1() { /* empty */ }
 
-function parseUrl(input) {
+function parseUrl$1(input) {
   var parsed;
   // istanbul ignore else
   if (useNativeURL) {
@@ -31897,7 +32649,7 @@ function parseUrl(input) {
 
 function resolveUrl(relative, base) {
   // istanbul ignore next
-  return useNativeURL ? new URL$1(relative, base) : parseUrl(url$1.resolve(base, relative));
+  return useNativeURL ? new URL$1(relative, base) : parseUrl$1(url$1.resolve(base, relative));
 }
 
 function validateUrl(input) {
@@ -31983,6 +32735,10 @@ function isSubdomain(subdomain, domain) {
   return dot > 0 && subdomain[dot] === "." && subdomain.endsWith(domain);
 }
 
+function isArray$1(value) {
+  return value instanceof Array;
+}
+
 function isString$1(value) {
   return typeof value === "string" || value instanceof String;
 }
@@ -31999,39 +32755,39 @@ function isURL(value) {
   return URL$1 && value instanceof URL$1;
 }
 
+function escapeRegex(regex) {
+  return regex.replace(/[\]\\/()*+?.$]/g, "\\$&");
+}
+
 // Exports
 followRedirects$1.exports = wrap({ http: http$1, https: https$1 });
 followRedirects$1.exports.wrap = wrap;
 
 var followRedirectsExports = followRedirects$1.exports;
 
-/*! Axios v1.12.2 Copyright (c) 2025 Matt Zabriskie and contributors */
+/*! Axios v1.20.0 Copyright (c) 2026 Matt Zabriskie and contributors */
 
-const FormData$1 = form_data;
-const crypto$1 = require$$8__default["default"];
-const url = require$$0__default$5["default"];
-const proxyFromEnv = proxyFromEnv$1;
-const http = require$$3__default$1["default"];
-const https = require$$4__default["default"];
-const util = require$$1__default$1["default"];
-const followRedirects = followRedirectsExports;
-const zlib = require$$8__default$1["default"];
-const stream = require$$0__default$4["default"];
-const events$2 = require$$10__default["default"];
+var FormData$1 = form_data;
+var crypto$1 = require$$8__default["default"];
+var url = require$$2__default["default"];
+var HttpsProxyAgent = dist;
+var http = require$$3__default$1["default"];
+var https = require$$4__default["default"];
+var http2 = require$$6__default["default"];
+var util = require$$1__default$1["default"];
+var path = require$$1__default["default"];
+var followRedirects = followRedirectsExports;
+var zlib = require$$10__default["default"];
+var stream = require$$0__default$4["default"];
+var events$2 = require$$0__default$6["default"];
 
-function _interopDefaultLegacy$1 (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
-
-const FormData__default = /*#__PURE__*/_interopDefaultLegacy$1(FormData$1);
-const crypto__default = /*#__PURE__*/_interopDefaultLegacy$1(crypto$1);
-const url__default = /*#__PURE__*/_interopDefaultLegacy$1(url);
-const proxyFromEnv__default = /*#__PURE__*/_interopDefaultLegacy$1(proxyFromEnv);
-const http__default = /*#__PURE__*/_interopDefaultLegacy$1(http);
-const https__default = /*#__PURE__*/_interopDefaultLegacy$1(https);
-const util__default = /*#__PURE__*/_interopDefaultLegacy$1(util);
-const followRedirects__default = /*#__PURE__*/_interopDefaultLegacy$1(followRedirects);
-const zlib__default = /*#__PURE__*/_interopDefaultLegacy$1(zlib);
-const stream__default = /*#__PURE__*/_interopDefaultLegacy$1(stream);
-
+/**
+ * Create a bound version of a function with a specified `this` context
+ *
+ * @param {Function} fn - The function to bind
+ * @param {*} thisArg - The value to be passed as the `this` parameter
+ * @returns {Function} A new function that will call the original function with the specified `this` context
+ */
 function bind(fn, thisArg) {
   return function wrap() {
     return fn.apply(thisArg, arguments);
@@ -32040,30 +32796,180 @@ function bind(fn, thisArg) {
 
 // utils is a library of generic helper functions non-specific to axios
 
-const {toString} = Object.prototype;
-const {getPrototypeOf} = Object;
-const {iterator, toStringTag} = Symbol;
+const {
+  toString
+} = Object.prototype;
+const {
+  getPrototypeOf
+} = Object;
+const {
+  iterator,
+  toStringTag
+} = Symbol;
 
-const kindOf = (cache => thing => {
-    const str = toString.call(thing);
-    return cache[str] || (cache[str] = str.slice(8, -1).toLowerCase());
-})(Object.create(null));
+/* Creating a function that will check if an object has a property. */
+const hasOwnProperty = (({
+  hasOwnProperty
+}) => (obj, prop) => hasOwnProperty.call(obj, prop))(Object.prototype);
+const isUnsafeObjectKey = prop => typeof prop === 'string' && (prop === '__proto__' || prop === 'constructor' || prop === 'prototype');
 
-const kindOfTest = (type) => {
-  type = type.toLowerCase();
-  return (thing) => kindOf(thing) === type
+/**
+ * Determine whether an inherited object must be treated as a shared-prototype
+ * boundary. Cross-realm Object.prototype objects cannot be distinguished
+ * reliably from application-created null-prototype objects because their
+ * properties are mutable, so all inherited terminal prototypes are excluded
+ * as a fail-closed boundary. A null-prototype source still keeps its own
+ * properties, as produced by mergeConfig and other safe materialization paths.
+ *
+ * @param {*} obj The object to inspect
+ * @param {*} prototype The object's prototype
+ * @param {boolean} source Whether obj is the original traversal source
+ *
+ * @returns {boolean} True when obj is a safe prototype traversal boundary
+ */
+const isPrototypeBoundary = (obj, prototype, source) => obj === Object.prototype || !source && prototype === null;
+
+/**
+ * Determine whether an object can retain its identity through code paths that
+ * add, replace, and remove config properties without bypassing unsafe-key
+ * filtering. Immutable objects, unsafe-key-bearing objects, and objects with
+ * accessor or restricted data properties must be materialized instead.
+ *
+ * @param {*} obj The object to inspect
+ *
+ * @returns {boolean} True when every own property is safe and fully mutable
+ */
+const isSafeAndFullyMutable = obj => {
+  if (!Object.isExtensible(obj)) {
+    return false;
+  }
+  const props = Object.getOwnPropertyNames(obj);
+  if (Object.getOwnPropertySymbols) {
+    props.push(...Object.getOwnPropertySymbols(obj));
+  }
+  return props.every(prop => {
+    if (isUnsafeObjectKey(prop)) {
+      return false;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(obj, prop);
+    return !!descriptor && descriptor.configurable && descriptor.writable === true;
+  });
 };
 
+/**
+ * Walk the prototype chain (excluding the source realm's Object.prototype)
+ * looking for an own `prop`. This distinguishes genuine own/inherited members
+ * — including class accessors and template prototypes — from members injected
+ * via Object.prototype pollution (e.g. `Object.prototype.username = '...'`),
+ * which live on Object.prototype itself and are therefore never matched.
+ *
+ * @param {*} thing The value whose chain to inspect
+ * @param {string|symbol} prop The property key to look for
+ *
+ * @returns {boolean} True when `prop` is owned below Object.prototype
+ */
+const hasOwnInPrototypeChain = (thing, prop) => {
+  let obj = thing;
+  const seen = [];
+  while (obj != null) {
+    if (seen.indexOf(obj) !== -1) {
+      return false;
+    }
+    seen.push(obj);
+    const prototype = getPrototypeOf(obj);
+    if (isPrototypeBoundary(obj, prototype, obj === thing)) {
+      return false;
+    }
+    if (hasOwnProperty(obj, prop)) {
+      return true;
+    }
+    obj = prototype;
+  }
+  return false;
+};
+
+/**
+ * Read `obj[prop]` only when it is safe from Object.prototype pollution. Own
+ * properties and members inherited from a non-Object.prototype source (a class
+ * instance or template object) are honored; a value reachable only through a
+ * polluted Object.prototype is ignored and `undefined` is returned.
+ *
+ * @param {*} obj The source object
+ * @param {string|symbol} prop The property key to read
+ *
+ * @returns {*} The resolved value, or undefined when unsafe/absent
+ */
+const getSafeProp = (obj, prop) => obj != null && hasOwnInPrototypeChain(obj, prop) ? obj[prop] : undefined;
+
+/**
+ * Flatten an object and its application-defined prototype chain into a
+ * null-prototype object. Members inherited only from the source realm's
+ * Object.prototype are deliberately excluded, while class/template members
+ * below that boundary are preserved.
+ *
+ * @param {*} thing The value to flatten
+ *
+ * @returns {*} A null-prototype copy, or the original value when it is already
+ * structurally safe or is not an object
+ */
+const toSafeFlatObject = thing => {
+  if (thing == null || typeof thing !== 'object' && typeof thing !== 'function') {
+    return thing;
+  }
+  const sourcePrototype = getPrototypeOf(thing);
+  if (sourcePrototype === null && isSafeAndFullyMutable(thing)) {
+    return thing;
+  }
+  const result = Object.create(null);
+  const merged = Object.create(null);
+  const seen = [];
+  let current = thing;
+  while (current != null) {
+    if (seen.indexOf(current) !== -1) {
+      break;
+    }
+    seen.push(current);
+    const prototype = current === thing ? sourcePrototype : getPrototypeOf(current);
+    if (isPrototypeBoundary(current, prototype, current === thing)) {
+      break;
+    }
+    const props = Object.getOwnPropertyNames(current);
+    if (Object.getOwnPropertySymbols) {
+      props.push(...Object.getOwnPropertySymbols(current));
+    }
+    for (const prop of props) {
+      if (isUnsafeObjectKey(prop)) {
+        continue;
+      }
+      if (!hasOwnProperty(merged, prop)) {
+        result[prop] = thing[prop];
+        merged[prop] = true;
+      }
+    }
+    current = prototype;
+  }
+  return result;
+};
+const kindOf = (cache => thing => {
+  const str = toString.call(thing);
+  return cache[str] || (cache[str] = str.slice(8, -1).toLowerCase());
+})(Object.create(null));
+const kindOfTest = type => {
+  type = type.toLowerCase();
+  return thing => kindOf(thing) === type;
+};
 const typeOfTest = type => thing => typeof thing === type;
 
 /**
- * Determine if a value is an Array
+ * Determine if a value is a non-null object
  *
  * @param {Object} val The value to test
  *
  * @returns {boolean} True if value is an Array, otherwise false
  */
-const {isArray} = Array;
+const {
+  isArray
+} = Array;
 
 /**
  * Determine if a value is undefined
@@ -32082,8 +32988,7 @@ const isUndefined = typeOfTest('undefined');
  * @returns {boolean} True if value is a Buffer, otherwise false
  */
 function isBuffer(val) {
-  return val !== null && !isUndefined(val) && val.constructor !== null && !isUndefined(val.constructor)
-    && isFunction$1(val.constructor.isBuffer) && val.constructor.isBuffer(val);
+  return val !== null && !isUndefined(val) && val.constructor !== null && !isUndefined(val.constructor) && isFunction$1(val.constructor.isBuffer) && val.constructor.isBuffer(val);
 }
 
 /**
@@ -32095,7 +33000,6 @@ function isBuffer(val) {
  */
 const isArrayBuffer = kindOfTest('ArrayBuffer');
 
-
 /**
  * Determine if a value is a view on an ArrayBuffer
  *
@@ -32105,10 +33009,10 @@ const isArrayBuffer = kindOfTest('ArrayBuffer');
  */
 function isArrayBufferView(val) {
   let result;
-  if ((typeof ArrayBuffer !== 'undefined') && (ArrayBuffer.isView)) {
+  if (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView) {
     result = ArrayBuffer.isView(val);
   } else {
-    result = (val) && (val.buffer) && (isArrayBuffer(val.buffer));
+    result = val && val.buffer && isArrayBuffer(val.buffer);
   }
   return result;
 }
@@ -32146,7 +33050,7 @@ const isNumber = typeOfTest('number');
  *
  * @returns {boolean} True if value is an Object, otherwise false
  */
-const isObject = (thing) => thing !== null && typeof thing === 'object';
+const isObject = thing => thing !== null && typeof thing === 'object';
 
 /**
  * Determine if a value is a Boolean
@@ -32163,13 +33067,16 @@ const isBoolean = thing => thing === true || thing === false;
  *
  * @returns {boolean} True if value is a plain Object, otherwise false
  */
-const isPlainObject = (val) => {
-  if (kindOf(val) !== 'object') {
+const isPlainObject = val => {
+  if (!isObject(val)) {
     return false;
   }
-
   const prototype = getPrototypeOf(val);
-  return (prototype === null || prototype === Object.prototype || Object.getPrototypeOf(prototype) === null) && !(toStringTag in val) && !(iterator in val);
+  return (prototype === null || prototype === Object.prototype || getPrototypeOf(prototype) === null) &&
+  // Treat safe own/inherited Symbol.toStringTag or Symbol.iterator members as
+  // evidence the value is tagged/iterable, while ignoring members reachable
+  // only through shared or terminal prototype boundaries.
+  !hasOwnInPrototypeChain(val, toStringTag) && !hasOwnInPrototypeChain(val, iterator);
 };
 
 /**
@@ -32179,12 +33086,11 @@ const isPlainObject = (val) => {
  *
  * @returns {boolean} True if value is an empty object, otherwise false
  */
-const isEmptyObject = (val) => {
+const isEmptyObject = val => {
   // Early return for non-objects or Buffers to prevent RangeError
   if (!isObject(val) || isBuffer(val)) {
     return false;
   }
-
   try {
     return Object.keys(val).length === 0 && Object.getPrototypeOf(val) === Object.prototype;
   } catch (e) {
@@ -32212,6 +33118,31 @@ const isDate = kindOfTest('Date');
 const isFile = kindOfTest('File');
 
 /**
+ * Determine if a value is a React Native Blob
+ * React Native "blob": an object with a `uri` attribute. Optionally, it can
+ * also have a `name` and `type` attribute to specify filename and content type
+ *
+ * @see https://github.com/facebook/react-native/blob/26684cf3adf4094eb6c405d345a75bf8c7c0bf88/Libraries/Network/FormData.js#L68-L71
+ *
+ * @param {*} value The value to test
+ *
+ * @returns {boolean} True if value is a React Native Blob, otherwise false
+ */
+const isReactNativeBlob = value => {
+  return !!(value && typeof value.uri !== 'undefined');
+};
+
+/**
+ * Determine if environment is React Native
+ * ReactNative `FormData` has a non-standard `getParts()` method
+ *
+ * @param {*} formData The formData to test
+ *
+ * @returns {boolean} True if environment is React Native, otherwise false
+ */
+const isReactNative = formData => formData && typeof formData.getParts !== 'undefined';
+
+/**
  * Determine if a value is a Blob
  *
  * @param {*} val The value to test
@@ -32225,9 +33156,10 @@ const isBlob = kindOfTest('Blob');
  *
  * @param {*} val The value to test
  *
- * @returns {boolean} True if value is a File, otherwise false
+ * @returns {boolean} True if value is a FileList, otherwise false
  */
 const isFileList = kindOfTest('FileList');
+const isSet = kindOfTest('Set');
 
 /**
  * Determine if a value is a Stream
@@ -32236,7 +33168,7 @@ const isFileList = kindOfTest('FileList');
  *
  * @returns {boolean} True if value is a Stream, otherwise false
  */
-const isStream = (val) => isObject(val) && isFunction$1(val.pipe);
+const isStream = val => isObject(val) && isFunction$1(val.pipe);
 
 /**
  * Determine if a value is a FormData
@@ -32245,17 +33177,26 @@ const isStream = (val) => isObject(val) && isFunction$1(val.pipe);
  *
  * @returns {boolean} True if value is an FormData, otherwise false
  */
-const isFormData = (thing) => {
-  let kind;
-  return thing && (
-    (typeof FormData === 'function' && thing instanceof FormData) || (
-      isFunction$1(thing.append) && (
-        (kind = kindOf(thing)) === 'formdata' ||
-        // detect form-data instance
-        (kind === 'object' && isFunction$1(thing.toString) && thing.toString() === '[object FormData]')
-      )
-    )
-  )
+function getGlobal() {
+  if (typeof globalThis !== 'undefined') return globalThis;
+  if (typeof self !== 'undefined') return self;
+  if (typeof window !== 'undefined') return window;
+  if (typeof commonjsGlobal !== 'undefined') return commonjsGlobal;
+  return {};
+}
+const G = getGlobal();
+const FormDataCtor = typeof G.FormData !== 'undefined' ? G.FormData : undefined;
+const isFormData = thing => {
+  if (!thing) return false;
+  if (FormDataCtor && thing instanceof FormDataCtor) return true;
+  // Reject plain objects inheriting directly from Object.prototype so prototype-pollution gadgets can't spoof FormData.
+  const proto = getPrototypeOf(thing);
+  if (!proto || proto === Object.prototype) return false;
+  if (!isFunction$1(thing.append)) return false;
+  const kind = kindOf(thing);
+  return kind === 'formdata' ||
+  // detect form-data instance
+  kind === 'object' && isFunction$1(thing.toString) && thing.toString() === '[object FormData]';
 };
 
 /**
@@ -32266,7 +33207,6 @@ const isFormData = (thing) => {
  * @returns {boolean} True if value is a URLSearchParams object, otherwise false
  */
 const isURLSearchParams = kindOfTest('URLSearchParams');
-
 const [isReadableStream, isRequest, isResponse, isHeaders] = ['ReadableStream', 'Request', 'Response', 'Headers'].map(kindOfTest);
 
 /**
@@ -32276,9 +33216,9 @@ const [isReadableStream, isRequest, isResponse, isHeaders] = ['ReadableStream', 
  *
  * @returns {String} The String freed of excess whitespace
  */
-const trim = (str) => str.trim ?
-  str.trim() : str.replace(/^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g, '');
-
+const trim = str => {
+  return str.trim ? str.trim() : str.replace(/^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g, '');
+};
 /**
  * Iterate over an Array or an Object invoking a function for each item.
  *
@@ -32288,18 +33228,20 @@ const trim = (str) => str.trim ?
  * If 'obj' is an Object callback will be called passing
  * the value, key, and complete object for each property.
  *
- * @param {Object|Array} obj The object to iterate
+ * @param {Object|Array<unknown>} obj The object to iterate
  * @param {Function} fn The callback to invoke for each item
  *
- * @param {Boolean} [allOwnKeys = false]
+ * @param {Object} [options]
+ * @param {Boolean} [options.allOwnKeys = false]
  * @returns {any}
  */
-function forEach(obj, fn, {allOwnKeys = false} = {}) {
+function forEach(obj, fn, {
+  allOwnKeys = false
+} = {}) {
   // Don't bother if no value provided
   if (obj === null || typeof obj === 'undefined') {
     return;
   }
-
   let i;
   let l;
 
@@ -32308,7 +33250,6 @@ function forEach(obj, fn, {allOwnKeys = false} = {}) {
     /*eslint no-param-reassign:0*/
     obj = [obj];
   }
-
   if (isArray(obj)) {
     // Iterate over array values
     for (i = 0, l = obj.length; i < l; i++) {
@@ -32324,7 +33265,6 @@ function forEach(obj, fn, {allOwnKeys = false} = {}) {
     const keys = allOwnKeys ? Object.getOwnPropertyNames(obj) : Object.keys(obj);
     const len = keys.length;
     let key;
-
     for (i = 0; i < len; i++) {
       key = keys[i];
       fn.call(null, obj[key], key, obj);
@@ -32332,11 +33272,18 @@ function forEach(obj, fn, {allOwnKeys = false} = {}) {
   }
 }
 
+/**
+ * Finds a key in an object, case-insensitive, returning the actual key name.
+ * Returns null if the object is a Buffer or if no match is found.
+ *
+ * @param {Object} obj - The object to search.
+ * @param {string} key - The key to find (case-insensitive).
+ * @returns {?string} The actual key name if found, otherwise null.
+ */
 function findKey(obj, key) {
-  if (isBuffer(obj)){
+  if (isBuffer(obj)) {
     return null;
   }
-
   key = key.toLowerCase();
   const keys = Object.keys(obj);
   let i = keys.length;
@@ -32349,14 +33296,12 @@ function findKey(obj, key) {
   }
   return null;
 }
-
 const _global = (() => {
   /*eslint no-undef:0*/
-  if (typeof globalThis !== "undefined") return globalThis;
-  return typeof self !== "undefined" ? self : (typeof window !== 'undefined' ? window : commonjsGlobal)
+  if (typeof globalThis !== 'undefined') return globalThis;
+  return typeof self !== 'undefined' ? self : typeof window !== 'undefined' ? window : commonjsGlobal;
 })();
-
-const isContextDefined = (context) => !isUndefined(context) && context !== _global;
+const isContextDefined = context => !isUndefined(context) && context !== _global;
 
 /**
  * Accepts varargs expecting each argument to be an object, then
@@ -32368,7 +33313,7 @@ const isContextDefined = (context) => !isUndefined(context) && context !== _glob
  * Example:
  *
  * ```js
- * var result = merge({foo: 123}, {foo: 456});
+ * const result = merge({foo: 123}, {foo: 456});
  * console.log(result.foo); // outputs 456
  * ```
  *
@@ -32376,13 +33321,27 @@ const isContextDefined = (context) => !isUndefined(context) && context !== _glob
  *
  * @returns {Object} Result of all merge properties
  */
-function merge(/* obj1, obj2, obj3, ... */) {
-  const {caseless, skipUndefined} = isContextDefined(this) && this || {};
+function merge(...objs) {
+  const {
+    caseless,
+    skipUndefined
+  } = isContextDefined(this) && this || {};
   const result = {};
   const assignValue = (val, key) => {
-    const targetKey = caseless && findKey(result, key) || key;
-    if (isPlainObject(result[targetKey]) && isPlainObject(val)) {
-      result[targetKey] = merge(result[targetKey], val);
+    // Skip dangerous property names to prevent prototype pollution
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+      return;
+    }
+
+    // findKey lowercases the key, so caseless lookup only applies to strings —
+    // symbol keys are identity-matched.
+    const targetKey = caseless && typeof key === 'string' && findKey(result, key) || key;
+    // Read via own-prop only — a bare `result[targetKey]` walks the prototype
+    // chain, so a polluted Object.prototype value could surface here and get
+    // copied into the merged result.
+    const existing = hasOwnProperty(result, targetKey) ? result[targetKey] : undefined;
+    if (isPlainObject(existing) && isPlainObject(val)) {
+      result[targetKey] = merge(existing, val);
     } else if (isPlainObject(val)) {
       result[targetKey] = merge({}, val);
     } else if (isArray(val)) {
@@ -32391,9 +33350,22 @@ function merge(/* obj1, obj2, obj3, ... */) {
       result[targetKey] = val;
     }
   };
-
-  for (let i = 0, l = arguments.length; i < l; i++) {
-    arguments[i] && forEach(arguments[i], assignValue);
+  for (let i = 0, l = objs.length; i < l; i++) {
+    const source = objs[i];
+    if (!source || isBuffer(source)) {
+      continue;
+    }
+    forEach(source, assignValue);
+    if (typeof source !== 'object' || isArray(source)) {
+      continue;
+    }
+    const symbols = Object.getOwnPropertySymbols(source);
+    for (let j = 0; j < symbols.length; j++) {
+      const symbol = symbols[j];
+      if (propertyIsEnumerable.call(source, symbol)) {
+        assignValue(source[symbol], symbol);
+      }
+    }
   }
   return result;
 }
@@ -32405,17 +33377,36 @@ function merge(/* obj1, obj2, obj3, ... */) {
  * @param {Object} b The object to copy properties from
  * @param {Object} thisArg The object to bind function to
  *
- * @param {Boolean} [allOwnKeys]
+ * @param {Object} [options]
+ * @param {Boolean} [options.allOwnKeys]
  * @returns {Object} The resulting value of object a
  */
-const extend = (a, b, thisArg, {allOwnKeys}= {}) => {
+const extend = (a, b, thisArg, {
+  allOwnKeys
+} = {}) => {
   forEach(b, (val, key) => {
     if (thisArg && isFunction$1(val)) {
-      a[key] = bind(val, thisArg);
+      Object.defineProperty(a, key, {
+        // Null-proto descriptor so a polluted Object.prototype.get cannot
+        // hijack defineProperty's accessor-vs-data resolution.
+        __proto__: null,
+        value: bind(val, thisArg),
+        writable: true,
+        enumerable: true,
+        configurable: true
+      });
     } else {
-      a[key] = val;
+      Object.defineProperty(a, key, {
+        __proto__: null,
+        value: val,
+        writable: true,
+        enumerable: true,
+        configurable: true
+      });
     }
-  }, {allOwnKeys});
+  }, {
+    allOwnKeys
+  });
   return a;
 };
 
@@ -32426,8 +33417,8 @@ const extend = (a, b, thisArg, {allOwnKeys}= {}) => {
  *
  * @returns {string} content value without BOM
  */
-const stripBOM = (content) => {
-  if (content.charCodeAt(0) === 0xFEFF) {
+const stripBOM = content => {
+  if (content.charCodeAt(0) === 0xfeff) {
     content = content.slice(1);
   }
   return content;
@@ -32444,8 +33435,15 @@ const stripBOM = (content) => {
  */
 const inherits = (constructor, superConstructor, props, descriptors) => {
   constructor.prototype = Object.create(superConstructor.prototype, descriptors);
-  constructor.prototype.constructor = constructor;
+  Object.defineProperty(constructor.prototype, 'constructor', {
+    __proto__: null,
+    value: constructor,
+    writable: true,
+    enumerable: false,
+    configurable: true
+  });
   Object.defineProperty(constructor, 'super', {
+    __proto__: null,
     value: superConstructor.prototype
   });
   props && Object.assign(constructor.prototype, props);
@@ -32465,11 +33463,9 @@ const toFlatObject = (sourceObj, destObj, filter, propFilter) => {
   let i;
   let prop;
   const merged = {};
-
   destObj = destObj || {};
   // eslint-disable-next-line no-eq-null,eqeqeq
   if (sourceObj == null) return destObj;
-
   do {
     props = Object.getOwnPropertyNames(sourceObj);
     i = props.length;
@@ -32482,7 +33478,6 @@ const toFlatObject = (sourceObj, destObj, filter, propFilter) => {
     }
     sourceObj = filter !== false && getPrototypeOf(sourceObj);
   } while (sourceObj && (!filter || filter(sourceObj, destObj)) && sourceObj !== Object.prototype);
-
   return destObj;
 };
 
@@ -32505,7 +33500,6 @@ const endsWith = (str, searchString, position) => {
   return lastIndex !== -1 && lastIndex === position;
 };
 
-
 /**
  * Returns new array from array like object or null if failed
  *
@@ -32513,7 +33507,7 @@ const endsWith = (str, searchString, position) => {
  *
  * @returns {?Array}
  */
-const toArray = (thing) => {
+const toArray = thing => {
   if (!thing) return null;
   if (isArray(thing)) return thing;
   let i = thing.length;
@@ -32551,11 +33545,8 @@ const isTypedArray = (TypedArray => {
  */
 const forEachEntry = (obj, fn) => {
   const generator = obj && obj[iterator];
-
   const _iterator = generator.call(obj);
-
   let result;
-
   while ((result = _iterator.next()) && !result.done) {
     const pair = result.value;
     fn.call(obj, pair[0], pair[1]);
@@ -32573,27 +33564,22 @@ const forEachEntry = (obj, fn) => {
 const matchAll = (regExp, str) => {
   let matches;
   const arr = [];
-
   while ((matches = regExp.exec(str)) !== null) {
     arr.push(matches);
   }
-
   return arr;
 };
 
 /* Checking if the kindOfTest function returns true when passed an HTMLFormElement. */
 const isHTMLForm = kindOfTest('HTMLFormElement');
-
 const toCamelCase = str => {
-  return str.toLowerCase().replace(/[-_\s]([a-z\d])(\w*)/g,
-    function replacer(m, p1, p2) {
-      return p1.toUpperCase() + p2;
-    }
-  );
+  return str.toLowerCase().replace(/[-_\s]([a-z\d])(\w*)/g, function replacer(m, p1, p2) {
+    return p1.toUpperCase() + p2;
+  });
 };
-
-/* Creating a function that will check if an object has a property. */
-const hasOwnProperty = (({hasOwnProperty}) => (obj, prop) => hasOwnProperty.call(obj, prop))(Object.prototype);
+const {
+  propertyIsEnumerable
+} = Object.prototype;
 
 /**
  * Determine if a value is a RegExp object
@@ -32603,18 +33589,15 @@ const hasOwnProperty = (({hasOwnProperty}) => (obj, prop) => hasOwnProperty.call
  * @returns {boolean} True if value is a RegExp object, otherwise false
  */
 const isRegExp = kindOfTest('RegExp');
-
 const reduceDescriptors = (obj, reducer) => {
   const descriptors = Object.getOwnPropertyDescriptors(obj);
   const reducedDescriptors = {};
-
   forEach(descriptors, (descriptor, name) => {
     let ret;
     if ((ret = reducer(descriptor, name, obj)) !== false) {
       reducedDescriptors[name] = ret || descriptor;
     }
   });
-
   Object.defineProperties(obj, reducedDescriptors);
 };
 
@@ -32623,53 +33606,49 @@ const reduceDescriptors = (obj, reducer) => {
  * @param {Object} obj
  */
 
-const freezeMethods = (obj) => {
+const freezeMethods = obj => {
   reduceDescriptors(obj, (descriptor, name) => {
     // skip restricted props in strict mode
-    if (isFunction$1(obj) && ['arguments', 'caller', 'callee'].indexOf(name) !== -1) {
+    if (isFunction$1(obj) && ['arguments', 'caller', 'callee'].includes(name)) {
       return false;
     }
-
     const value = obj[name];
-
     if (!isFunction$1(value)) return;
-
     descriptor.enumerable = false;
-
     if ('writable' in descriptor) {
       descriptor.writable = false;
       return;
     }
-
     if (!descriptor.set) {
       descriptor.set = () => {
-        throw Error('Can not rewrite read-only method \'' + name + '\'');
+        throw Error("Can not rewrite read-only method '" + name + "'");
       };
     }
   });
 };
 
+/**
+ * Converts an array or a delimited string into an object set with values as keys and true as values.
+ * Useful for fast membership checks.
+ *
+ * @param {Array|string} arrayOrString - The array or string to convert.
+ * @param {string} delimiter - The delimiter to use if input is a string.
+ * @returns {Object} An object with keys from the array or string, values set to true.
+ */
 const toObjectSet = (arrayOrString, delimiter) => {
   const obj = {};
-
-  const define = (arr) => {
+  const define = arr => {
     arr.forEach(value => {
       obj[value] = true;
     });
   };
-
   isArray(arrayOrString) ? define(arrayOrString) : define(String(arrayOrString).split(delimiter));
-
   return obj;
 };
-
 const noop = () => {};
-
 const toFiniteNumber = (value, defaultValue) => {
   return value != null && Number.isFinite(value = +value) ? value : defaultValue;
 };
-
-
 
 /**
  * If the thing is a FormData object, return true, otherwise return false.
@@ -32682,13 +33661,17 @@ function isSpecCompliantForm(thing) {
   return !!(thing && isFunction$1(thing.append) && thing[toStringTag] === 'FormData' && thing[iterator]);
 }
 
-const toJSONObject = (obj) => {
-  const stack = new Array(10);
-
-  const visit = (source, i) => {
-
+/**
+ * Recursively converts an object to a JSON-compatible object, handling circular references and Buffers.
+ *
+ * @param {Object} obj - The object to convert.
+ * @returns {Object} The JSON-compatible object.
+ */
+const toJSONObject = obj => {
+  const visited = new WeakSet();
+  const visit = source => {
     if (isObject(source)) {
-      if (stack.indexOf(source) >= 0) {
+      if (visited.has(source)) {
         return;
       }
 
@@ -32696,68 +33679,104 @@ const toJSONObject = (obj) => {
       if (isBuffer(source)) {
         return source;
       }
-
-      if(!('toJSON' in source)) {
-        stack[i] = source;
-        const target = isArray(source) ? [] : {};
-
-        forEach(source, (value, key) => {
-          const reducedValue = visit(value, i + 1);
-          !isUndefined(reducedValue) && (target[key] = reducedValue);
-        });
-
-        stack[i] = undefined;
-
+      if (!('toJSON' in source)) {
+        // add-on descent / delete-on-ascent: preserves path semantics, so DAG nodes serialise at every occurrence (see #7230).
+        visited.add(source);
+        let target;
+        if (isSet(source)) {
+          target = [];
+          for (const value of source) {
+            const reducedValue = visit(value);
+            !isUndefined(reducedValue) && target.push(reducedValue);
+          }
+        } else {
+          target = isArray(source) ? [] : {};
+          forEach(source, (value, key) => {
+            const reducedValue = visit(value);
+            !isUndefined(reducedValue) && (target[key] = reducedValue);
+          });
+        }
+        visited.delete(source);
         return target;
       }
     }
-
     return source;
   };
-
-  return visit(obj, 0);
+  return visit(obj);
 };
 
+/**
+ * Determines if a value is an async function.
+ *
+ * @param {*} thing - The value to test.
+ * @returns {boolean} True if value is an async function, otherwise false.
+ */
 const isAsyncFn = kindOfTest('AsyncFunction');
 
-const isThenable = (thing) =>
-  thing && (isObject(thing) || isFunction$1(thing)) && isFunction$1(thing.then) && isFunction$1(thing.catch);
+/**
+ * Determines if a value is thenable (has then and catch methods).
+ *
+ * @param {*} thing - The value to test.
+ * @returns {boolean} True if value is thenable, otherwise false.
+ */
+const isThenable = thing => thing && (isObject(thing) || isFunction$1(thing)) && isFunction$1(thing.then) && isFunction$1(thing.catch);
 
 // original code
 // https://github.com/DigitalBrainJS/AxiosPromise/blob/16deab13710ec09779922131f3fa5954320f83ab/lib/utils.js#L11-L34
 
+/**
+ * Provides a cross-platform setImmediate implementation.
+ * Uses native setImmediate if available, otherwise falls back to postMessage or setTimeout.
+ *
+ * @param {boolean} setImmediateSupported - Whether setImmediate is supported.
+ * @param {boolean} postMessageSupported - Whether postMessage is supported.
+ * @returns {Function} A function to schedule a callback asynchronously.
+ */
 const _setImmediate = ((setImmediateSupported, postMessageSupported) => {
   if (setImmediateSupported) {
     return setImmediate;
   }
-
   return postMessageSupported ? ((token, callbacks) => {
-    _global.addEventListener("message", ({source, data}) => {
+    _global.addEventListener('message', ({
+      source,
+      data
+    }) => {
       if (source === _global && data === token) {
         callbacks.length && callbacks.shift()();
       }
     }, false);
-
-    return (cb) => {
+    return cb => {
       callbacks.push(cb);
-      _global.postMessage(token, "*");
-    }
-  })(`axios@${Math.random()}`, []) : (cb) => setTimeout(cb);
-})(
-  typeof setImmediate === 'function',
-  isFunction$1(_global.postMessage)
-);
+      _global.postMessage(token, '*');
+    };
+  })(`axios@${Math.random()}`, []) : cb => setTimeout(cb);
+})(typeof setImmediate === 'function', isFunction$1(_global.postMessage));
 
-const asap = typeof queueMicrotask !== 'undefined' ?
-  queueMicrotask.bind(_global) : ( typeof process !== 'undefined' && process.nextTick || _setImmediate);
+/**
+ * Schedules a microtask or asynchronous callback as soon as possible.
+ * Uses queueMicrotask if available, otherwise falls back to process.nextTick or _setImmediate.
+ *
+ * @type {Function}
+ */
+const asap = typeof queueMicrotask !== 'undefined' ? queueMicrotask.bind(_global) : typeof process !== 'undefined' && process.nextTick || _setImmediate;
 
 // *********************
 
+const isIterable = thing => thing != null && isFunction$1(thing[iterator]);
 
-const isIterable = (thing) => thing != null && isFunction$1(thing[iterator]);
-
-
-const utils$1 = {
+/**
+ * Determine if a value is iterable via an iterator that is NOT sourced solely
+ * from a polluted Object.prototype. Use this instead of `isIterable` whenever
+ * the iterable comes from untrusted input (e.g. user-supplied header sources),
+ * so `Object.prototype[Symbol.iterator] = ...` cannot turn an ordinary object
+ * into an attacker-controlled entries iterator.
+ *
+ * @param {*} thing The value to test
+ *
+ * @returns {boolean} True if value has a non-polluted iterator
+ */
+const isSafeIterable = thing => thing != null && hasOwnInPrototypeChain(thing, iterator) && isIterable(thing);
+var utils$1 = {
   isArray,
   isArrayBuffer,
   isBuffer,
@@ -32776,6 +33795,8 @@ const utils$1 = {
   isUndefined,
   isDate,
   isFile,
+  isReactNativeBlob,
+  isReactNative,
   isBlob,
   isRegExp,
   isFunction: isFunction$1,
@@ -32798,7 +33819,11 @@ const utils$1 = {
   matchAll,
   isHTMLForm,
   hasOwnProperty,
-  hasOwnProp: hasOwnProperty, // an alias to avoid ESLint no-prototype-builtins detection
+  hasOwnProp: hasOwnProperty,
+  // an alias to avoid ESLint no-prototype-builtins detection
+  hasOwnInPrototypeChain,
+  getSafeProp,
+  toSafeFlatObject,
   reduceDescriptors,
   freezeMethods,
   toObjectSet,
@@ -32814,42 +33839,575 @@ const utils$1 = {
   isThenable,
   setImmediate: _setImmediate,
   asap,
-  isIterable
+  isIterable,
+  isSafeIterable
 };
 
+// RawAxiosHeaders whose duplicates are ignored by node
+// c.f. https://nodejs.org/api/http.html#http_message_headers
+const ignoreDuplicateOf = utils$1.toObjectSet(['age', 'authorization', 'content-length', 'content-type', 'etag', 'expires', 'from', 'host', 'if-modified-since', 'if-unmodified-since', 'last-modified', 'location', 'max-forwards', 'proxy-authorization', 'referer', 'retry-after', 'user-agent']);
+
 /**
- * Create an Error with the specified message, config, error code, request and response.
+ * Parse headers into an object
  *
- * @param {string} message The error message.
- * @param {string} [code] The error code (for example, 'ECONNABORTED').
- * @param {Object} [config] The config.
- * @param {Object} [request] The request.
- * @param {Object} [response] The response.
+ * ```
+ * Date: Wed, 27 Aug 2014 08:58:49 GMT
+ * Content-Type: application/json
+ * Connection: keep-alive
+ * Transfer-Encoding: chunked
+ * ```
  *
- * @returns {Error} The created error.
+ * @param {String} rawHeaders Headers needing to be parsed
+ *
+ * @returns {Object} Headers parsed into an object
  */
-function AxiosError(message, code, config, request, response) {
-  Error.call(this);
+var parseHeaders = rawHeaders => {
+  const parsed = {};
+  let key;
+  let val;
+  let i;
+  rawHeaders && rawHeaders.split('\n').forEach(function parser(line) {
+    i = line.indexOf(':');
+    key = line.substring(0, i).trim().toLowerCase();
+    val = line.substring(i + 1).trim();
+    const hasKey = utils$1.hasOwnProp(parsed, key);
+    if (!key || hasKey && utils$1.hasOwnProp(ignoreDuplicateOf, key)) {
+      return;
+    }
+    if (key === 'set-cookie') {
+      if (hasKey) {
+        parsed[key].push(val);
+      } else {
+        parsed[key] = [val];
+      }
+    } else {
+      parsed[key] = hasKey ? parsed[key] + ', ' + val : val;
+    }
+  });
+  return parsed;
+};
 
-  if (Error.captureStackTrace) {
-    Error.captureStackTrace(this, this.constructor);
-  } else {
-    this.stack = (new Error()).stack;
+function trimSPorHTAB(str) {
+  let start = 0;
+  let end = str.length;
+  while (start < end) {
+    const code = str.charCodeAt(start);
+    if (code !== 0x09 && code !== 0x20) {
+      break;
+    }
+    start += 1;
   }
-
-  this.message = message;
-  this.name = 'AxiosError';
-  code && (this.code = code);
-  config && (this.config = config);
-  request && (this.request = request);
-  if (response) {
-    this.response = response;
-    this.status = response.status ? response.status : null;
+  while (end > start) {
+    const code = str.charCodeAt(end - 1);
+    if (code !== 0x09 && code !== 0x20) {
+      break;
+    }
+    end -= 1;
   }
+  return start === 0 && end === str.length ? str : str.slice(start, end);
 }
 
-utils$1.inherits(AxiosError, Error, {
-  toJSON: function toJSON() {
+// The control-code ranges are intentional: header sanitization strips C0/DEL bytes.
+// eslint-disable-next-line no-control-regex
+const INVALID_UNICODE_HEADER_VALUE_CHARS = new RegExp('[\\u0000-\\u0008\\u000a-\\u001f\\u007f]+', 'g');
+// eslint-disable-next-line no-control-regex
+const INVALID_BYTE_STRING_HEADER_VALUE_CHARS = new RegExp('[^\\u0009\\u0020-\\u007e\\u0080-\\u00ff]+', 'g');
+function sanitizeValue(value, invalidChars) {
+  if (utils$1.isArray(value)) {
+    return value.map(item => sanitizeValue(item, invalidChars));
+  }
+  return trimSPorHTAB(String(value).replace(invalidChars, ''));
+}
+const sanitizeHeaderValue = value => sanitizeValue(value, INVALID_UNICODE_HEADER_VALUE_CHARS);
+const sanitizeByteStringHeaderValue = value => sanitizeValue(value, INVALID_BYTE_STRING_HEADER_VALUE_CHARS);
+function toByteStringHeaderObject(headers) {
+  const byteStringHeaders = Object.create(null);
+  utils$1.forEach(headers.toJSON(), (value, header) => {
+    byteStringHeaders[header] = sanitizeByteStringHeaderValue(value);
+  });
+  return byteStringHeaders;
+}
+
+const $internals$1 = Symbol('internals');
+function normalizeHeader(header) {
+  return header && String(header).trim().toLowerCase();
+}
+function normalizeValue(value) {
+  if (value === false || value == null) {
+    return value;
+  }
+  return utils$1.isArray(value) ? value.map(normalizeValue) : sanitizeHeaderValue(String(value));
+}
+function parseTokens(str) {
+  const tokens = Object.create(null);
+  const tokensRE = /([^\s,;=]+)\s*(?:=\s*([^,;]+))?/g;
+  let match;
+  while (match = tokensRE.exec(str)) {
+    tokens[match[1]] = match[2];
+  }
+  return tokens;
+}
+const parameterNameRE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+function trimOWS(value) {
+  let start = 0;
+  let end = value.length;
+  while (start < end) {
+    const code = value.charCodeAt(start);
+    if (code !== 0x09 && code !== 0x20) {
+      break;
+    }
+    start += 1;
+  }
+  while (end > start) {
+    const code = value.charCodeAt(end - 1);
+    if (code !== 0x09 && code !== 0x20) {
+      break;
+    }
+    end -= 1;
+  }
+  return start === 0 && end === value.length ? value : value.slice(start, end);
+}
+function decodeQuotedString(value) {
+  const last = value.length - 1;
+  if (last < 1 || value.charCodeAt(0) !== 0x22 || value.charCodeAt(last) !== 0x22) {
+    return value;
+  }
+  let decoded = '';
+  for (let i = 1; i < last; i++) {
+    const code = value.charCodeAt(i);
+    if (code === 0x22) {
+      return value;
+    }
+    if (code === 0x5c) {
+      i += 1;
+      if (i >= last) {
+        return value;
+      }
+    }
+    decoded += value[i];
+  }
+  return decoded;
+}
+function parseParameters(value) {
+  const parameters = Object.create(null);
+  const str = String(value);
+  let start = 0;
+  let quoted = false;
+  let escaped = false;
+  function parseParameter(end) {
+    const part = trimOWS(str.slice(start, end));
+    const equals = part.indexOf('=');
+    if (equals < 1) {
+      return;
+    }
+    const name = trimOWS(part.slice(0, equals));
+    if (!parameterNameRE.test(name)) {
+      return;
+    }
+    const normalizedName = name.toLowerCase();
+    if (normalizedName === '__proto__' || normalizedName === 'constructor' || normalizedName === 'prototype') {
+      return;
+    }
+    const parameterValue = trimOWS(part.slice(equals + 1));
+    parameters[normalizedName] = decodeQuotedString(parameterValue);
+  }
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    if (quoted) {
+      if (escaped) {
+        escaped = false;
+      } else if (code === 0x5c) {
+        escaped = true;
+      } else if (code === 0x22) {
+        quoted = false;
+      }
+    } else if (code === 0x22) {
+      quoted = true;
+    } else if (code === 0x2c || code === 0x3b) {
+      parseParameter(i);
+      start = i + 1;
+    }
+  }
+  parseParameter(str.length);
+  return parameters;
+}
+const isValidHeaderName = str => /^[-_a-zA-Z0-9^`|~,!#$%&'*+.]+$/.test(str.trim());
+function matchHeaderValue(context, value, header, filter, isHeaderNameFilter) {
+  if (utils$1.isFunction(filter)) {
+    return filter.call(this, value, header);
+  }
+  if (isHeaderNameFilter) {
+    value = header;
+  }
+  if (!utils$1.isString(value)) return;
+  if (utils$1.isString(filter)) {
+    return value.indexOf(filter) !== -1;
+  }
+  if (utils$1.isRegExp(filter)) {
+    return filter.test(value);
+  }
+}
+function formatHeader(header) {
+  return header.trim().toLowerCase().replace(/([a-z\d])(\w*)/g, (w, char, str) => {
+    return char.toUpperCase() + str;
+  });
+}
+function buildAccessors(obj, header) {
+  const accessorName = utils$1.toCamelCase(' ' + header);
+  ['get', 'set', 'has'].forEach(methodName => {
+    Object.defineProperty(obj, methodName + accessorName, {
+      // Null-proto descriptor so a polluted Object.prototype.get cannot turn
+      // this data descriptor into an accessor descriptor on the way in.
+      __proto__: null,
+      value: function (arg1, arg2, arg3) {
+        return this[methodName].call(this, header, arg1, arg2, arg3);
+      },
+      configurable: true
+    });
+  });
+}
+class AxiosHeaders {
+  constructor(headers) {
+    headers && this.set(headers);
+  }
+  set(header, valueOrRewrite, rewrite) {
+    const self = this;
+    function setHeader(_value, _header, _rewrite) {
+      const lHeader = normalizeHeader(_header);
+      if (!lHeader) {
+        return;
+      }
+      const key = utils$1.findKey(self, lHeader);
+      if (!key || self[key] === undefined || _rewrite === true || _rewrite === undefined && self[key] !== false) {
+        self[key || _header] = normalizeValue(_value);
+      }
+    }
+    const setHeaders = (headers, _rewrite) => utils$1.forEach(headers, (_value, _header) => setHeader(_value, _header, _rewrite));
+    if (utils$1.isPlainObject(header) || header instanceof this.constructor) {
+      setHeaders(header, valueOrRewrite);
+    } else if (utils$1.isString(header) && (header = header.trim()) && !isValidHeaderName(header)) {
+      setHeaders(parseHeaders(header), valueOrRewrite);
+    } else if (utils$1.isObject(header) && utils$1.isSafeIterable(header)) {
+      let obj = Object.create(null),
+        dest,
+        key;
+      for (const entry of header) {
+        if (!utils$1.isArray(entry)) {
+          throw new TypeError('Object iterator must return a key-value pair');
+        }
+        key = entry[0];
+        if (utils$1.hasOwnProp(obj, key)) {
+          dest = obj[key];
+          obj[key] = utils$1.isArray(dest) ? [...dest, entry[1]] : [dest, entry[1]];
+        } else {
+          obj[key] = entry[1];
+        }
+      }
+      setHeaders(obj, valueOrRewrite);
+    } else {
+      header != null && setHeader(valueOrRewrite, header, rewrite);
+    }
+    return this;
+  }
+  get(header, parser) {
+    header = normalizeHeader(header);
+    if (header) {
+      const key = utils$1.findKey(this, header);
+      if (key) {
+        const value = this[key];
+        if (!parser) {
+          return value;
+        }
+        if (parser === true) {
+          return parseTokens(value);
+        }
+        if (utils$1.isFunction(parser)) {
+          return parser.call(this, value, key);
+        }
+        if (utils$1.isRegExp(parser)) {
+          return parser.exec(value);
+        }
+        throw new TypeError('parser must be boolean|regexp|function');
+      }
+    }
+  }
+  has(header, matcher) {
+    header = normalizeHeader(header);
+    if (header) {
+      const key = utils$1.findKey(this, header);
+      return !!(key && this[key] !== undefined && (!matcher || matchHeaderValue(this, this[key], key, matcher)));
+    }
+    return false;
+  }
+  delete(header, matcher) {
+    const self = this;
+    let deleted = false;
+    function deleteHeader(_header) {
+      _header = normalizeHeader(_header);
+      if (_header) {
+        const key = utils$1.findKey(self, _header);
+        if (key && (!matcher || matchHeaderValue(self, self[key], key, matcher))) {
+          delete self[key];
+          deleted = true;
+        }
+      }
+    }
+    if (utils$1.isArray(header)) {
+      header.forEach(deleteHeader);
+    } else {
+      deleteHeader(header);
+    }
+    return deleted;
+  }
+  clear(matcher) {
+    const keys = Object.keys(this);
+    let i = keys.length;
+    let deleted = false;
+    while (i--) {
+      const key = keys[i];
+      if (!matcher || matchHeaderValue(this, this[key], key, matcher, true)) {
+        delete this[key];
+        deleted = true;
+      }
+    }
+    return deleted;
+  }
+  normalize(format) {
+    const self = this;
+    const headers = {};
+    utils$1.forEach(this, (value, header) => {
+      const key = utils$1.findKey(headers, header);
+      if (key) {
+        self[key] = normalizeValue(value);
+        delete self[header];
+        return;
+      }
+      const normalized = format ? formatHeader(header) : String(header).trim();
+      if (normalized !== header) {
+        delete self[header];
+      }
+      self[normalized] = normalizeValue(value);
+      headers[normalized] = true;
+    });
+    return this;
+  }
+  concat(...targets) {
+    return this.constructor.concat(this, ...targets);
+  }
+  toJSON(asStrings) {
+    const obj = Object.create(null);
+    utils$1.forEach(this, (value, header) => {
+      value != null && value !== false && (obj[header] = asStrings && utils$1.isArray(value) ? value.join(', ') : value);
+    });
+    return obj;
+  }
+  [Symbol.iterator]() {
+    return Object.entries(this.toJSON())[Symbol.iterator]();
+  }
+  toString() {
+    return Object.entries(this.toJSON()).map(([header, value]) => header + ': ' + value).join('\n');
+  }
+  getSetCookie() {
+    const value = this.get('set-cookie');
+    return utils$1.isArray(value) ? value : value == null || value === false ? [] : [value];
+  }
+  get [Symbol.toStringTag]() {
+    return 'AxiosHeaders';
+  }
+  static from(thing) {
+    return thing instanceof this ? thing : new this(thing);
+  }
+  static parseParameters(value) {
+    return parseParameters(value);
+  }
+  static concat(first, ...targets) {
+    const computed = new this(first);
+    targets.forEach(target => computed.set(target));
+    return computed;
+  }
+  static accessor(header) {
+    const internals = this[$internals$1] = this[$internals$1] = {
+      accessors: {}
+    };
+    const accessors = internals.accessors;
+    const prototype = this.prototype;
+    function defineAccessor(_header) {
+      const lHeader = normalizeHeader(_header);
+      if (!accessors[lHeader]) {
+        buildAccessors(prototype, _header);
+        accessors[lHeader] = true;
+      }
+    }
+    utils$1.isArray(header) ? header.forEach(defineAccessor) : defineAccessor(header);
+    return this;
+  }
+}
+AxiosHeaders.accessor(['Content-Type', 'Content-Length', 'Accept', 'Accept-Encoding', 'User-Agent', 'Authorization']);
+
+// reserved names hotfix
+utils$1.reduceDescriptors(AxiosHeaders.prototype, ({
+  value
+}, key) => {
+  let mapped = key[0].toUpperCase() + key.slice(1); // map `set` => `Set`
+  return {
+    get: () => value,
+    set(headerValue) {
+      this[mapped] = headerValue;
+    }
+  };
+});
+utils$1.freezeMethods(AxiosHeaders);
+
+const REDACTED = '[REDACTED ****]';
+function hasOwnOrPrototypeToJSON(source) {
+  if (utils$1.hasOwnProp(source, 'toJSON')) {
+    return true;
+  }
+  let prototype = Object.getPrototypeOf(source);
+  while (prototype && prototype !== Object.prototype) {
+    if (utils$1.hasOwnProp(prototype, 'toJSON')) {
+      return true;
+    }
+    prototype = Object.getPrototypeOf(prototype);
+  }
+  return false;
+}
+
+// Build a plain-object snapshot of `config` and replace the value of any key
+// (case-insensitive) listed in `redactKeys` with REDACTED. Walks through arrays
+// and AxiosHeaders, and short-circuits on circular references.
+function redactConfig(config, redactKeys) {
+  const lowerKeys = new Set(redactKeys.map(k => String(k).toLowerCase()));
+  const seen = [];
+  const visit = source => {
+    if (source === null || typeof source !== 'object') return source;
+    if (utils$1.isBuffer(source)) return source;
+    if (seen.indexOf(source) !== -1) return undefined;
+    if (source instanceof AxiosHeaders) {
+      source = source.toJSON();
+    }
+    seen.push(source);
+    let result;
+    if (utils$1.isArray(source)) {
+      result = [];
+      source.forEach((v, i) => {
+        const reducedValue = visit(v);
+        if (!utils$1.isUndefined(reducedValue)) {
+          result[i] = reducedValue;
+        }
+      });
+    } else {
+      if (!utils$1.isPlainObject(source) && hasOwnOrPrototypeToJSON(source)) {
+        seen.pop();
+        return source;
+      }
+      result = Object.create(null);
+      for (const [key, value] of Object.entries(source)) {
+        const reducedValue = lowerKeys.has(key.toLowerCase()) ? REDACTED : visit(value);
+        if (!utils$1.isUndefined(reducedValue)) {
+          result[key] = reducedValue;
+        }
+      }
+    }
+    seen.pop();
+    return result;
+  };
+  return visit(config);
+}
+function stringifySafely$1(value) {
+  try {
+    return String(value);
+  } catch (err) {
+    return '';
+  }
+}
+function aggregateErrorMessage(error) {
+  const message = error.errors.map(entry => {
+    try {
+      return entry && entry.message ? stringifySafely$1(entry.message) : stringifySafely$1(entry);
+    } catch (err) {
+      return '';
+    }
+  }).filter(Boolean).join('; ');
+  return message || error.name || 'AggregateError';
+}
+class AxiosError extends Error {
+  static from(error, code, config, request, response, customProps) {
+    // `AggregateError` (thrown by Node on dual-stack/Happy-Eyeballs connection
+    // failures) has an empty `message`; its detail lives in `errors[]`. Without
+    // this, the wrapped error surfaces with a blank message (see #6721).
+    let message = error.message;
+    if (!message && utils$1.isArray(error.errors) && error.errors.length) {
+      message = aggregateErrorMessage(error);
+    }
+    const axiosError = new AxiosError(message, code || error.code, config, request, response);
+    // Match native `Error` `cause` semantics: non-enumerable. The wrapped
+    // error often carries circular internals (sockets, requests, agents), so
+    // an enumerable `cause` makes structured loggers (pino/winston) and any
+    // own-property walk throw "Converting circular structure to JSON".
+    // Regression from #6982; see #7205. `__proto__: null` mirrors the
+    // `message` descriptor below (prototype-pollution-safe descriptor).
+    Object.defineProperty(axiosError, 'cause', {
+      __proto__: null,
+      value: error,
+      writable: true,
+      enumerable: false,
+      configurable: true
+    });
+    axiosError.name = error.name;
+
+    // Preserve status from the original error if not already set from response
+    if (error.status != null && axiosError.status == null) {
+      axiosError.status = error.status;
+    }
+    customProps && Object.assign(axiosError, customProps);
+    return axiosError;
+  }
+
+  /**
+   * Create an Error with the specified message, config, error code, request and response.
+   *
+   * @param {string} message The error message.
+   * @param {string} [code] The error code (for example, 'ECONNABORTED').
+   * @param {Object} [config] The config.
+   * @param {Object} [request] The request.
+   * @param {Object} [response] The response.
+   *
+   * @returns {Error} The created error.
+   */
+  constructor(message, code, config, request, response) {
+    super(message);
+
+    // Make message enumerable to maintain backward compatibility
+    // The native Error constructor sets message as non-enumerable,
+    // but axios < v1.13.3 had it as enumerable
+    Object.defineProperty(this, 'message', {
+      // Null-proto descriptor so a polluted Object.prototype.get cannot turn
+      // this data descriptor into an accessor descriptor on the way in.
+      __proto__: null,
+      value: message,
+      enumerable: true,
+      writable: true,
+      configurable: true
+    });
+    this.name = 'AxiosError';
+    this.isAxiosError = true;
+    code && (this.code = code);
+    config && (this.config = config);
+    request && (this.request = request);
+    if (response) {
+      this.response = response;
+      this.status = response.status;
+    }
+  }
+  toJSON() {
+    // Opt-in redaction: when the request config carries a `redact` array, the
+    // value of any matching key (case-insensitive, at any depth) is replaced
+    // with REDACTED in the serialized snapshot. Undefined or empty leaves the
+    // existing serialization behavior unchanged.
+    const config = this.config;
+    const redactKeys = config && utils$1.hasOwnProp(config, 'redact') ? config.redact : undefined;
+    const serializedConfig = utils$1.isArray(redactKeys) && redactKeys.length > 0 ? redactConfig(config, redactKeys) : utils$1.toJSONObject(config);
     return {
       // Standard
       message: this.message,
@@ -32863,64 +34421,41 @@ utils$1.inherits(AxiosError, Error, {
       columnNumber: this.columnNumber,
       stack: this.stack,
       // Axios
-      config: utils$1.toJSONObject(this.config),
+      config: serializedConfig,
       code: this.code,
       status: this.status
     };
   }
-});
+}
 
-const prototype$1 = AxiosError.prototype;
-const descriptors = {};
+// This can be changed to static properties as soon as the parser options in .eslint.cjs are updated.
+AxiosError.ERR_BAD_OPTION_VALUE = 'ERR_BAD_OPTION_VALUE';
+AxiosError.ERR_BAD_OPTION = 'ERR_BAD_OPTION';
+AxiosError.ECONNABORTED = 'ECONNABORTED';
+AxiosError.ETIMEDOUT = 'ETIMEDOUT';
+AxiosError.ECONNREFUSED = 'ECONNREFUSED';
+AxiosError.ERR_NETWORK = 'ERR_NETWORK';
+AxiosError.ERR_FR_TOO_MANY_REDIRECTS = 'ERR_FR_TOO_MANY_REDIRECTS';
+AxiosError.ERR_DEPRECATED = 'ERR_DEPRECATED';
+AxiosError.ERR_BAD_RESPONSE = 'ERR_BAD_RESPONSE';
+AxiosError.ERR_BAD_REQUEST = 'ERR_BAD_REQUEST';
+AxiosError.ERR_CANCELED = 'ERR_CANCELED';
+AxiosError.ERR_NOT_SUPPORT = 'ERR_NOT_SUPPORT';
+AxiosError.ERR_INVALID_URL = 'ERR_INVALID_URL';
+AxiosError.ERR_FORM_DATA_DEPTH_EXCEEDED = 'ERR_FORM_DATA_DEPTH_EXCEEDED';
 
-[
-  'ERR_BAD_OPTION_VALUE',
-  'ERR_BAD_OPTION',
-  'ECONNABORTED',
-  'ETIMEDOUT',
-  'ERR_NETWORK',
-  'ERR_FR_TOO_MANY_REDIRECTS',
-  'ERR_DEPRECATED',
-  'ERR_BAD_RESPONSE',
-  'ERR_BAD_REQUEST',
-  'ERR_CANCELED',
-  'ERR_NOT_SUPPORT',
-  'ERR_INVALID_URL'
-// eslint-disable-next-line func-names
-].forEach(code => {
-  descriptors[code] = {value: code};
-});
-
-Object.defineProperties(AxiosError, descriptors);
-Object.defineProperty(prototype$1, 'isAxiosError', {value: true});
-
-// eslint-disable-next-line func-names
-AxiosError.from = (error, code, config, request, response, customProps) => {
-  const axiosError = Object.create(prototype$1);
-
-  utils$1.toFlatObject(error, axiosError, function filter(obj) {
-    return obj !== Error.prototype;
-  }, prop => {
-    return prop !== 'isAxiosError';
-  });
-
-  const msg = error && error.message ? error.message : 'Error';
-
-  // Prefer explicit code; otherwise copy the low-level error's code (e.g. ECONNREFUSED)
-  const errCode = code == null && error ? error.code : code;
-  AxiosError.call(axiosError, msg, errCode, config, request, response);
-
-  // Chain the original error on the standard field; non-enumerable to avoid JSON noise
-  if (error && axiosError.cause == null) {
-    Object.defineProperty(axiosError, 'cause', { value: error, configurable: true });
+var PlatformBuffer = {
+  isBufferAvailable() {
+    return typeof Buffer !== 'undefined';
+  },
+  from(value) {
+    return Buffer.from(value);
   }
-
-  axiosError.name = (error && error.name) || 'Error';
-
-  customProps && Object.assign(axiosError, customProps);
-
-  return axiosError;
 };
+
+// Default nesting limit shared with the inverse transform (formDataToJSON) so
+// the FormData <-> JSON round-trip stays symmetric.
+const DEFAULT_FORM_DATA_MAX_DEPTH = 100;
 
 /**
  * Determines if the given thing is a array or js object.
@@ -32972,7 +34507,6 @@ function renderKey(path, key, dots) {
 function isFlatArray(arr) {
   return utils$1.isArray(arr) && !arr.some(isVisitable);
 }
-
 const predicates = utils$1.toFlatObject(utils$1, {}, null, function filter(prop) {
   return /^is[A-Z]/.test(prop);
 });
@@ -33006,50 +34540,66 @@ function toFormData(obj, formData, options) {
   }
 
   // eslint-disable-next-line no-param-reassign
-  formData = formData || new (FormData__default["default"] || FormData)();
-
-  // eslint-disable-next-line no-param-reassign
-  options = utils$1.toFlatObject(options, {
-    metaTokens: true,
-    dots: false,
-    indexes: false
-  }, false, function defined(option, source) {
-    // eslint-disable-next-line no-eq-null,eqeqeq
-    return !utils$1.isUndefined(source[option]);
-  });
-
-  const metaTokens = options.metaTokens;
+  formData = formData || new (FormData$1 || FormData)();
+  const option = (name, fallback) => {
+    const value = utils$1.getSafeProp(options, name);
+    return utils$1.isUndefined(value) ? fallback : value;
+  };
+  const metaTokens = option('metaTokens', true);
   // eslint-disable-next-line no-use-before-define
-  const visitor = options.visitor || defaultVisitor;
-  const dots = options.dots;
-  const indexes = options.indexes;
-  const _Blob = options.Blob || typeof Blob !== 'undefined' && Blob;
+  const visitor = option('visitor') || defaultVisitor;
+  const dots = option('dots', false);
+  const indexes = option('indexes', false);
+  const _Blob = option('Blob') || typeof Blob !== 'undefined' && Blob;
+  const maxDepth = option('maxDepth', DEFAULT_FORM_DATA_MAX_DEPTH);
   const useBlob = _Blob && utils$1.isSpecCompliantForm(formData);
-
+  const stack = [];
   if (!utils$1.isFunction(visitor)) {
     throw new TypeError('visitor must be a function');
   }
-
   function convertValue(value) {
     if (value === null) return '';
-
     if (utils$1.isDate(value)) {
       return value.toISOString();
     }
-
     if (utils$1.isBoolean(value)) {
       return value.toString();
     }
-
     if (!useBlob && utils$1.isBlob(value)) {
       throw new AxiosError('Blob is not supported. Use a Buffer instead.');
     }
-
     if (utils$1.isArrayBuffer(value) || utils$1.isTypedArray(value)) {
-      return useBlob && typeof Blob === 'function' ? new Blob([value]) : Buffer.from(value);
+      if (useBlob && typeof _Blob === 'function') {
+        return new _Blob([value]);
+      }
+      if (PlatformBuffer && PlatformBuffer.isBufferAvailable()) {
+        return PlatformBuffer.from(value);
+      }
+      throw new AxiosError('Blob is not supported. Use a Buffer instead.', AxiosError.ERR_NOT_SUPPORT);
     }
-
     return value;
+  }
+  function throwIfMaxDepthExceeded(depth) {
+    if (depth > maxDepth) {
+      throw new AxiosError('Object is too deeply nested (' + depth + ' levels). Max depth: ' + maxDepth, AxiosError.ERR_FORM_DATA_DEPTH_EXCEEDED);
+    }
+  }
+  function stringifyWithDepthLimit(value, depth) {
+    if (maxDepth === Infinity) {
+      return JSON.stringify(value);
+    }
+    const ancestors = [];
+    return JSON.stringify(value, function limitDepth(_key, currentValue) {
+      if (!utils$1.isObject(currentValue)) {
+        return currentValue;
+      }
+      while (ancestors.length && ancestors[ancestors.length - 1] !== this) {
+        ancestors.pop();
+      }
+      ancestors.push(currentValue);
+      throwIfMaxDepthExceeded(depth + ancestors.length - 1);
+      return currentValue;
+    });
   }
 
   /**
@@ -33064,76 +34614,57 @@ function toFormData(obj, formData, options) {
    */
   function defaultVisitor(value, key, path) {
     let arr = value;
-
+    if (utils$1.isReactNative(formData) && utils$1.isReactNativeBlob(value)) {
+      formData.append(renderKey(path, key, dots), convertValue(value));
+      return false;
+    }
     if (value && !path && typeof value === 'object') {
       if (utils$1.endsWith(key, '{}')) {
         // eslint-disable-next-line no-param-reassign
         key = metaTokens ? key : key.slice(0, -2);
         // eslint-disable-next-line no-param-reassign
-        value = JSON.stringify(value);
-      } else if (
-        (utils$1.isArray(value) && isFlatArray(value)) ||
-        ((utils$1.isFileList(value) || utils$1.endsWith(key, '[]')) && (arr = utils$1.toArray(value))
-        )) {
+        value = stringifyWithDepthLimit(value, 1);
+      } else if (utils$1.isArray(value) && isFlatArray(value) || (utils$1.isFileList(value) || utils$1.endsWith(key, '[]')) && (arr = utils$1.toArray(value))) {
         // eslint-disable-next-line no-param-reassign
         key = removeBrackets(key);
-
         arr.forEach(function each(el, index) {
           !(utils$1.isUndefined(el) || el === null) && formData.append(
-            // eslint-disable-next-line no-nested-ternary
-            indexes === true ? renderKey([key], index, dots) : (indexes === null ? key : key + '[]'),
-            convertValue(el)
-          );
+          // eslint-disable-next-line no-nested-ternary
+          indexes === true ? renderKey([key], index, dots) : indexes === null ? key : key + '[]', convertValue(el));
         });
         return false;
       }
     }
-
     if (isVisitable(value)) {
       return true;
     }
-
     formData.append(renderKey(path, key, dots), convertValue(value));
-
     return false;
   }
-
-  const stack = [];
-
   const exposedHelpers = Object.assign(predicates, {
     defaultVisitor,
     convertValue,
     isVisitable
   });
-
-  function build(value, path) {
+  function build(value, path, depth = 0) {
     if (utils$1.isUndefined(value)) return;
-
+    throwIfMaxDepthExceeded(depth);
     if (stack.indexOf(value) !== -1) {
-      throw Error('Circular reference detected in ' + path.join('.'));
+      throw new Error('Circular reference detected in ' + path.join('.'));
     }
-
     stack.push(value);
-
     utils$1.forEach(value, function each(el, key) {
-      const result = !(utils$1.isUndefined(el) || el === null) && visitor.call(
-        formData, el, utils$1.isString(key) ? key.trim() : key, path, exposedHelpers
-      );
-
+      const result = !(utils$1.isUndefined(el) || el === null) && visitor.call(formData, el, utils$1.isString(key) ? key.trim() : key, path, exposedHelpers);
       if (result === true) {
-        build(el, path ? path.concat(key) : [key]);
+        build(el, path ? path.concat(key) : [key], depth + 1);
       }
     });
-
     stack.pop();
   }
-
   if (!utils$1.isObject(obj)) {
     throw new TypeError('data must be an object');
   }
-
   build(obj);
-
   return formData;
 }
 
@@ -33152,10 +34683,9 @@ function encode$1(str) {
     '(': '%28',
     ')': '%29',
     '~': '%7E',
-    '%20': '+',
-    '%00': '\x00'
+    '%20': '+'
   };
-  return encodeURIComponent(str).replace(/[!'()~]|%20|%00/g, function replacer(match) {
+  return encodeURIComponent(str).replace(/[!'()~]|%20/g, function replacer(match) {
     return charMap[match];
   });
 }
@@ -33170,40 +34700,29 @@ function encode$1(str) {
  */
 function AxiosURLSearchParams(params, options) {
   this._pairs = [];
-
   params && toFormData(params, this, options);
 }
-
 const prototype = AxiosURLSearchParams.prototype;
-
 prototype.append = function append(name, value) {
   this._pairs.push([name, value]);
 };
-
 prototype.toString = function toString(encoder) {
-  const _encode = encoder ? function(value) {
-    return encoder.call(this, value, encode$1);
-  } : encode$1;
-
+  const _encode = encoder ? value => encoder.call(this, value, encode$1) : encode$1;
   return this._pairs.map(function each(pair) {
     return _encode(pair[0]) + '=' + _encode(pair[1]);
   }, '').join('&');
 };
 
 /**
- * It replaces all instances of the characters `:`, `$`, `,`, `+`, `[`, and `]` with their
- * URI encoded counterparts
+ * It replaces URL-encoded forms of `:`, `$`, `,`, and spaces with
+ * their plain counterparts (`:`, `$`, `,`, `+`).
  *
  * @param {string} val The value to be encoded.
  *
  * @returns {string} The encoded value.
  */
 function encode(val) {
-  return encodeURIComponent(val).
-    replace(/%3A/gi, ':').
-    replace(/%24/g, '$').
-    replace(/%2C/gi, ',').
-    replace(/%20/g, '+');
+  return encodeURIComponent(val).replace(/%3A/gi, ':').replace(/%24/g, '$').replace(/%2C/gi, ',').replace(/%20/g, '+');
 }
 
 /**
@@ -33216,46 +34735,80 @@ function encode(val) {
  * @returns {string} The formatted url
  */
 function buildURL(url, params, options) {
-  /*eslint no-param-reassign:0*/
   if (!params) {
     return url;
   }
-  
-  const _encode = options && options.encode || encode;
+  url = url || '';
+  const _options = utils$1.isFunction(options) ? {
+    serialize: options
+  } : options;
 
-  if (utils$1.isFunction(options)) {
-    options = {
-      serialize: options
-    };
-  } 
-
-  const serializeFn = options && options.serialize;
-
+  // Read serializer options pollution-safely: own properties and methods on a
+  // class/template prototype are honored, but values injected onto a polluted
+  // Object.prototype are ignored.
+  const _encode = utils$1.getSafeProp(_options, 'encode') || encode;
+  const serializeFn = utils$1.getSafeProp(_options, 'serialize');
   let serializedParams;
-
   if (serializeFn) {
-    serializedParams = serializeFn(params, options);
+    serializedParams = serializeFn(params, _options);
   } else {
-    serializedParams = utils$1.isURLSearchParams(params) ?
-      params.toString() :
-      new AxiosURLSearchParams(params, options).toString(_encode);
+    serializedParams = utils$1.isURLSearchParams(params) ? params.toString() : new AxiosURLSearchParams(params, _options).toString(_encode);
   }
-
   if (serializedParams) {
-    const hashmarkIndex = url.indexOf("#");
-
+    const hashmarkIndex = url.indexOf('#');
     if (hashmarkIndex !== -1) {
       url = url.slice(0, hashmarkIndex);
     }
     url += (url.indexOf('?') === -1 ? '?' : '&') + serializedParams;
   }
-
   return url;
 }
 
+const $internals = Symbol('internals');
+
+// `handlers` is public and may be replaced with a nullish value by user code;
+// `clear()` has always tolerated that. Treat it as an empty stack rather than
+// dereferencing it.
+function countHandlers(handlers) {
+  return handlers ? handlers.length : 0;
+}
+function trimHandlers(handlers) {
+  if (!handlers) {
+    return;
+  }
+  while (handlers.length && handlers[handlers.length - 1] === null) {
+    handlers.pop();
+  }
+}
+function syncHandlerEntries(manager, internals) {
+  const handlers = manager.handlers;
+  const length = countHandlers(handlers);
+  if (handlers !== internals.handlersRef) {
+    internals.handlersRef = handlers;
+    internals.handlerEntries.clear();
+  } else if (length !== internals.handlersLength) {
+    if (!length) {
+      internals.handlerEntries.clear();
+    } else {
+      internals.handlerEntries.forEach(function removeStaleEntry(entry, id) {
+        if (handlers[entry.index] !== entry.handler) {
+          internals.handlerEntries.delete(id);
+        }
+      });
+    }
+  }
+  internals.handlersLength = length;
+}
 class InterceptorManager {
   constructor() {
     this.handlers = [];
+    this[$internals] = {
+      handlersRef: this.handlers,
+      handlersLength: this.handlers.length,
+      handlerEntries: new Map(),
+      iterationDepth: 0,
+      nextId: 0
+    };
   }
 
   /**
@@ -33263,17 +34816,30 @@ class InterceptorManager {
    *
    * @param {Function} fulfilled The function to handle `then` for a `Promise`
    * @param {Function} rejected The function to handle `reject` for a `Promise`
+   * @param {Object} options The options for the interceptor, synchronous and runWhen
    *
    * @return {Number} An ID used to remove interceptor later
    */
   use(fulfilled, rejected, options) {
-    this.handlers.push({
+    const handler = {
       fulfilled,
       rejected,
       synchronous: options ? options.synchronous : false,
       runWhen: options ? options.runWhen : null
+    };
+    const internals = this[$internals];
+    if (this.handlers == null) {
+      this.handlers = [];
+    }
+    syncHandlerEntries(this, internals);
+    const id = internals.nextId++;
+    this.handlers.push(handler);
+    internals.handlerEntries.set(id, {
+      handler,
+      index: this.handlers.length - 1
     });
-    return this.handlers.length - 1;
+    internals.handlersLength = this.handlers.length;
+    return id;
   }
 
   /**
@@ -33281,11 +34847,26 @@ class InterceptorManager {
    *
    * @param {Number} id The ID that was returned by `use`
    *
-   * @returns {Boolean} `true` if the interceptor was removed, `false` otherwise
+   * @returns {void}
    */
   eject(id) {
-    if (this.handlers[id]) {
-      this.handlers[id] = null;
+    const internals = this[$internals];
+    syncHandlerEntries(this, internals);
+    const entry = internals.handlerEntries.get(id);
+    if (entry) {
+      internals.handlerEntries.delete(id);
+
+      // Ignore IDs invalidated by clear or direct replacement of handlers.
+      if (this.handlers[entry.index] !== entry.handler) {
+        return;
+      }
+      this.handlers[entry.index] = null;
+
+      // Do not reuse an index while forEach is walking its length snapshot.
+      if (!internals.iterationDepth) {
+        trimHandlers(this.handlers);
+        internals.handlersLength = this.handlers.length;
+      }
     }
   }
 
@@ -33297,6 +34878,7 @@ class InterceptorManager {
   clear() {
     if (this.handlers) {
       this.handlers = [];
+      syncHandlerEntries(this, this[$internals]);
     }
   }
 
@@ -33311,61 +34893,68 @@ class InterceptorManager {
    * @returns {void}
    */
   forEach(fn) {
-    utils$1.forEach(this.handlers, function forEachHandler(h) {
-      if (h !== null) {
-        fn(h);
+    const internals = this[$internals];
+    syncHandlerEntries(this, internals);
+    internals.iterationDepth++;
+    try {
+      utils$1.forEach(this.handlers, function forEachHandler(h) {
+        if (h !== null) {
+          fn(h);
+        }
+      });
+    } finally {
+      if (! --internals.iterationDepth) {
+        syncHandlerEntries(this, internals);
+        trimHandlers(this.handlers);
+        internals.handlersLength = countHandlers(this.handlers);
       }
-    });
+    }
   }
 }
 
-const InterceptorManager$1 = InterceptorManager;
-
-const transitionalDefaults = {
+var transitionalDefaults = {
   silentJSONParsing: true,
   forcedJSONParsing: true,
-  clarifyTimeoutError: false
+  clarifyTimeoutError: false,
+  legacyInterceptorReqResOrdering: true,
+  advertiseZstdAcceptEncoding: false,
+  validateStatusUndefinedResolves: true
 };
 
-const URLSearchParams = url__default["default"].URLSearchParams;
+var URLSearchParams = url.URLSearchParams;
 
 const ALPHA = 'abcdefghijklmnopqrstuvwxyz';
-
 const DIGIT = '0123456789';
-
 const ALPHABET = {
   DIGIT,
   ALPHA,
   ALPHA_DIGIT: ALPHA + ALPHA.toUpperCase() + DIGIT
 };
-
 const generateString = (size = 16, alphabet = ALPHABET.ALPHA_DIGIT) => {
   let str = '';
-  const {length} = alphabet;
+  const {
+    length
+  } = alphabet;
   const randomValues = new Uint32Array(size);
-  crypto__default["default"].randomFillSync(randomValues);
+  crypto$1.randomFillSync(randomValues);
   for (let i = 0; i < size; i++) {
     str += alphabet[randomValues[i] % length];
   }
-
   return str;
 };
-
-
-const platform$1 = {
+var platform$1 = {
   isNode: true,
   classes: {
     URLSearchParams,
-    FormData: FormData__default["default"],
+    FormData: FormData$1,
     Blob: typeof Blob !== 'undefined' && Blob || null
   },
   ALPHABET,
   generateString,
-  protocols: [ 'http', 'https', 'file', 'data' ]
+  protocols: ['http', 'https', 'file', 'data']
 };
 
 const hasBrowserEnv = typeof window !== 'undefined' && typeof document !== 'undefined';
-
 const _navigator = typeof navigator === 'object' && navigator || undefined;
 
 /**
@@ -33385,8 +34974,7 @@ const _navigator = typeof navigator === 'object' && navigator || undefined;
  *
  * @returns {boolean}
  */
-const hasStandardBrowserEnv = hasBrowserEnv &&
-  (!_navigator || ['ReactNative', 'NativeScript', 'NS'].indexOf(_navigator.product) < 0);
+const hasStandardBrowserEnv = hasBrowserEnv && (!_navigator || ['ReactNative', 'NativeScript', 'NS'].indexOf(_navigator.product) < 0);
 
 /**
  * Determine if we're running in a standard browser webWorker environment
@@ -33398,42 +34986,44 @@ const hasStandardBrowserEnv = hasBrowserEnv &&
  * This leads to a problem when axios post `FormData` in webWorker
  */
 const hasStandardBrowserWebWorkerEnv = (() => {
-  return (
-    typeof WorkerGlobalScope !== 'undefined' &&
-    // eslint-disable-next-line no-undef
-    self instanceof WorkerGlobalScope &&
-    typeof self.importScripts === 'function'
-  );
+  return typeof WorkerGlobalScope !== 'undefined' &&
+  // eslint-disable-next-line no-undef
+  self instanceof WorkerGlobalScope && typeof self.importScripts === 'function';
 })();
-
 const origin = hasBrowserEnv && window.location.href || 'http://localhost';
 
-const utils = /*#__PURE__*/Object.freeze({
+var utils = /*#__PURE__*/Object.freeze({
   __proto__: null,
   hasBrowserEnv: hasBrowserEnv,
-  hasStandardBrowserWebWorkerEnv: hasStandardBrowserWebWorkerEnv,
   hasStandardBrowserEnv: hasStandardBrowserEnv,
+  hasStandardBrowserWebWorkerEnv: hasStandardBrowserWebWorkerEnv,
   navigator: _navigator,
   origin: origin
 });
 
-const platform = {
+var platform = {
   ...utils,
   ...platform$1
 };
 
 function toURLEncodedForm(data, options) {
   return toFormData(data, new platform.classes.URLSearchParams(), {
-    visitor: function(value, key, path, helpers) {
+    visitor: function (value, key, path, helpers) {
       if (platform.isNode && utils$1.isBuffer(value)) {
         this.append(key, value.toString('base64'));
         return false;
       }
-
       return helpers.defaultVisitor.apply(this, arguments);
     },
     ...options
   });
+}
+
+const MAX_DEPTH = DEFAULT_FORM_DATA_MAX_DEPTH;
+function throwIfDepthExceeded(index) {
+  if (index > MAX_DEPTH) {
+    throw new AxiosError('FormData field is too deeply nested (' + index + ' levels). Max depth: ' + MAX_DEPTH, AxiosError.ERR_FORM_DATA_DEPTH_EXCEEDED);
+  }
 }
 
 /**
@@ -33444,13 +35034,24 @@ function toURLEncodedForm(data, options) {
  * @returns An array of strings.
  */
 function parsePropPath(name) {
-  // foo[x][y][z]
-  // foo.x.y.z
-  // foo-x-y-z
-  // foo x y z
-  return utils$1.matchAll(/\w+|\[(\w*)]/g, name).map(match => {
-    return match[0] === '[]' ? '' : match[1] || match[0];
-  });
+  // foo[x][y][z] -> ['foo', 'x', 'y', 'z']
+  // foo.x.y.z    -> ['foo', 'x', 'y', 'z']
+  // A path is split on `.` and on `[...]` groups. A segment — whether written
+  // in dot notation or captured inside brackets — may contain any character
+  // except `.`, `[` and `]`, so a key like `user-name` or `user name` is kept
+  // literal instead of being split (#5402). `.`, `[` and `]` keep their existing
+  // meaning, e.g. `foo[bar.baz]` -> ['foo', 'bar', 'baz'] and `[]` is an array push.
+  // Excluding `[` from the bracket group also makes the match fail fast at the
+  // next `[`, so a malformed name cannot rescan to the end of the string from
+  // every unmatched `[` — parsing stays linear in the length of the name.
+  const path = [];
+  const pattern = /[^.[\]]+|\[([^.[\]]*)]/g;
+  let match;
+  while ((match = pattern.exec(name)) !== null) {
+    throwIfDepthExceeded(path.length);
+    path.push(match[0] === '[]' ? '' : match[1] || match[0]);
+  }
+  return path;
 }
 
 /**
@@ -33482,49 +35083,42 @@ function arrayToObject(arr) {
  */
 function formDataToJSON(formData) {
   function buildPath(path, value, target, index) {
+    throwIfDepthExceeded(index);
     let name = path[index++];
-
     if (name === '__proto__') return true;
-
     const isNumericKey = Number.isFinite(+name);
     const isLast = index >= path.length;
     name = !name && utils$1.isArray(target) ? target.length : name;
-
     if (isLast) {
       if (utils$1.hasOwnProp(target, name)) {
-        target[name] = [target[name], value];
+        target[name] = utils$1.isArray(target[name]) ? target[name].concat(value) : [target[name], value];
       } else {
         target[name] = value;
       }
-
       return !isNumericKey;
     }
-
-    if (!target[name] || !utils$1.isObject(target[name])) {
+    if (!utils$1.hasOwnProp(target, name) || !utils$1.isObject(target[name])) {
       target[name] = [];
     }
-
     const result = buildPath(path, value, target[name], index);
-
     if (result && utils$1.isArray(target[name])) {
       target[name] = arrayToObject(target[name]);
     }
-
     return !isNumericKey;
   }
-
   if (utils$1.isFormData(formData) && utils$1.isFunction(formData.entries)) {
     const obj = {};
-
     utils$1.forEachEntry(formData, (name, value) => {
       buildPath(parsePropPath(name), value, obj, 0);
     });
-
     return obj;
   }
-
   return null;
 }
+
+const methodList = Object.freeze(['get', 'delete', 'head', 'options', 'post', 'put', 'patch', 'purge', 'link', 'unlink', 'query']);
+
+const own = (obj, key) => obj != null && utils$1.hasOwnProp(obj, key) ? obj[key] : undefined;
 
 /**
  * It takes a string, tries to parse it, and if it fails, it returns the stringified version
@@ -33547,38 +35141,23 @@ function stringifySafely(rawValue, parser, encoder) {
       }
     }
   }
-
   return (encoder || JSON.stringify)(rawValue);
 }
-
 const defaults = {
-
   transitional: transitionalDefaults,
-
   adapter: ['xhr', 'http', 'fetch'],
-
   transformRequest: [function transformRequest(data, headers) {
     const contentType = headers.getContentType() || '';
     const hasJSONContentType = contentType.indexOf('application/json') > -1;
     const isObjectPayload = utils$1.isObject(data);
-
     if (isObjectPayload && utils$1.isHTMLForm(data)) {
       data = new FormData(data);
     }
-
     const isFormData = utils$1.isFormData(data);
-
     if (isFormData) {
       return hasJSONContentType ? JSON.stringify(formDataToJSON(data)) : data;
     }
-
-    if (utils$1.isArrayBuffer(data) ||
-      utils$1.isBuffer(data) ||
-      utils$1.isStream(data) ||
-      utils$1.isFile(data) ||
-      utils$1.isBlob(data) ||
-      utils$1.isReadableStream(data)
-    ) {
+    if (utils$1.isArrayBuffer(data) || utils$1.isBuffer(data) || utils$1.isStream(data) || utils$1.isFile(data) || utils$1.isBlob(data) || utils$1.isReadableStream(data)) {
       return data;
     }
     if (utils$1.isArrayBufferView(data)) {
@@ -33588,457 +35167,76 @@ const defaults = {
       headers.setContentType('application/x-www-form-urlencoded;charset=utf-8', false);
       return data.toString();
     }
-
     let isFileList;
-
     if (isObjectPayload) {
+      const formSerializer = own(this, 'formSerializer');
       if (contentType.indexOf('application/x-www-form-urlencoded') > -1) {
-        return toURLEncodedForm(data, this.formSerializer).toString();
+        return toURLEncodedForm(data, formSerializer).toString();
       }
-
       if ((isFileList = utils$1.isFileList(data)) || contentType.indexOf('multipart/form-data') > -1) {
-        const _FormData = this.env && this.env.FormData;
-
-        return toFormData(
-          isFileList ? {'files[]': data} : data,
-          _FormData && new _FormData(),
-          this.formSerializer
-        );
+        const env = own(this, 'env');
+        const _FormData = env && env.FormData;
+        return toFormData(isFileList ? {
+          'files[]': data
+        } : data, _FormData && new _FormData(), formSerializer);
       }
     }
-
-    if (isObjectPayload || hasJSONContentType ) {
+    if (isObjectPayload || hasJSONContentType) {
       headers.setContentType('application/json', false);
       return stringifySafely(data);
     }
-
     return data;
   }],
-
   transformResponse: [function transformResponse(data) {
-    const transitional = this.transitional || defaults.transitional;
+    const transitional = own(this, 'transitional') || defaults.transitional;
     const forcedJSONParsing = transitional && transitional.forcedJSONParsing;
-    const JSONRequested = this.responseType === 'json';
-
+    const responseType = own(this, 'responseType');
+    const JSONRequested = responseType === 'json';
     if (utils$1.isResponse(data) || utils$1.isReadableStream(data)) {
       return data;
     }
-
-    if (data && utils$1.isString(data) && ((forcedJSONParsing && !this.responseType) || JSONRequested)) {
+    if (data && utils$1.isString(data) && (forcedJSONParsing && !responseType || JSONRequested)) {
       const silentJSONParsing = transitional && transitional.silentJSONParsing;
       const strictJSONParsing = !silentJSONParsing && JSONRequested;
-
       try {
-        return JSON.parse(data, this.parseReviver);
+        return JSON.parse(data, own(this, 'parseReviver'));
       } catch (e) {
         if (strictJSONParsing) {
           if (e.name === 'SyntaxError') {
-            throw AxiosError.from(e, AxiosError.ERR_BAD_RESPONSE, this, null, this.response);
+            throw AxiosError.from(e, AxiosError.ERR_BAD_RESPONSE, this, null, own(this, 'response'));
           }
           throw e;
         }
       }
     }
-
     return data;
   }],
-
   /**
    * A timeout in milliseconds to abort a request. If set to 0 (default) a
    * timeout is not created.
    */
   timeout: 0,
-
   xsrfCookieName: 'XSRF-TOKEN',
   xsrfHeaderName: 'X-XSRF-TOKEN',
-
   maxContentLength: -1,
   maxBodyLength: -1,
-
   env: {
     FormData: platform.classes.FormData,
     Blob: platform.classes.Blob
   },
-
   validateStatus: function validateStatus(status) {
     return status >= 200 && status < 300;
   },
-
   headers: {
     common: {
-      'Accept': 'application/json, text/plain, */*',
+      Accept: 'application/json, text/plain, */*',
       'Content-Type': undefined
     }
   }
 };
-
-utils$1.forEach(['delete', 'get', 'head', 'post', 'put', 'patch'], (method) => {
+utils$1.forEach(methodList, method => {
   defaults.headers[method] = {};
 });
-
-const defaults$1 = defaults;
-
-// RawAxiosHeaders whose duplicates are ignored by node
-// c.f. https://nodejs.org/api/http.html#http_message_headers
-const ignoreDuplicateOf = utils$1.toObjectSet([
-  'age', 'authorization', 'content-length', 'content-type', 'etag',
-  'expires', 'from', 'host', 'if-modified-since', 'if-unmodified-since',
-  'last-modified', 'location', 'max-forwards', 'proxy-authorization',
-  'referer', 'retry-after', 'user-agent'
-]);
-
-/**
- * Parse headers into an object
- *
- * ```
- * Date: Wed, 27 Aug 2014 08:58:49 GMT
- * Content-Type: application/json
- * Connection: keep-alive
- * Transfer-Encoding: chunked
- * ```
- *
- * @param {String} rawHeaders Headers needing to be parsed
- *
- * @returns {Object} Headers parsed into an object
- */
-const parseHeaders = rawHeaders => {
-  const parsed = {};
-  let key;
-  let val;
-  let i;
-
-  rawHeaders && rawHeaders.split('\n').forEach(function parser(line) {
-    i = line.indexOf(':');
-    key = line.substring(0, i).trim().toLowerCase();
-    val = line.substring(i + 1).trim();
-
-    if (!key || (parsed[key] && ignoreDuplicateOf[key])) {
-      return;
-    }
-
-    if (key === 'set-cookie') {
-      if (parsed[key]) {
-        parsed[key].push(val);
-      } else {
-        parsed[key] = [val];
-      }
-    } else {
-      parsed[key] = parsed[key] ? parsed[key] + ', ' + val : val;
-    }
-  });
-
-  return parsed;
-};
-
-const $internals = Symbol('internals');
-
-function normalizeHeader(header) {
-  return header && String(header).trim().toLowerCase();
-}
-
-function normalizeValue(value) {
-  if (value === false || value == null) {
-    return value;
-  }
-
-  return utils$1.isArray(value) ? value.map(normalizeValue) : String(value);
-}
-
-function parseTokens(str) {
-  const tokens = Object.create(null);
-  const tokensRE = /([^\s,;=]+)\s*(?:=\s*([^,;]+))?/g;
-  let match;
-
-  while ((match = tokensRE.exec(str))) {
-    tokens[match[1]] = match[2];
-  }
-
-  return tokens;
-}
-
-const isValidHeaderName = (str) => /^[-_a-zA-Z0-9^`|~,!#$%&'*+.]+$/.test(str.trim());
-
-function matchHeaderValue(context, value, header, filter, isHeaderNameFilter) {
-  if (utils$1.isFunction(filter)) {
-    return filter.call(this, value, header);
-  }
-
-  if (isHeaderNameFilter) {
-    value = header;
-  }
-
-  if (!utils$1.isString(value)) return;
-
-  if (utils$1.isString(filter)) {
-    return value.indexOf(filter) !== -1;
-  }
-
-  if (utils$1.isRegExp(filter)) {
-    return filter.test(value);
-  }
-}
-
-function formatHeader(header) {
-  return header.trim()
-    .toLowerCase().replace(/([a-z\d])(\w*)/g, (w, char, str) => {
-      return char.toUpperCase() + str;
-    });
-}
-
-function buildAccessors(obj, header) {
-  const accessorName = utils$1.toCamelCase(' ' + header);
-
-  ['get', 'set', 'has'].forEach(methodName => {
-    Object.defineProperty(obj, methodName + accessorName, {
-      value: function(arg1, arg2, arg3) {
-        return this[methodName].call(this, header, arg1, arg2, arg3);
-      },
-      configurable: true
-    });
-  });
-}
-
-class AxiosHeaders {
-  constructor(headers) {
-    headers && this.set(headers);
-  }
-
-  set(header, valueOrRewrite, rewrite) {
-    const self = this;
-
-    function setHeader(_value, _header, _rewrite) {
-      const lHeader = normalizeHeader(_header);
-
-      if (!lHeader) {
-        throw new Error('header name must be a non-empty string');
-      }
-
-      const key = utils$1.findKey(self, lHeader);
-
-      if(!key || self[key] === undefined || _rewrite === true || (_rewrite === undefined && self[key] !== false)) {
-        self[key || _header] = normalizeValue(_value);
-      }
-    }
-
-    const setHeaders = (headers, _rewrite) =>
-      utils$1.forEach(headers, (_value, _header) => setHeader(_value, _header, _rewrite));
-
-    if (utils$1.isPlainObject(header) || header instanceof this.constructor) {
-      setHeaders(header, valueOrRewrite);
-    } else if(utils$1.isString(header) && (header = header.trim()) && !isValidHeaderName(header)) {
-      setHeaders(parseHeaders(header), valueOrRewrite);
-    } else if (utils$1.isObject(header) && utils$1.isIterable(header)) {
-      let obj = {}, dest, key;
-      for (const entry of header) {
-        if (!utils$1.isArray(entry)) {
-          throw TypeError('Object iterator must return a key-value pair');
-        }
-
-        obj[key = entry[0]] = (dest = obj[key]) ?
-          (utils$1.isArray(dest) ? [...dest, entry[1]] : [dest, entry[1]]) : entry[1];
-      }
-
-      setHeaders(obj, valueOrRewrite);
-    } else {
-      header != null && setHeader(valueOrRewrite, header, rewrite);
-    }
-
-    return this;
-  }
-
-  get(header, parser) {
-    header = normalizeHeader(header);
-
-    if (header) {
-      const key = utils$1.findKey(this, header);
-
-      if (key) {
-        const value = this[key];
-
-        if (!parser) {
-          return value;
-        }
-
-        if (parser === true) {
-          return parseTokens(value);
-        }
-
-        if (utils$1.isFunction(parser)) {
-          return parser.call(this, value, key);
-        }
-
-        if (utils$1.isRegExp(parser)) {
-          return parser.exec(value);
-        }
-
-        throw new TypeError('parser must be boolean|regexp|function');
-      }
-    }
-  }
-
-  has(header, matcher) {
-    header = normalizeHeader(header);
-
-    if (header) {
-      const key = utils$1.findKey(this, header);
-
-      return !!(key && this[key] !== undefined && (!matcher || matchHeaderValue(this, this[key], key, matcher)));
-    }
-
-    return false;
-  }
-
-  delete(header, matcher) {
-    const self = this;
-    let deleted = false;
-
-    function deleteHeader(_header) {
-      _header = normalizeHeader(_header);
-
-      if (_header) {
-        const key = utils$1.findKey(self, _header);
-
-        if (key && (!matcher || matchHeaderValue(self, self[key], key, matcher))) {
-          delete self[key];
-
-          deleted = true;
-        }
-      }
-    }
-
-    if (utils$1.isArray(header)) {
-      header.forEach(deleteHeader);
-    } else {
-      deleteHeader(header);
-    }
-
-    return deleted;
-  }
-
-  clear(matcher) {
-    const keys = Object.keys(this);
-    let i = keys.length;
-    let deleted = false;
-
-    while (i--) {
-      const key = keys[i];
-      if(!matcher || matchHeaderValue(this, this[key], key, matcher, true)) {
-        delete this[key];
-        deleted = true;
-      }
-    }
-
-    return deleted;
-  }
-
-  normalize(format) {
-    const self = this;
-    const headers = {};
-
-    utils$1.forEach(this, (value, header) => {
-      const key = utils$1.findKey(headers, header);
-
-      if (key) {
-        self[key] = normalizeValue(value);
-        delete self[header];
-        return;
-      }
-
-      const normalized = format ? formatHeader(header) : String(header).trim();
-
-      if (normalized !== header) {
-        delete self[header];
-      }
-
-      self[normalized] = normalizeValue(value);
-
-      headers[normalized] = true;
-    });
-
-    return this;
-  }
-
-  concat(...targets) {
-    return this.constructor.concat(this, ...targets);
-  }
-
-  toJSON(asStrings) {
-    const obj = Object.create(null);
-
-    utils$1.forEach(this, (value, header) => {
-      value != null && value !== false && (obj[header] = asStrings && utils$1.isArray(value) ? value.join(', ') : value);
-    });
-
-    return obj;
-  }
-
-  [Symbol.iterator]() {
-    return Object.entries(this.toJSON())[Symbol.iterator]();
-  }
-
-  toString() {
-    return Object.entries(this.toJSON()).map(([header, value]) => header + ': ' + value).join('\n');
-  }
-
-  getSetCookie() {
-    return this.get("set-cookie") || [];
-  }
-
-  get [Symbol.toStringTag]() {
-    return 'AxiosHeaders';
-  }
-
-  static from(thing) {
-    return thing instanceof this ? thing : new this(thing);
-  }
-
-  static concat(first, ...targets) {
-    const computed = new this(first);
-
-    targets.forEach((target) => computed.set(target));
-
-    return computed;
-  }
-
-  static accessor(header) {
-    const internals = this[$internals] = (this[$internals] = {
-      accessors: {}
-    });
-
-    const accessors = internals.accessors;
-    const prototype = this.prototype;
-
-    function defineAccessor(_header) {
-      const lHeader = normalizeHeader(_header);
-
-      if (!accessors[lHeader]) {
-        buildAccessors(prototype, _header);
-        accessors[lHeader] = true;
-      }
-    }
-
-    utils$1.isArray(header) ? header.forEach(defineAccessor) : defineAccessor(header);
-
-    return this;
-  }
-}
-
-AxiosHeaders.accessor(['Content-Type', 'Content-Length', 'Accept', 'Accept-Encoding', 'User-Agent', 'Authorization']);
-
-// reserved names hotfix
-utils$1.reduceDescriptors(AxiosHeaders.prototype, ({value}, key) => {
-  let mapped = key[0].toUpperCase() + key.slice(1); // map `set` => `Set`
-  return {
-    get: () => value,
-    set(headerValue) {
-      this[mapped] = headerValue;
-    }
-  }
-});
-
-utils$1.freezeMethods(AxiosHeaders);
-
-const AxiosHeaders$1 = AxiosHeaders;
 
 /**
  * Transform the data for a request or a response
@@ -34049,17 +35247,14 @@ const AxiosHeaders$1 = AxiosHeaders;
  * @returns {*} The resulting transformed data
  */
 function transformData(fns, response) {
-  const config = this || defaults$1;
+  const config = this || defaults;
   const context = response || config;
-  const headers = AxiosHeaders$1.from(context.headers);
+  const headers = AxiosHeaders.from(context.headers);
   let data = context.data;
-
   utils$1.forEach(fns, function transform(fn) {
     data = fn.call(config, data, headers.normalize(), response ? response.status : undefined);
   });
-
   headers.normalize();
-
   return data;
 }
 
@@ -34067,24 +35262,22 @@ function isCancel(value) {
   return !!(value && value.__CANCEL__);
 }
 
-/**
- * A `CanceledError` is an object that is thrown when an operation is canceled.
- *
- * @param {string=} message The message.
- * @param {Object=} config The config.
- * @param {Object=} request The request.
- *
- * @returns {CanceledError} The created error.
- */
-function CanceledError(message, config, request) {
-  // eslint-disable-next-line no-eq-null,eqeqeq
-  AxiosError.call(this, message == null ? 'canceled' : message, AxiosError.ERR_CANCELED, config, request);
-  this.name = 'CanceledError';
+class CanceledError extends AxiosError {
+  /**
+   * A `CanceledError` is an object that is thrown when an operation is canceled.
+   *
+   * @param {string=} message The message.
+   * @param {Object=} config The config.
+   * @param {Object=} request The request.
+   *
+   * @returns {CanceledError} The created error.
+   */
+  constructor(message, config, request) {
+    super(message == null ? 'canceled' : message, AxiosError.ERR_CANCELED, config, request);
+    this.name = 'CanceledError';
+    this.__CANCEL__ = true;
+  }
 }
-
-utils$1.inherits(CanceledError, AxiosError, {
-  __CANCEL__: true
-});
 
 /**
  * Resolve or reject a Promise based on response status.
@@ -34100,13 +35293,7 @@ function settle(resolve, reject, response) {
   if (!response.status || !validateStatus || validateStatus(response.status)) {
     resolve(response);
   } else {
-    reject(new AxiosError(
-      'Request failed with status code ' + response.status,
-      [AxiosError.ERR_BAD_REQUEST, AxiosError.ERR_BAD_RESPONSE][Math.floor(response.status / 100) - 4],
-      response.config,
-      response.request,
-      response
-    ));
+    reject(new AxiosError('Request failed with status code ' + response.status, response.status >= 400 && response.status < 500 ? AxiosError.ERR_BAD_REQUEST : AxiosError.ERR_BAD_RESPONSE, response.config, response.request, response));
   }
 }
 
@@ -34121,6 +35308,9 @@ function isAbsoluteURL(url) {
   // A URL is considered absolute if it begins with "<scheme>://" or "//" (protocol-relative URL).
   // RFC 3986 defines scheme name as a sequence of characters beginning with a letter and followed
   // by any combination of letters, digits, plus, period, or hyphen.
+  if (typeof url !== 'string') {
+    return false;
+  }
   return /^([a-z][a-z\d+\-.]*:)?\/\//i.test(url);
 }
 
@@ -34133,9 +35323,71 @@ function isAbsoluteURL(url) {
  * @returns {string} The combined URL
  */
 function combineURLs(baseURL, relativeURL) {
-  return relativeURL
-    ? baseURL.replace(/\/?\/$/, '') + '/' + relativeURL.replace(/^\/+/, '')
-    : baseURL;
+  if (!relativeURL) {
+    return baseURL;
+  }
+  let end = baseURL.length;
+  while (end > 0 && baseURL.charCodeAt(end - 1) === 47) {
+    end--;
+  }
+  return baseURL.slice(0, end) + '/' + relativeURL.replace(/^\/+/, '');
+}
+
+const urlParserControlCharacters = /[\t\n\r]/g;
+
+/**
+ * Match WHATWG URL preprocessing before checking a URL's protocol.
+ *
+ * @param {string} url
+ *
+ * @returns {string}
+ */
+function normalizeURLForProtocolCheck(url) {
+  if (typeof url !== 'string') {
+    return url;
+  }
+  let start = 0;
+  while (start < url.length && url.charCodeAt(start) <= 0x20) {
+    start++;
+  }
+  return url.slice(start).replace(urlParserControlCharacters, '');
+}
+
+const malformedHttpProtocol = /^https?:(?!\/\/)/i;
+
+// Redact the parts of a URL that can carry secrets before it is embedded in an
+// error message. AxiosError.toJSON() serializes `message` verbatim and errors
+// are commonly logged, while the opt-in `config.redact` model only cleans
+// config keys — it cannot reach the message. Redact only the genuinely
+// sensitive substrings — userinfo (credentials), query parameter values and
+// fragment contents — with the same REDACTED marker the config redaction uses,
+// while keeping the scheme, host, path and parameter names so the offending
+// request stays accurately identifiable.
+function redactFragment(fragment) {
+  if (!fragment) {
+    return fragment;
+  }
+  return fragment.replace(/(^|&)([^=&]*=)?[^&]+/g, (match, separator, parameterName = '') => {
+    return `${separator}${parameterName}${REDACTED}`;
+  });
+}
+function redactSensitiveURLParts(url) {
+  const redactedURL = url.replace(/^(https?:\/{0,2})[^/?#]*@/i, `$1${REDACTED}@`);
+  const fragmentIndex = redactedURL.indexOf('#');
+  const urlWithoutFragment = fragmentIndex === -1 ? redactedURL : redactedURL.slice(0, fragmentIndex);
+  const redactedURLWithoutFragment = urlWithoutFragment.replace(/([?&][^=&#]*=)[^&#]*/g, `$1${REDACTED}`);
+  if (fragmentIndex === -1) {
+    return redactedURLWithoutFragment;
+  }
+  return `${redactedURLWithoutFragment}#${redactFragment(redactedURL.slice(fragmentIndex + 1))}`;
+}
+function assertValidHttpProtocolURL(url, config) {
+  if (typeof url === 'string') {
+    const normalizedURL = normalizeURLForProtocolCheck(url);
+    if (malformedHttpProtocol.test(normalizedURL)) {
+      throw new AxiosError(`Invalid URL ${JSON.stringify(redactSensitiveURLParts(normalizedURL))}: missing "//" after protocol`, AxiosError.ERR_INVALID_URL, config);
+    }
+  }
 }
 
 /**
@@ -34148,22 +35400,122 @@ function combineURLs(baseURL, relativeURL) {
  *
  * @returns {string} The combined full path
  */
-function buildFullPath(baseURL, requestedURL, allowAbsoluteUrls) {
+function buildFullPath(baseURL, requestedURL, allowAbsoluteUrls, config) {
+  assertValidHttpProtocolURL(requestedURL, config);
   let isRelativeUrl = !isAbsoluteURL(requestedURL);
-  if (baseURL && (isRelativeUrl || allowAbsoluteUrls == false)) {
+  if (baseURL && (isRelativeUrl || allowAbsoluteUrls === false)) {
+    assertValidHttpProtocolURL(baseURL, config);
     return combineURLs(baseURL, requestedURL);
   }
   return requestedURL;
 }
 
-const VERSION = "1.12.2";
+var DEFAULT_PORTS$1 = {
+  ftp: 21,
+  gopher: 70,
+  http: 80,
+  https: 443,
+  ws: 80,
+  wss: 443
+};
+function parseUrl(urlString) {
+  try {
+    return new URL(urlString);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @param {string|object|URL} url - The URL as a string or URL instance, or a
+ *   compatible object (such as the result from legacy url.parse).
+ * @return {string} The URL of the proxy that should handle the request to the
+ *  given URL. If no proxy is set, this will be an empty string.
+ */
+function getProxyForUrl(url) {
+  var parsedUrl = (typeof url === 'string' ? parseUrl(url) : url) || {};
+  var proto = parsedUrl.protocol;
+  var hostname = parsedUrl.host;
+  var port = parsedUrl.port;
+  if (typeof hostname !== 'string' || !hostname || typeof proto !== 'string') {
+    return ''; // Don't proxy URLs without a valid scheme or host.
+  }
+  proto = proto.split(':', 1)[0];
+  // Stripping ports in this way instead of using parsedUrl.hostname to make
+  // sure that the brackets around IPv6 addresses are kept.
+  hostname = hostname.replace(/:\d*$/, '');
+  port = parseInt(port) || DEFAULT_PORTS$1[proto] || 0;
+  if (!shouldProxy(hostname, port)) {
+    return ''; // Don't proxy URLs that match NO_PROXY.
+  }
+  var proxy = getEnv(proto + '_proxy') || getEnv('all_proxy');
+  if (proxy && proxy.indexOf('://') === -1) {
+    // Missing scheme in proxy, default to the requested URL's scheme.
+    proxy = proto + '://' + proxy;
+  }
+  return proxy;
+}
+
+/**
+ * Determines whether a given URL should be proxied.
+ *
+ * @param {string} hostname - The host name of the URL.
+ * @param {number} port - The effective port of the URL.
+ * @returns {boolean} Whether the given URL should be proxied.
+ * @private
+ */
+function shouldProxy(hostname, port) {
+  var NO_PROXY = getEnv('no_proxy').toLowerCase();
+  if (!NO_PROXY) {
+    return true; // Always proxy if NO_PROXY is not set.
+  }
+  if (NO_PROXY === '*') {
+    return false; // Never proxy if wildcard is set.
+  }
+  return NO_PROXY.split(/[,\s]/).every(function (proxy) {
+    if (!proxy) {
+      return true; // Skip zero-length hosts.
+    }
+    var parsedProxy = proxy.match(/^(.+):(\d+)$/);
+    var parsedProxyHostname = parsedProxy ? parsedProxy[1] : proxy;
+    var parsedProxyPort = parsedProxy ? parseInt(parsedProxy[2]) : 0;
+    if (parsedProxyPort && parsedProxyPort !== port) {
+      return true; // Skip if ports don't match.
+    }
+    if (!/^[.*]/.test(parsedProxyHostname)) {
+      // No wildcards, so stop proxying if there is an exact match.
+      return hostname !== parsedProxyHostname;
+    }
+    if (parsedProxyHostname.charAt(0) === '*') {
+      // Remove leading wildcard.
+      parsedProxyHostname = parsedProxyHostname.slice(1);
+    }
+    // Stop proxying if the hostname ends with the no_proxy host.
+    return !hostname.endsWith(parsedProxyHostname);
+  });
+}
+
+/**
+ * Get the value for an environment variable.
+ *
+ * @param {string} key - The name of the environment variable.
+ * @return {string} The value of the environment variable.
+ * @private
+ */
+function getEnv(key) {
+  return process.env[key.toLowerCase()] || process.env[key.toUpperCase()] || '';
+}
+
+const VERSION = "1.20.0";
 
 function parseProtocol(url) {
-  const match = /^([-+\w]{1,25})(:?\/\/|:)/.exec(url);
+  const match = /^([-+\w]{1,25}):(?:\/\/)?/.exec(url);
   return match && match[1] || '';
 }
 
-const DATA_URL_PATTERN = /^(?:([^;]+);)?(?:[^;]+;)?(base64|),([\s\S]*)$/;
+// RFC 2397: data:[<mediatype>][;base64],<data>
+// mediatype = type/subtype followed by optional ;name=value parameters
+const DATA_URL_PATTERN = /^([^,;/]+\/[^,;/]+)?((?:;[^,;=]+=[^,;]+)*)(;base64)?,([\s\S]*)$/;
 
 /**
  * Parse data uri to a Buffer or Blob
@@ -34178,42 +35530,69 @@ const DATA_URL_PATTERN = /^(?:([^;]+);)?(?:[^;]+;)?(base64|),([\s\S]*)$/;
 function fromDataURI(uri, asBlob, options) {
   const _Blob = options && options.Blob || platform.classes.Blob;
   const protocol = parseProtocol(uri);
-
   if (asBlob === undefined && _Blob) {
     asBlob = true;
   }
-
   if (protocol === 'data') {
     uri = protocol.length ? uri.slice(protocol.length + 1) : uri;
-
     const match = DATA_URL_PATTERN.exec(uri);
-
     if (!match) {
       throw new AxiosError('Invalid URL', AxiosError.ERR_INVALID_URL);
     }
+    const type = match[1];
+    const params = match[2];
+    const encoding = match[3] ? 'base64' : 'utf8';
+    const body = match[4];
 
-    const mime = match[1];
-    const isBase64 = match[2];
-    const body = match[3];
-    const buffer = Buffer.from(decodeURIComponent(body), isBase64 ? 'base64' : 'utf8');
-
+    // RFC 2397 section 3: default mediatype is text/plain;charset=US-ASCII
+    // Bare `data:,` leaves mime undefined; Blob normalises that to "" per spec.
+    let mime = '';
+    if (type) {
+      mime = params ? type + params : type;
+    } else if (params) {
+      mime = 'text/plain' + params;
+    }
+    const buffer = encoding === 'base64' ? Buffer.from(body, 'base64') : Buffer.from(decodeURIComponent(body), encoding);
     if (asBlob) {
       if (!_Blob) {
         throw new AxiosError('Blob is not supported', AxiosError.ERR_NOT_SUPPORT);
       }
-
-      return new _Blob([buffer], {type: mime});
+      return new _Blob([buffer], {
+        type: mime
+      });
     }
-
     return buffer;
   }
-
   throw new AxiosError('Unsupported protocol ' + protocol, AxiosError.ERR_NOT_SUPPORT);
 }
 
-const kInternals = Symbol('internals');
+const FORM_DATA_CONTENT_HEADERS = ['content-type', 'content-length'];
 
-class AxiosTransformStream extends stream__default["default"].Transform{
+/**
+ * Apply the headers generated by a FormData implementation to the request headers,
+ * honoring the `formDataHeaderPolicy` option: with 'content-only', copy only the
+ * content-* headers; otherwise merge all of them.
+ *
+ * @param {AxiosHeaders} headers - the request headers to mutate
+ * @param {Object | null | undefined} formHeaders - headers produced by the FormData implementation
+ * @param {String} [policy] - the resolved `formDataHeaderPolicy` config value
+ *
+ * @returns {void}
+ */
+function setFormDataHeaders(headers, formHeaders, policy) {
+  if (policy !== 'content-only') {
+    headers.set(formHeaders);
+    return;
+  }
+  Object.entries(formHeaders || {}).forEach(([key, val]) => {
+    if (FORM_DATA_CONTENT_HEADERS.includes(key.toLowerCase())) {
+      headers.set(key, val);
+    }
+  });
+}
+
+const kInternals = Symbol('internals');
+class AxiosTransformStream extends stream.Transform {
   constructor(options) {
     options = utils$1.toFlatObject(options, {
       maxRate: 0,
@@ -34225,11 +35604,9 @@ class AxiosTransformStream extends stream__default["default"].Transform{
     }, null, (prop, source) => {
       return !utils$1.isUndefined(source[prop]);
     });
-
     super({
       readableHighWaterMark: options.chunkSize
     });
-
     const internals = this[kInternals] = {
       timeWindow: options.timeWindow,
       chunkSize: options.chunkSize,
@@ -34242,7 +35619,6 @@ class AxiosTransformStream extends stream__default["default"].Transform{
       bytes: 0,
       onReadCallback: null
     };
-
     this.on('newListener', event => {
       if (event === 'progress') {
         if (!internals.isCaptured) {
@@ -34251,36 +35627,26 @@ class AxiosTransformStream extends stream__default["default"].Transform{
       }
     });
   }
-
   _read(size) {
     const internals = this[kInternals];
-
     if (internals.onReadCallback) {
       internals.onReadCallback();
     }
-
     return super._read(size);
   }
-
   _transform(chunk, encoding, callback) {
     const internals = this[kInternals];
     const maxRate = internals.maxRate;
-
     const readableHighWaterMark = this.readableHighWaterMark;
-
     const timeWindow = internals.timeWindow;
-
     const divider = 1000 / timeWindow;
-    const bytesThreshold = (maxRate / divider);
+    const bytesThreshold = maxRate / divider;
     const minChunkSize = internals.minChunkSize !== false ? Math.max(internals.minChunkSize, bytesThreshold * 0.01) : 0;
-
     const pushChunk = (_chunk, _callback) => {
       const bytes = Buffer.byteLength(_chunk);
       internals.bytesSeen += bytes;
       internals.bytes += bytes;
-
       internals.isCaptured && this.emit('progress', internals.bytesSeen);
-
       if (this.push(_chunk)) {
         process.nextTick(_callback);
       } else {
@@ -34290,27 +35656,22 @@ class AxiosTransformStream extends stream__default["default"].Transform{
         };
       }
     };
-
     const transformChunk = (_chunk, _callback) => {
       const chunkSize = Buffer.byteLength(_chunk);
       let chunkRemainder = null;
       let maxChunkSize = readableHighWaterMark;
       let bytesLeft;
       let passed = 0;
-
       if (maxRate) {
         const now = Date.now();
-
-        if (!internals.ts || (passed = (now - internals.ts)) >= timeWindow) {
+        if (!internals.ts || (passed = now - internals.ts) >= timeWindow) {
           internals.ts = now;
           bytesLeft = bytesThreshold - internals.bytes;
           internals.bytes = bytesLeft < 0 ? -bytesLeft : 0;
           passed = 0;
         }
-
         bytesLeft = bytesThreshold - internals.bytes;
       }
-
       if (maxRate) {
         if (bytesLeft <= 0) {
           // next time window
@@ -34318,27 +35679,22 @@ class AxiosTransformStream extends stream__default["default"].Transform{
             _callback(null, _chunk);
           }, timeWindow - passed);
         }
-
         if (bytesLeft < maxChunkSize) {
           maxChunkSize = bytesLeft;
         }
       }
-
-      if (maxChunkSize && chunkSize > maxChunkSize && (chunkSize - maxChunkSize) > minChunkSize) {
+      if (maxChunkSize && chunkSize > maxChunkSize && chunkSize - maxChunkSize > minChunkSize) {
         chunkRemainder = _chunk.subarray(maxChunkSize);
         _chunk = _chunk.subarray(0, maxChunkSize);
       }
-
       pushChunk(_chunk, chunkRemainder ? () => {
         process.nextTick(_callback, null, chunkRemainder);
       } : _callback);
     };
-
     transformChunk(chunk, function transformNextChunk(err, _chunk) {
       if (err) {
         return callback(err);
       }
-
       if (_chunk) {
         transformChunk(_chunk, transformNextChunk);
       } else {
@@ -34348,10 +35704,9 @@ class AxiosTransformStream extends stream__default["default"].Transform{
   }
 }
 
-const AxiosTransformStream$1 = AxiosTransformStream;
-
-const {asyncIterator} = Symbol;
-
+const {
+  asyncIterator
+} = Symbol;
 const readBlob = async function* (blob) {
   if (blob.stream) {
     yield* blob.stream();
@@ -34364,144 +35719,193 @@ const readBlob = async function* (blob) {
   }
 };
 
-const readBlob$1 = readBlob;
-
 const BOUNDARY_ALPHABET = platform.ALPHABET.ALPHA_DIGIT + '-_';
-
-const textEncoder = typeof TextEncoder === 'function' ? new TextEncoder() : new util__default["default"].TextEncoder();
-
+const textEncoder = typeof TextEncoder === 'function' ? new TextEncoder() : new util.TextEncoder();
 const CRLF = '\r\n';
 const CRLF_BYTES = textEncoder.encode(CRLF);
 const CRLF_BYTES_COUNT = 2;
-
 class FormDataPart {
   constructor(name, value) {
-    const {escapeName} = this.constructor;
+    const {
+      escapeName
+    } = this.constructor;
     const isStringValue = utils$1.isString(value);
-
-    let headers = `Content-Disposition: form-data; name="${escapeName(name)}"${
-      !isStringValue && value.name ? `; filename="${escapeName(value.name)}"` : ''
-    }${CRLF}`;
-
+    let headers = `Content-Disposition: form-data; name="${escapeName(name)}"${!isStringValue && value.name ? `; filename="${escapeName(value.name)}"` : ''}${CRLF}`;
     if (isStringValue) {
       value = textEncoder.encode(String(value).replace(/\r?\n|\r\n?/g, CRLF));
     } else {
-      headers += `Content-Type: ${value.type || "application/octet-stream"}${CRLF}`;
+      const safeType = String(value.type || 'application/octet-stream').replace(/[\r\n]/g, '');
+      headers += `Content-Type: ${safeType}${CRLF}`;
     }
-
     this.headers = textEncoder.encode(headers + CRLF);
-
     this.contentLength = isStringValue ? value.byteLength : value.size;
-
     this.size = this.headers.byteLength + this.contentLength + CRLF_BYTES_COUNT;
-
     this.name = name;
     this.value = value;
   }
-
-  async *encode(){
+  async *encode() {
     yield this.headers;
-
-    const {value} = this;
-
-    if(utils$1.isTypedArray(value)) {
+    const {
+      value
+    } = this;
+    if (utils$1.isTypedArray(value)) {
       yield value;
     } else {
-      yield* readBlob$1(value);
+      yield* readBlob(value);
     }
-
     yield CRLF_BYTES;
   }
-
   static escapeName(name) {
-      return String(name).replace(/[\r\n"]/g, (match) => ({
-        '\r' : '%0D',
-        '\n' : '%0A',
-        '"' : '%22',
-      }[match]));
+    return String(name).replace(/[\r\n"]/g, match => ({
+      '\r': '%0D',
+      '\n': '%0A',
+      '"': '%22'
+    })[match]);
   }
 }
-
 const formDataToStream = (form, headersHandler, options) => {
   const {
     tag = 'form-data-boundary',
     size = 25,
     boundary = tag + '-' + platform.generateString(size, BOUNDARY_ALPHABET)
   } = options || {};
-
-  if(!utils$1.isFormData(form)) {
-    throw TypeError('FormData instance required');
+  if (!utils$1.isFormData(form)) {
+    throw new TypeError('FormData instance required');
   }
-
   if (boundary.length < 1 || boundary.length > 70) {
-    throw Error('boundary must be 10-70 characters long')
+    throw new Error('boundary must be 1-70 characters long');
   }
-
   const boundaryBytes = textEncoder.encode('--' + boundary + CRLF);
   const footerBytes = textEncoder.encode('--' + boundary + '--' + CRLF);
   let contentLength = footerBytes.byteLength;
-
   const parts = Array.from(form.entries()).map(([name, value]) => {
     const part = new FormDataPart(name, value);
     contentLength += part.size;
     return part;
   });
-
   contentLength += boundaryBytes.byteLength * parts.length;
-
   contentLength = utils$1.toFiniteNumber(contentLength);
-
   const computedHeaders = {
     'Content-Type': `multipart/form-data; boundary=${boundary}`
   };
-
   if (Number.isFinite(contentLength)) {
     computedHeaders['Content-Length'] = contentLength;
   }
-
   headersHandler && headersHandler(computedHeaders);
-
-  return stream.Readable.from((async function *() {
-    for(const part of parts) {
+  return stream.Readable.from(async function* () {
+    for (const part of parts) {
       yield boundaryBytes;
       yield* part.encode();
     }
-
     yield footerBytes;
-  })());
+  }());
 };
 
-const formDataToStream$1 = formDataToStream;
-
-class ZlibHeaderTransformStream extends stream__default["default"].Transform {
+class ZlibHeaderTransformStream extends stream.Transform {
   __transform(chunk, encoding, callback) {
     this.push(chunk);
     callback();
   }
-
   _transform(chunk, encoding, callback) {
     if (chunk.length !== 0) {
       this._transform = this.__transform;
 
       // Add Default Compression headers if no zlib headers are present
-      if (chunk[0] !== 120) { // Hex: 78
+      if (chunk[0] !== 120) {
+        // Hex: 78
         const header = Buffer.alloc(2);
         header[0] = 120; // Hex: 78
-        header[1] = 156; // Hex: 9C 
+        header[1] = 156; // Hex: 9C
         this.push(header, encoding);
       }
     }
-
     this.__transform(chunk, encoding, callback);
   }
 }
 
-const ZlibHeaderTransformStream$1 = ZlibHeaderTransformStream;
+class Http2Sessions {
+  constructor() {
+    this.sessions = Object.create(null);
+  }
+  getSession(authority, options) {
+    options = Object.assign(Object.create(null), {
+      sessionTimeout: 1000
+    }, options);
+    let authoritySessions = this.sessions[authority];
+    if (authoritySessions) {
+      let len = authoritySessions.length;
+      for (let i = 0; i < len; i++) {
+        const [sessionHandle, sessionOptions] = authoritySessions[i];
+        if (!sessionHandle.destroyed && !sessionHandle.closed && util.isDeepStrictEqual(sessionOptions, options)) {
+          return sessionHandle;
+        }
+      }
+    }
+    const session = http2.connect(authority, options);
+    let removed;
+    let timer;
+    const removeSession = () => {
+      if (removed) {
+        return;
+      }
+      removed = true;
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      let entries = authoritySessions,
+        len = entries.length,
+        i = len;
+      while (i--) {
+        if (entries[i][0] === session) {
+          if (len === 1) {
+            delete this.sessions[authority];
+          } else {
+            entries.splice(i, 1);
+          }
+          if (!session.closed) {
+            session.close();
+          }
+          return;
+        }
+      }
+    };
+    const originalRequestFn = session.request;
+    const {
+      sessionTimeout
+    } = options;
+    if (sessionTimeout != null) {
+      let streamsCount = 0;
+      session.request = function () {
+        const stream = originalRequestFn.apply(this, arguments);
+        streamsCount++;
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        stream.once('close', () => {
+          if (! --streamsCount) {
+            timer = setTimeout(() => {
+              timer = null;
+              removeSession();
+            }, sessionTimeout);
+          }
+        });
+        return stream;
+      };
+    }
+    session.once('close', removeSession);
+    session.once('error', removeSession);
+    let entry = [session, options];
+    authoritySessions ? authoritySessions.push(entry) : authoritySessions = this.sessions[authority] = [entry];
+    return session;
+  }
+}
 
 const callbackify = (fn, reducer) => {
   return utils$1.isAsyncFn(fn) ? function (...args) {
     const cb = args.pop();
-    fn.apply(this, args).then((value) => {
+    fn.apply(this, args).then(value => {
       try {
         reducer ? cb(null, ...reducer(value)) : cb(null, value);
       } catch (err) {
@@ -34511,7 +35915,406 @@ const callbackify = (fn, reducer) => {
   } : fn;
 };
 
-const callbackify$1 = callbackify;
+const LOOPBACK_HOSTNAMES = new Set(['localhost', '0.0.0.0']);
+const trimTrailingDots = value => {
+  let end = value.length;
+  while (end && value.charCodeAt(end - 1) === 46) {
+    end--;
+  }
+  return end === value.length ? value : value.slice(0, end);
+};
+const isIPv4Loopback = host => {
+  const parts = host.split('.');
+  if (parts.length !== 4) return false;
+  if (parts[0] !== '127') return false;
+  return parts.every(p => /^\d+$/.test(p) && Number(p) >= 0 && Number(p) <= 255);
+};
+
+/**
+ * Canonicalize an IPv4 address written in shorthand, octal, or hex form into
+ * dotted-decimal. IPv6 addresses and non-IP strings are returned unchanged so
+ * the existing IPv4-mapped IPv6 unmap path and the isLoopback path can still
+ * see them.
+ *
+ * Shorthand expansion mirrors Node's URL parser: literal parts fill from the
+ * left, the final part fills the remaining octets from the right with
+ * zero-padding on the left.
+ *   127.1     -> 127.0.0.1
+ *   127.0.1   -> 127.0.0.1
+ *   1.2.3     -> 1.2.0.3
+ *
+ * Each octet is parsed with an explicit base: 16 for `0x`/`0X` prefix, 8 for
+ * zero-prefixed multi-digit all-`0-7` parts, 10 otherwise. Zero-prefixed
+ * decimal-looking parts that contain `8` or `9` are rejected to match Node's
+ * URL parser, and the comparison layer falls through to non-bypass if either
+ * side rejects the form (fail-safe).
+ *
+ * Returns the input unchanged on any parse failure, out-of-range octet, or
+ * unusual shape (1-part, 5+ parts) so the comparison layer fails closed.
+ */
+const parseIPv4Octet = text => {
+  if (/^0[xX][0-9a-fA-F]+$/.test(text)) {
+    const n = parseInt(text.slice(2), 16);
+    return Number.isFinite(n) ? n : null;
+  }
+  if (text.length > 1 && /^0[0-7]+$/.test(text)) {
+    const n = parseInt(text, 8);
+    return Number.isFinite(n) ? n : null;
+  }
+  if (text.length > 1 && /^0[0-9]+$/.test(text)) {
+    return null;
+  }
+  if (/^[0-9]+$/.test(text)) {
+    const n = parseInt(text, 10);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+};
+const normalizeIPAddress = host => {
+  if (typeof host !== 'string' || !host || host.indexOf(':') !== -1) {
+    return host;
+  }
+  let h = host;
+  if (h.charAt(0) === '[' && h.charAt(h.length - 1) === ']') {
+    h = h.slice(1, -1);
+  }
+  h = trimTrailingDots(h);
+
+  // Allowed characters for any IPv4 shape: digits, dot, 'x', 'X', hex digits.
+  if (!/^[0-9.xXa-fA-F]+$/.test(h)) return host;
+  const parts = h.split('.');
+
+  // No part may be empty (e.g. "127..0.1" or "127.0.0."). Trailing dots are
+  // already stripped above; this guards against the empty-middle case.
+  if (parts.some(p => p === '')) return host;
+  if (parts.length === 4) {
+    // Full IPv4 form: each part is an octet.
+    const octets = parts.map(parseIPv4Octet);
+    if (octets.some(n => n === null || n < 0 || n > 255)) return host;
+    return octets.join('.');
+  }
+  if (parts.length > 4) {
+    return host;
+  }
+
+  // Shorthand: 1..3 parts. Node's URL parser treats a 1-part input as a 32-bit
+  // integer split into octets, which has surprising semantics (e.g. "127" ->
+  // "0.0.0.127"). Reject 1-part inputs to keep the helper predictable: the
+  // fail-safe returns the input unchanged and the comparison layer falls
+  // through to non-bypass.
+  if (parts.length === 1) return host;
+
+  // 2..3 parts: literal parts fill from the left, tail fills remaining octets
+  // from the right with zero-padding.
+  const literalOctets = parts.slice(0, -1);
+  const tail = parts[parts.length - 1];
+  const tailSlots = 4 - literalOctets.length;
+
+  // Tail is parsed as a full IPv4 number (hex/octal/decimal) and packed
+  // low-byte-right into the remaining octets, matching Node's URL parser.
+  // e.g. 127.65535 (tail 0xFFFF into 3 slots) -> 127.0.255.255;
+  //      127.0x00ff (tail 0xFF into 3 slots) -> 127.0.0.255;
+  //      127.0.65535 (tail 0xFFFF into 2 slots) -> 127.0.255.255.
+  const tailValue = parseIPv4Octet(tail);
+  if (tailValue === null) return host;
+  const maxTail = (1 << 8 * tailSlots) - 1;
+  if (tailValue < 0 || tailValue > maxTail) return host;
+  const tailOctets = new Array(tailSlots).fill(0);
+  for (let i = tailSlots - 1, v = tailValue; i >= 0; i--, v >>= 8) {
+    tailOctets[i] = v & 0xff;
+  }
+  const literal = literalOctets.map(parseIPv4Octet);
+  if (literal.some(n => n === null || n < 0 || n > 255)) return host;
+  return [...literal, ...tailOctets].join('.');
+};
+const isIPv6ZeroGroup = group => /^0{1,4}$/.test(group);
+
+// The unspecified address (IPv4 0.0.0.0 / IPv6 ::) resolves to the local host
+// for outbound connections, so treat it as loopback-equivalent for NO_PROXY
+// matching. 0.0.0.0 is covered by LOOPBACK_HOSTNAMES; this handles compressed
+// and full IPv6 all-zero forms so both families bypass symmetrically.
+const isIPv6Unspecified = host => {
+  if (host === '::') return true;
+  const compressionIndex = host.indexOf('::');
+  if (compressionIndex !== -1) {
+    if (compressionIndex !== host.lastIndexOf('::')) return false;
+    const left = host.slice(0, compressionIndex);
+    const right = host.slice(compressionIndex + 2);
+    const leftGroups = left ? left.split(':') : [];
+    const rightGroups = right ? right.split(':') : [];
+    const explicitGroups = leftGroups.length + rightGroups.length;
+    return explicitGroups < 8 && leftGroups.every(isIPv6ZeroGroup) && rightGroups.every(isIPv6ZeroGroup);
+  }
+  const groups = host.split(':');
+  return groups.length === 8 && groups.every(isIPv6ZeroGroup);
+};
+const isIPv6Loopback = host => {
+  // Collapse all-zero groups: any form of ::1 / 0:0:...:0:1
+  // First, strip any leading "::" by normalising with Set lookup of common forms,
+  // then fall back to structural check.
+  if (host === '::1') return true;
+
+  // Check IPv4-mapped IPv6 loopback: ::ffff:<v4-loopback> or ::ffff:<hex-v4-loopback>
+  // Node's URL parser normalises ::ffff:127.0.0.1 → ::ffff:7f00:1
+  const v4MappedDotted = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+  if (v4MappedDotted) return isIPv4Loopback(v4MappedDotted[1]);
+  const v4MappedHex = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  if (v4MappedHex) {
+    const high = parseInt(v4MappedHex[1], 16);
+    // High 16 bits must start with 127 (0x7f) — i.e. 0x7f00..0x7fff
+    return high >= 0x7f00 && high <= 0x7fff;
+  }
+
+  // Full-form ::1 variants: any number of zero groups followed by trailing 1
+  // e.g. 0:0:0:0:0:0:0:1, 0000:...:0001
+  const groups = host.split(':');
+  if (groups.length === 8) {
+    for (let i = 0; i < 7; i++) {
+      if (!/^0+$/.test(groups[i])) return false;
+    }
+    return /^0*1$/.test(groups[7]);
+  }
+  return false;
+};
+const isLoopback = host => {
+  if (!host) return false;
+  if (LOOPBACK_HOSTNAMES.has(host)) return true;
+  if (isIPv4Loopback(host)) return true;
+  if (isIPv6Unspecified(host)) return true;
+  return isIPv6Loopback(host);
+};
+const DEFAULT_PORTS = {
+  http: 80,
+  https: 443,
+  ws: 80,
+  wss: 443,
+  ftp: 21
+};
+const parseNoProxyEntry = entry => {
+  let entryHost = entry;
+  let entryPort = 0;
+  if (entryHost.charAt(0) === '[') {
+    const bracketIndex = entryHost.indexOf(']');
+    if (bracketIndex !== -1) {
+      const host = entryHost.slice(1, bracketIndex);
+      const rest = entryHost.slice(bracketIndex + 1);
+      if (rest.charAt(0) === ':' && /^\d+$/.test(rest.slice(1))) {
+        entryPort = Number.parseInt(rest.slice(1), 10);
+      }
+      return [host, entryPort];
+    }
+  }
+  const firstColon = entryHost.indexOf(':');
+  const lastColon = entryHost.lastIndexOf(':');
+  if (firstColon !== -1 && firstColon === lastColon && /^\d+$/.test(entryHost.slice(lastColon + 1))) {
+    entryPort = Number.parseInt(entryHost.slice(lastColon + 1), 10);
+    entryHost = entryHost.slice(0, lastColon);
+  }
+  return [entryHost, entryPort];
+};
+
+// Convert IPv4-mapped IPv6 (::ffff:0:0/96 prefix) to IPv4 dotted form so both
+// sides of a NO_PROXY comparison see the same canonical address. Without this,
+// `NO_PROXY=192.168.1.5` would not match a request to `http://[::ffff:192.168.1.5]/`
+// (Node's URL parser normalises that to `[::ffff:c0a8:105]`), and vice-versa,
+// allowing the proxy-bypass policy to be circumvented by using the alternate
+// representation. Returns the input unchanged when not IPv4-mapped.
+const IPV4_MAPPED_DOTTED_RE = /^(?:::|(?:0{1,4}:){1,4}:|(?:0{1,4}:){5})ffff:(\d+\.\d+\.\d+\.\d+)$/i;
+const IPV4_MAPPED_HEX_RE = /^(?:::|(?:0{1,4}:){1,4}:|(?:0{1,4}:){5})ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i;
+const unmapIPv4MappedIPv6 = host => {
+  if (typeof host !== 'string' || host.indexOf(':') === -1) return host;
+  const dotted = host.match(IPV4_MAPPED_DOTTED_RE);
+  if (dotted) return dotted[1];
+  const hex = host.match(IPV4_MAPPED_HEX_RE);
+  if (hex) {
+    const high = parseInt(hex[1], 16);
+    const low = parseInt(hex[2], 16);
+    return `${high >> 8}.${high & 0xff}.${low >> 8}.${low & 0xff}`;
+  }
+  return host;
+};
+const IPV4_OCTET_RE = /^(?:0|[1-9]\d{0,2})$/;
+const ipv4ToBytes = host => {
+  const parts = host.split('.');
+  return parts.length === 4 && parts.every(part => IPV4_OCTET_RE.test(part) && Number(part) <= 255) ? parts.map(Number) : null;
+};
+const IPV6_GROUP_RE = /^[0-9a-f]{1,4}$/i;
+const ipv6ToBytes = host => {
+  const halves = host.split('::');
+  if (halves.length > 2) {
+    return null;
+  }
+  const groups = halves[0] ? halves[0].split(':') : [];
+  if (halves.length === 2) {
+    const rear = halves[1] ? halves[1].split(':') : [];
+    const missing = 8 - groups.length - rear.length;
+    if (missing < 1) {
+      return null;
+    }
+    groups.push(...new Array(missing).fill('0'), ...rear);
+  }
+  if (groups.length !== 8 || groups.some(group => !IPV6_GROUP_RE.test(group))) {
+    return null;
+  }
+  return groups.flatMap(group => {
+    const value = Number.parseInt(group, 16);
+    return [value >> 8 & 0xff, value & 0xff];
+  });
+};
+const ipToBytes = host => {
+  if (typeof host !== 'string' || !host) {
+    return null;
+  }
+  return host.indexOf(':') !== -1 ? ipv6ToBytes(host) : ipv4ToBytes(host);
+};
+const normalizeNoProxyHost = hostname => {
+  if (!hostname) {
+    return hostname;
+  }
+  if (hostname.charAt(0) === '[' && hostname.charAt(hostname.length - 1) === ']') {
+    hostname = hostname.slice(1, -1);
+  }
+  const trimmed = trimTrailingDots(hostname);
+
+  // IPv4 shorthand/octal/hex → dotted-decimal; helper is a no-op for inputs
+  // containing ':' (IPv6 and IPv4-mapped IPv6) so we fall through to unmap.
+  const ipv4 = normalizeIPAddress(trimmed);
+  if (ipv4 !== trimmed) {
+    return ipv4;
+  }
+  return unmapIPv4MappedIPv6(trimmed);
+};
+const normalizeCidrBase = input => {
+  let base = input;
+  const startsBracket = base.charAt(0) === '[';
+  const endsBracket = base.charAt(base.length - 1) === ']';
+  const hasBracket = base.includes('[') || base.includes(']');
+  if (startsBracket || endsBracket) {
+    if (!startsBracket || !endsBracket) {
+      return null;
+    }
+    base = base.slice(1, -1);
+    if (base.indexOf(':') === -1 || base.includes('[') || base.includes(']')) {
+      return null;
+    }
+  } else if (hasBracket) {
+    return null;
+  }
+  if (!base || base.charAt(base.length - 1) === '.') {
+    return null;
+  }
+  const wasIPv6 = base.indexOf(':') !== -1;
+  if (wasIPv6) {
+    try {
+      base = new URL(`http://[${base}]/`).hostname.slice(1, -1);
+    } catch (_err) {
+      return null;
+    }
+  } else {
+    base = normalizeIPAddress(base);
+    if (!ipv4ToBytes(base)) {
+      return null;
+    }
+  }
+  return {
+    normalized: unmapIPv4MappedIPv6(base),
+    wasIPv6
+  };
+};
+const CIDR_ENTRY_RE = /^(.+)\/(0|[1-9]\d{0,2})$/;
+const parseCidrEntry = entry => {
+  if (entry.indexOf('/') === -1) {
+    return undefined;
+  }
+  const match = CIDR_ENTRY_RE.exec(entry);
+  if (!match) {
+    return null;
+  }
+  let prefix = Number(match[2]);
+  const parsedBase = normalizeCidrBase(match[1]);
+  if (!parsedBase) {
+    return null;
+  }
+  const {
+    normalized,
+    wasIPv6
+  } = parsedBase;
+  if (wasIPv6 && normalized.indexOf(':') === -1) {
+    if (prefix < 96) {
+      return null;
+    }
+    prefix -= 96;
+  }
+  const bytes = ipToBytes(normalized);
+  if (!bytes || prefix > bytes.length * 8) {
+    return null;
+  }
+  return {
+    bytes,
+    prefix
+  };
+};
+const isInSubnet = (addressBytes, networkBytes, prefix) => {
+  const fullBytes = prefix >> 3;
+  for (let i = 0; i < fullBytes; i++) {
+    if (addressBytes[i] !== networkBytes[i]) {
+      return false;
+    }
+  }
+  const remainingBits = prefix & 7;
+  if (remainingBits) {
+    const mask = 0xff << 8 - remainingBits & 0xff;
+    if ((addressBytes[fullBytes] & mask) !== (networkBytes[fullBytes] & mask)) {
+      return false;
+    }
+  }
+  return true;
+};
+function shouldBypassProxy(location) {
+  let parsed;
+  try {
+    parsed = new URL(location);
+  } catch (_err) {
+    return false;
+  }
+  const noProxy = (process.env.no_proxy || process.env.NO_PROXY || '').toLowerCase();
+  if (!noProxy) {
+    return false;
+  }
+  if (noProxy === '*') {
+    return true;
+  }
+  const port = Number.parseInt(parsed.port, 10) || DEFAULT_PORTS[parsed.protocol.split(':', 1)[0]] || 0;
+  const hostname = normalizeNoProxyHost(parsed.hostname.toLowerCase());
+  const hostnameBytes = ipToBytes(hostname);
+  return noProxy.split(/[\s,]+/).some(entry => {
+    if (!entry) {
+      return false;
+    }
+    if (entry === '*') {
+      return true;
+    }
+    const cidr = parseCidrEntry(entry);
+    if (cidr !== undefined) {
+      return cidr !== null && !!hostnameBytes && hostnameBytes.length === cidr.bytes.length && isInSubnet(hostnameBytes, cidr.bytes, cidr.prefix);
+    }
+    let [entryHost, entryPort] = parseNoProxyEntry(entry);
+    entryHost = normalizeNoProxyHost(entryHost);
+    if (!entryHost) {
+      return false;
+    }
+    if (entryPort && entryPort !== port) {
+      return false;
+    }
+    if (entryHost.charAt(0) === '*') {
+      entryHost = entryHost.slice(1);
+    }
+    if (entryHost.charAt(0) === '.') {
+      return hostname.endsWith(entryHost);
+    }
+    return hostname === entryHost || isLoopback(hostname) && isLoopback(entryHost);
+  });
+}
 
 /**
  * Calculate data maxRate
@@ -34526,41 +36329,29 @@ function speedometer(samplesCount, min) {
   let head = 0;
   let tail = 0;
   let firstSampleTS;
-
   min = min !== undefined ? min : 1000;
-
   return function push(chunkLength) {
     const now = Date.now();
-
     const startedAt = timestamps[tail];
-
     if (!firstSampleTS) {
       firstSampleTS = now;
     }
-
     bytes[head] = chunkLength;
     timestamps[head] = now;
-
     let i = tail;
     let bytesCount = 0;
-
     while (i !== head) {
       bytesCount += bytes[i++];
       i = i % samplesCount;
     }
-
     head = (head + 1) % samplesCount;
-
     if (head === tail) {
       tail = (tail + 1) % samplesCount;
     }
-
     if (now - firstSampleTS < min) {
       return;
     }
-
     const passed = startedAt && now - startedAt;
-
     return passed ? Math.round(bytesCount * 1000 / passed) : undefined;
   };
 }
@@ -34569,14 +36360,13 @@ function speedometer(samplesCount, min) {
  * Throttle decorator
  * @param {Function} fn
  * @param {Number} freq
- * @return {Function}
+ * @return {Array<Function>}
  */
 function throttle(fn, freq) {
   let timestamp = 0;
   let threshold = 1000 / freq;
   let lastArgs;
   let timer;
-
   const invoke = (args, now = Date.now()) => {
     timestamp = now;
     lastArgs = null;
@@ -34586,11 +36376,10 @@ function throttle(fn, freq) {
     }
     fn(...args);
   };
-
   const throttled = (...args) => {
     const now = Date.now();
     const passed = now - timestamp;
-    if ( passed >= threshold) {
+    if (passed >= threshold) {
       invoke(args, now);
     } else {
       lastArgs = args;
@@ -34602,171 +36391,360 @@ function throttle(fn, freq) {
       }
     }
   };
-
   const flush = () => lastArgs && invoke(lastArgs);
-
-  return [throttled, flush];
+  const flushWith = (...args) => invoke(args);
+  return [throttled, flush, flushWith];
 }
 
 const progressEventReducer = (listener, isDownloadStream, freq = 3) => {
   let bytesNotified = 0;
   const _speedometer = speedometer(50, 250);
-
   return throttle(e => {
-    const loaded = e.loaded;
+    if (!e || !utils$1.isNumber(e.loaded)) {
+      return;
+    }
+    const rawLoaded = e.loaded;
     const total = e.lengthComputable ? e.total : undefined;
-    const progressBytes = loaded - bytesNotified;
+    const loaded = Math.max(0, total != null ? Math.min(rawLoaded, total) : rawLoaded);
+    const progressBytes = Math.max(0, loaded - bytesNotified);
     const rate = _speedometer(progressBytes);
-    const inRange = loaded <= total;
-
-    bytesNotified = loaded;
-
+    bytesNotified = Math.max(bytesNotified, loaded);
     const data = {
       loaded,
       total,
-      progress: total ? (loaded / total) : undefined,
+      progress: total ? loaded / total : undefined,
       bytes: progressBytes,
       rate: rate ? rate : undefined,
-      estimated: rate && total && inRange ? (total - loaded) / rate : undefined,
+      estimated: rate && total ? (total - loaded) / rate : undefined,
       event: e,
       lengthComputable: total != null,
       [isDownloadStream ? 'download' : 'upload']: true
     };
-
     listener(data);
   }, freq);
 };
-
 const progressEventDecorator = (total, throttled) => {
   const lengthComputable = total != null;
-
-  return [(loaded) => throttled[0]({
+  return [loaded => throttled[0]({
     lengthComputable,
     total,
     loaded
   }), throttled[1]];
 };
-
-const asyncDecorator = (fn) => (...args) => utils$1.asap(() => fn(...args));
+const asyncDecorator = (fn, scheduler = utils$1.asap) => (...args) => scheduler(() => fn(...args));
 
 /**
- * Estimate decoded byte length of a data:// URL *without* allocating large buffers.
- * - For base64: compute exact decoded size using length and padding;
- *               handle %XX at the character-count level (no string allocation).
- * - For non-base64: use UTF-8 byteLength of the encoded body as a safe upper bound.
+ * Estimate data: URL byte lengths *without* allocating large buffers.
+ * - Fetch percent-decodes a base64 body before decoding it.
+ * - Node's Buffer.from(body, 'base64') sizes its backing allocation from the
+ *   raw body, including ignored characters and content after padding.
+ * - Non-base64 data is percent-decoded and then encoded as UTF-8.
+ */
+const isHexDigit = charCode => charCode >= 48 && charCode <= 57 || charCode >= 65 && charCode <= 70 || charCode >= 97 && charCode <= 102;
+const isPercentEncodedByte = (str, i, len) => i + 2 < len && isHexDigit(str.charCodeAt(i + 1)) && isHexDigit(str.charCodeAt(i + 2));
+const hexValue = charCode => charCode <= 57 ? charCode - 48 : (charCode & 0xdf) - 55;
+const isBase64Char = charCode => charCode >= 65 && charCode <= 90 ||
+// A-Z
+charCode >= 97 && charCode <= 122 ||
+// a-z
+charCode >= 48 && charCode <= 57 ||
+// 0-9
+charCode === 43 ||
+// +
+charCode === 47 ||
+// /
+charCode === 45 ||
+// - (base64url)
+charCode === 95; // _ (base64url)
+
+const isBase64Whitespace = charCode => charCode === 9 || charCode === 10 || charCode === 12 || charCode === 13 || charCode === 32;
+const base64Bytes = significant => {
+  const groups = Math.floor(significant / 4);
+  const remainder = significant % 4;
+  return groups * 3 + (remainder === 2 ? 1 : remainder === 3 ? 2 : 0);
+};
+
+// Buffer.byteLength(body, 'base64') uses the raw string length as an allocation
+// upper bound even when Buffer.from later ignores characters or stops at '='.
+const estimateBase64BufferAllocation = body => {
+  const len = body.length;
+  let padding = 0;
+  if (len > 0 && body.charCodeAt(len - 1) === 61 /* '=' */) {
+    padding++;
+    if (len > 1 && body.charCodeAt(len - 2) === 61 /* '=' */) {
+      padding++;
+    }
+  }
+  return Math.floor((len - padding) * 3 / 4);
+};
+const estimatePercentDecodedBase64Bytes = body => {
+  const len = body.length;
+  let significant = 0;
+  let padding = 0;
+  let invalid = false;
+  for (let i = 0; i < len; i++) {
+    let code = body.charCodeAt(i);
+    if (code === 37 /* '%' */ && isPercentEncodedByte(body, i, len)) {
+      code = hexValue(body.charCodeAt(i + 1)) * 16 + hexValue(body.charCodeAt(i + 2));
+      i += 2;
+    }
+    if (isBase64Whitespace(code)) {
+      continue;
+    }
+    if (code === 61 /* '=' */) {
+      padding++;
+      continue;
+    }
+    if (!isBase64Char(code) || padding > 0) {
+      invalid = true;
+      continue;
+    }
+    significant++;
+  }
+
+  // Fetch rejects malformed forgiving-base64 input. Returning the raw-size
+  // allocation bound keeps that invalid input from becoming a pre-check bypass.
+  if (invalid || padding > 2 || padding > 0 && (significant + padding) % 4 !== 0 || significant % 4 === 1) {
+    return estimateBase64BufferAllocation(body);
+  }
+  return base64Bytes(significant);
+};
+const estimateDataURLBytes = (url, estimateBase64) => {
+  if (!url || typeof url !== 'string') return 0;
+  if (!url.startsWith('data:')) return 0;
+  const comma = url.indexOf(',');
+  if (comma < 0) return 0;
+  const meta = url.slice(5, comma);
+  const body = url.slice(comma + 1);
+  const isBase64 = /;base64/i.test(meta);
+  if (isBase64) {
+    return estimateBase64(body);
+  }
+
+  // Compute UTF-8 byte length directly from UTF-16 code units without allocating
+  // a byte buffer (TextEncoder.encode would defeat the DoS guard on large bodies).
+  // Valid %XX triplets count as one decoded byte; this matches the bytes that
+  // decodeURIComponent(body) would produce before Buffer re-encodes the string.
+  let bytes = 0;
+  for (let i = 0, len = body.length; i < len; i++) {
+    const c = body.charCodeAt(i);
+    if (c === 37 /* '%' */ && isPercentEncodedByte(body, i, len)) {
+      bytes += 1;
+      i += 2;
+    } else if (c < 0x80) {
+      bytes += 1;
+    } else if (c < 0x800) {
+      bytes += 2;
+    } else if (c >= 0xd800 && c <= 0xdbff && i + 1 < len) {
+      const next = body.charCodeAt(i + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        bytes += 4;
+        i++;
+      } else {
+        bytes += 3;
+      }
+    } else {
+      bytes += 3;
+    }
+  }
+  return bytes;
+};
+
+/**
+ * Estimate the percent-decoded payload size used by Fetch data: URLs.
  *
  * @param {string} url
  * @returns {number}
  */
 function estimateDataURLDecodedBytes(url) {
-  if (!url || typeof url !== 'string') return 0;
-  if (!url.startsWith('data:')) return 0;
+  // Fetch removes URL fragments before processing a data: URL.
+  const fragmentIndex = typeof url === 'string' ? url.indexOf('#') : -1;
+  return estimateDataURLBytes(fragmentIndex === -1 ? url : url.slice(0, fragmentIndex), estimatePercentDecodedBase64Bytes);
+}
 
-  const comma = url.indexOf(',');
-  if (comma < 0) return 0;
-
-  const meta = url.slice(5, comma);
-  const body = url.slice(comma + 1);
-  const isBase64 = /;base64/i.test(meta);
-
-  if (isBase64) {
-    let effectiveLen = body.length;
-    const len = body.length; // cache length
-
-    for (let i = 0; i < len; i++) {
-      if (body.charCodeAt(i) === 37 /* '%' */ && i + 2 < len) {
-        const a = body.charCodeAt(i + 1);
-        const b = body.charCodeAt(i + 2);
-        const isHex =
-          ((a >= 48 && a <= 57) || (a >= 65 && a <= 70) || (a >= 97 && a <= 102)) &&
-          ((b >= 48 && b <= 57) || (b >= 65 && b <= 70) || (b >= 97 && b <= 102));
-
-        if (isHex) {
-          effectiveLen -= 2;
-          i += 2;
-        }
-      }
-    }
-
-    let pad = 0;
-    let idx = len - 1;
-
-    const tailIsPct3D = (j) =>
-      j >= 2 &&
-      body.charCodeAt(j - 2) === 37 && // '%'
-      body.charCodeAt(j - 1) === 51 && // '3'
-      (body.charCodeAt(j) === 68 || body.charCodeAt(j) === 100); // 'D' or 'd'
-
-    if (idx >= 0) {
-      if (body.charCodeAt(idx) === 61 /* '=' */) {
-        pad++;
-        idx--;
-      } else if (tailIsPct3D(idx)) {
-        pad++;
-        idx -= 3;
-      }
-    }
-
-    if (pad === 1 && idx >= 0) {
-      if (body.charCodeAt(idx) === 61 /* '=' */) {
-        pad++;
-      } else if (tailIsPct3D(idx)) {
-        pad++;
-      }
-    }
-
-    const groups = Math.floor(effectiveLen / 4);
-    const bytes = groups * 3 - (pad || 0);
-    return bytes > 0 ? bytes : 0;
-  }
-
-  return Buffer.byteLength(body, 'utf8');
+/**
+ * Estimate the Buffer backing allocation used by Node's raw base64 decoder.
+ *
+ * @param {string} url
+ * @returns {number}
+ */
+function estimateDataURLBufferAllocation(url) {
+  return estimateDataURLBytes(url, estimateBase64BufferAllocation);
 }
 
 const zlibOptions = {
-  flush: zlib__default["default"].constants.Z_SYNC_FLUSH,
-  finishFlush: zlib__default["default"].constants.Z_SYNC_FLUSH
+  flush: zlib.constants.Z_SYNC_FLUSH,
+  finishFlush: zlib.constants.Z_SYNC_FLUSH
 };
-
 const brotliOptions = {
-  flush: zlib__default["default"].constants.BROTLI_OPERATION_FLUSH,
-  finishFlush: zlib__default["default"].constants.BROTLI_OPERATION_FLUSH
+  flush: zlib.constants.BROTLI_OPERATION_FLUSH,
+  finishFlush: zlib.constants.BROTLI_OPERATION_FLUSH
 };
-
-const isBrotliSupported = utils$1.isFunction(zlib__default["default"].createBrotliDecompress);
-
-const {http: httpFollow, https: httpsFollow} = followRedirects__default["default"];
-
+const zstdOptions = {
+  flush: zlib.constants.ZSTD_e_flush,
+  finishFlush: zlib.constants.ZSTD_e_flush
+};
+const isBrotliSupported = utils$1.isFunction(zlib.createBrotliDecompress);
+const isZstdSupported = utils$1.isFunction(zlib.createZstdDecompress);
+const ACCEPT_ENCODING = 'gzip, compress, deflate' + (isBrotliSupported ? ', br' : '');
+const ACCEPT_ENCODING_WITH_ZSTD = ACCEPT_ENCODING + (isZstdSupported ? ', zstd' : '');
+const scheduleProgress = typeof process !== 'undefined' && process.nextTick ? process.nextTick.bind(process) : utils$1.asap;
+const {
+  http: httpFollow,
+  https: httpsFollow
+} = followRedirects;
 const isHttps = /https:?/;
 
+// Symbols used to bind a single 'error' listener to a pooled socket and track
+// the request currently owning that socket across keep-alive reuse (issue #10780).
+const kAxiosSocketListener = Symbol('axios.http.socketListener');
+const kAxiosCurrentReq = Symbol('axios.http.currentReq');
+
+// A shared listener avoids retaining an adapter context for the lifetime of a
+// pooled socket. EventEmitter invokes listeners with `this` set to the emitter.
+function handleSocketError(err) {
+  const current = this[kAxiosCurrentReq];
+  if (current && !current.destroyed) {
+    current.destroy(err);
+  }
+}
+
+// Tags HttpsProxyAgent instances installed by setProxy() so the redirect path
+// can strip them without clobbering a user-supplied agent that happens to be
+// an HttpsProxyAgent.
+const kAxiosInstalledTunnel = Symbol('axios.http.installedTunnel');
+
+// Cache of CONNECT-tunneling agents keyed by proxy config so repeat requests
+// through the same proxy reuse a single agent (and its socket pool). The
+// keyspace is bounded by the set of distinct proxy configs the process uses,
+// so unbounded growth is not a concern in practice.
+const tunnelingAgentCache = new Map();
+const tunnelingAgentCacheUser = new WeakMap();
+// Minimum minor versions where Node's HTTP Agent supports native proxyEnv
+// handling. Checking the selected agent below also covers startup modes such
+// as NODE_OPTIONS=--use-env-proxy and --no-use-env-proxy precedence.
+const NODE_NATIVE_ENV_PROXY_SUPPORT = {
+  22: 21,
+  24: 5
+};
+function isNodeNativeEnvProxySupported(nodeVersion = process.versions && process.versions.node) {
+  if (!nodeVersion) {
+    return false;
+  }
+  const [major, minor] = nodeVersion.split('.').map(part => Number(part));
+  if (!Number.isInteger(major) || !Number.isInteger(minor)) {
+    return false;
+  }
+  if (major > 24) {
+    return true;
+  }
+  return NODE_NATIVE_ENV_PROXY_SUPPORT[major] != null && minor >= NODE_NATIVE_ENV_PROXY_SUPPORT[major];
+}
+function isNodeEnvProxyEnabled(agent, nodeVersion = process.versions && process.versions.node) {
+  if (!isNodeNativeEnvProxySupported(nodeVersion)) {
+    return false;
+  }
+  const agentOptions = agent && agent.options;
+  return Boolean(agentOptions && utils$1.hasOwnProp(agentOptions, 'proxyEnv') && agentOptions.proxyEnv != null);
+}
+function getProxyEnvAgent(options, configHttpAgent, configHttpsAgent) {
+  return isHttps.test(options.protocol) ? configHttpsAgent || https.globalAgent : configHttpAgent || http.globalAgent;
+}
+function getTunnelingAgent(agentOptions, userHttpsAgent) {
+  const key = agentOptions.protocol + '//' + agentOptions.hostname + ':' + (agentOptions.port || '') + '#' + (agentOptions.auth || '');
+  const cache = userHttpsAgent ? tunnelingAgentCacheUser.get(userHttpsAgent) || tunnelingAgentCacheUser.set(userHttpsAgent, new Map()).get(userHttpsAgent) : tunnelingAgentCache;
+  let agent = cache.get(key);
+  if (agent) return agent;
+  // Forward the user's TLS options (custom CA, rejectUnauthorized, client cert,
+  // etc.) into the tunneling agent so they apply to the origin TLS upgrade
+  // performed after CONNECT. Our proxy fields take precedence on conflict.
+  const merged = userHttpsAgent && userHttpsAgent.options ? {
+    ...userHttpsAgent.options,
+    ...agentOptions
+  } : agentOptions;
+  agent = new HttpsProxyAgent(merged);
+  if (userHttpsAgent && userHttpsAgent.options) {
+    const originTLSOptions = {
+      ...userHttpsAgent.options
+    };
+    const callback = agent.callback;
+    agent.callback = function axiosTunnelingAgentCallback(req, opts) {
+      // HttpsProxyAgent v5 reads callback opts for the post-CONNECT origin TLS upgrade.
+      return callback.call(this, req, {
+        ...originTLSOptions,
+        ...opts
+      });
+    };
+  }
+  agent[kAxiosInstalledTunnel] = true;
+  cache.set(key, agent);
+  return agent;
+}
 const supportedProtocols = platform.protocols.map(protocol => {
   return protocol + ':';
 });
 
-
+// Node's WHATWG URL parser returns `username` and `password` percent-encoded.
+// Decode before composing the `auth` option so credentials such as
+// `my%40email.com:pass` are sent as `my@email.com:pass`. Falls back to the
+// original value for malformed input so a bad encoding never throws.
+const decodeURIComponentSafe$1 = value => {
+  if (!utils$1.isString(value)) {
+    return value;
+  }
+  try {
+    return decodeURIComponent(value);
+  } catch (error) {
+    return value;
+  }
+};
 const flushOnFinish = (stream, [throttled, flush]) => {
-  stream
-    .on('end', flush)
-    .on('error', flush);
-
+  stream.on('end', flush).on('error', flush);
   return throttled;
 };
-
+const http2Sessions = new Http2Sessions();
 
 /**
- * If the proxy or config beforeRedirects functions are defined, call them with the options
- * object.
+ * If the proxy, auth, sensitive header, or config beforeRedirects functions are defined,
+ * call them with the options object.
  *
  * @param {Object<string, any>} options - The options object that was passed to the request.
  *
  * @returns {Object<string, any>}
  */
-function dispatchBeforeRedirect(options, responseDetails) {
+function dispatchBeforeRedirect(options, responseDetails, requestDetails) {
   if (options.beforeRedirects.proxy) {
     options.beforeRedirects.proxy(options);
   }
+  if (options.beforeRedirects.auth) {
+    options.beforeRedirects.auth(options);
+  }
+  if (options.beforeRedirects.sensitiveHeaders) {
+    options.beforeRedirects.sensitiveHeaders(options, requestDetails);
+  }
   if (options.beforeRedirects.config) {
-    options.beforeRedirects.config(options, responseDetails);
+    options.beforeRedirects.config(options, responseDetails, requestDetails);
+  }
+}
+function stripMatchingHeaders(headers, sensitiveSet) {
+  if (!headers) {
+    return;
+  }
+  Object.keys(headers).forEach(header => {
+    if (sensitiveSet.has(header.toLowerCase())) {
+      delete headers[header];
+    }
+  });
+}
+function isSameOriginRedirect(redirectOptions, requestDetails) {
+  if (!requestDetails) {
+    return false;
+  }
+  try {
+    return new URL(requestDetails.url).origin === new URL(redirectOptions.href).origin;
+  } catch (e) {
+    // If origin comparison fails, treat the redirect as unsafe.
+    return false;
   }
 }
 
@@ -34776,179 +36754,383 @@ function dispatchBeforeRedirect(options, responseDetails) {
  * @param {http.ClientRequestArgs} options
  * @param {AxiosProxyConfig} configProxy configuration from Axios options object
  * @param {string} location
+ * @param {boolean} [allowEnvProxy=true] whether environment proxy configuration can be used
  *
- * @returns {http.ClientRequestArgs}
+ * @returns {boolean} whether a proxy applies to the selected transport
  */
-function setProxy(options, configProxy, location) {
+function setProxy(options, configProxy, location, isRedirect, configHttpsAgent, configHttpAgent, allowEnvProxy = true) {
   let proxy = configProxy;
-  if (!proxy && proxy !== false) {
-    const proxyUrl = proxyFromEnv__default["default"].getProxyForUrl(location);
+  const proxyEnvAgent = getProxyEnvAgent(options, configHttpAgent, configHttpsAgent);
+  if (!proxy && proxy !== false && allowEnvProxy && !isNodeEnvProxyEnabled(proxyEnvAgent)) {
+    const proxyUrl = getProxyForUrl(location);
     if (proxyUrl) {
-      proxy = new URL(proxyUrl);
+      if (!shouldBypassProxy(location)) {
+        proxy = new URL(proxyUrl);
+      }
     }
+  }
+  // On redirect re-invocation, strip any stale Proxy-Authorization header carried
+  // over from the prior request (e.g. new target no longer uses a proxy, or uses
+  // a different proxy). Skip on the initial request so user-supplied headers are
+  // preserved. Header names are case-insensitive, so remove every case variant.
+  if (isRedirect && options.headers) {
+    for (const name of Object.keys(options.headers)) {
+      if (name.toLowerCase() === 'proxy-authorization') {
+        delete options.headers[name];
+      }
+    }
+  }
+  // Strip any tunneling agent we installed for the previous hop so a redirect
+  // that drops the proxy or crosses an HTTPS↔HTTP boundary doesn't reuse a
+  // stale one. Match on our Symbol marker so a user-supplied HttpsProxyAgent
+  // (which won't carry the marker) is left alone.
+  if (isRedirect && options.agent && options.agent[kAxiosInstalledTunnel]) {
+    options.agent = undefined;
   }
   if (proxy) {
+    // Read proxy fields without traversing the prototype chain. URL instances expose
+    // username/password/hostname/host/port/protocol via getters on URL.prototype (so
+    // direct reads are shielded), but plain object proxies — and the `auth` field
+    // (which URL does not expose) — must be guarded so a polluted Object.prototype
+    // (e.g. Object.prototype.auth = { username, password }) cannot inject
+    // attacker-controlled credentials into the Proxy-Authorization header or
+    // redirect proxying to an attacker-controlled host.
+    const isProxyURL = proxy instanceof URL;
+    const readProxyField = key => isProxyURL || utils$1.hasOwnProp(proxy, key) ? proxy[key] : undefined;
+    const proxyUsername = readProxyField('username');
+    const proxyPassword = readProxyField('password');
+    let proxyAuth = utils$1.hasOwnProp(proxy, 'auth') ? proxy.auth : undefined;
+
     // Basic proxy authorization
-    if (proxy.username) {
-      proxy.auth = (proxy.username || '') + ':' + (proxy.password || '');
+    if (proxyUsername) {
+      proxyAuth = (proxyUsername || '') + ':' + (proxyPassword || '');
     }
-
-    if (proxy.auth) {
-      // Support proxy auth object form
-      if (proxy.auth.username || proxy.auth.password) {
-        proxy.auth = (proxy.auth.username || '') + ':' + (proxy.auth.password || '');
+    if (proxyAuth) {
+      // Support proxy auth object form. Read sub-fields via own-prop checks so a
+      // plain object inheriting from polluted Object.prototype cannot leak creds.
+      const authIsObject = typeof proxyAuth === 'object';
+      const authUsername = authIsObject && utils$1.hasOwnProp(proxyAuth, 'username') ? proxyAuth.username : undefined;
+      const authPassword = authIsObject && utils$1.hasOwnProp(proxyAuth, 'password') ? proxyAuth.password : undefined;
+      const validProxyAuth = Boolean(authUsername || authPassword);
+      if (validProxyAuth) {
+        proxyAuth = (authUsername || '') + ':' + (authPassword || '');
+      } else if (authIsObject) {
+        throw new AxiosError('Invalid proxy authorization', AxiosError.ERR_BAD_OPTION, {
+          proxy
+        });
       }
-      const base64 = Buffer
-        .from(proxy.auth, 'utf8')
-        .toString('base64');
-      options.headers['Proxy-Authorization'] = 'Basic ' + base64;
     }
+    const targetIsHttps = isHttps.test(options.protocol);
+    if (targetIsHttps) {
+      // CONNECT-tunneling path for HTTPS targets. Preserves end-to-end TLS to
+      // the origin so the proxy cannot inspect the URL, headers, or body — the
+      // behavior already promised by THREATMODEL.md (T-R9). HttpsProxyAgent
+      // sends Proxy-Authorization on the CONNECT request only, never on the
+      // wrapped TLS request, which is why we don't stamp it onto
+      // options.headers here. If the user already supplied an HttpsProxyAgent,
+      // they own tunneling end-to-end and we leave them alone; otherwise we
+      // install our own tunneling agent and forward their TLS options (if any)
+      // so a custom httpsAgent for cert pinning / rejectUnauthorized still
+      // applies to the origin TLS upgrade.
+      if (!(configHttpsAgent instanceof HttpsProxyAgent)) {
+        const proxyHost = readProxyField('hostname') || readProxyField('host');
+        const proxyPort = readProxyField('port');
+        const rawProxyProtocol = readProxyField('protocol');
+        const normalizedProtocol = rawProxyProtocol ? rawProxyProtocol.includes(':') ? rawProxyProtocol : `${rawProxyProtocol}:` : 'http:';
+        // Bracket IPv6 literals for URL parsing; URL.hostname strips the
+        // brackets again on read so the agent receives the raw form.
+        const proxyHostForURL = proxyHost && proxyHost.includes(':') && !proxyHost.startsWith('[') ? `[${proxyHost}]` : proxyHost;
+        const proxyURL = new URL(`${normalizedProtocol}//${proxyHostForURL}${proxyPort ? ':' + proxyPort : ''}`);
+        const agentOptions = {
+          protocol: proxyURL.protocol,
+          hostname: proxyURL.hostname.replace(/^\[|\]$/g, ''),
+          port: proxyURL.port,
+          auth: proxyAuth && typeof proxyAuth === 'string' ? proxyAuth : undefined
+        };
+        if (proxyURL.protocol === 'https:') {
+          agentOptions.ALPNProtocols = ['http/1.1'];
+        }
+        const tunnelingAgent = getTunnelingAgent(agentOptions, configHttpsAgent);
+        // Set both: `options.agent` is consumed by the native https.request path
+        // (maxRedirects === 0); `options.agents.https` is consumed by
+        // follow-redirects, which ignores `options.agent` when `options.agents`
+        // is present.
+        options.agent = tunnelingAgent;
+        if (options.agents) {
+          options.agents.https = tunnelingAgent;
+        }
+      }
+    } else {
+      // Forward-proxy mode for plaintext HTTP targets. The request line carries
+      // the absolute URL and the proxy sees everything — acceptable for plain
+      // HTTP since the wire was already plaintext.
+      if (proxyAuth) {
+        const base64 = Buffer.from(proxyAuth, 'utf8').toString('base64');
+        options.headers['Proxy-Authorization'] = 'Basic ' + base64;
+      }
 
-    options.headers.host = options.hostname + (options.port ? ':' + options.port : '');
-    const proxyHost = proxy.hostname || proxy.host;
-    options.hostname = proxyHost;
-    // Replace 'host' since options is not a URL object
-    options.host = proxyHost;
-    options.port = proxy.port;
-    options.path = location;
-    if (proxy.protocol) {
-      options.protocol = proxy.protocol.includes(':') ? proxy.protocol : `${proxy.protocol}:`;
+      // Preserve a user-supplied Host header (case-insensitive) so callers can override
+      // the value forwarded to the proxy; otherwise default to the request URL's host.
+      let hasUserHostHeader = false;
+      for (const name of Object.keys(options.headers)) {
+        if (name.toLowerCase() === 'host') {
+          hasUserHostHeader = true;
+          break;
+        }
+      }
+      if (!hasUserHostHeader) {
+        options.headers.host = options.hostname + (options.port ? ':' + options.port : '');
+      }
+      const proxyHost = readProxyField('hostname') || readProxyField('host');
+      options.hostname = proxyHost;
+      // Replace 'host' since options is not a URL object
+      options.host = proxyHost;
+      options.port = readProxyField('port');
+      options.path = location;
+      const proxyProtocol = readProxyField('protocol');
+      if (proxyProtocol) {
+        options.protocol = proxyProtocol.includes(':') ? proxyProtocol : `${proxyProtocol}:`;
+      }
     }
   }
-
   options.beforeRedirects.proxy = function beforeRedirect(redirectOptions) {
     // Configure proxy for redirected request, passing the original config proxy to apply
     // the exact same logic as if the redirected request was performed by axios directly.
-    setProxy(redirectOptions, configProxy, redirectOptions.href);
+    setProxy(redirectOptions, configProxy, redirectOptions.href, true, configHttpsAgent, configHttpAgent, allowEnvProxy);
   };
+  return Boolean(proxy || configProxy !== false && allowEnvProxy && isNodeEnvProxyEnabled(proxyEnvAgent));
 }
-
 const isHttpAdapterSupported = typeof process !== 'undefined' && utils$1.kindOf(process) === 'process';
 
 // temporary hotfix
 
-const wrapAsync = (asyncExecutor) => {
+const wrapAsync = asyncExecutor => {
   return new Promise((resolve, reject) => {
     let onDone;
     let isDone;
-
     const done = (value, isRejected) => {
       if (isDone) return;
       isDone = true;
       onDone && onDone(value, isRejected);
     };
-
-    const _resolve = (value) => {
+    const _resolve = value => {
       done(value);
       resolve(value);
     };
-
-    const _reject = (reason) => {
+    const _reject = reason => {
       done(reason, true);
       reject(reason);
     };
-
-    asyncExecutor(_resolve, _reject, (onDoneHandler) => (onDone = onDoneHandler)).catch(_reject);
-  })
-};
-
-const resolveFamily = ({address, family}) => {
-  if (!utils$1.isString(address)) {
-    throw TypeError('address must be a string');
-  }
-  return ({
-    address,
-    family: family || (address.indexOf('.') < 0 ? 6 : 4)
+    asyncExecutor(_resolve, _reject, onDoneHandler => onDone = onDoneHandler).catch(_reject);
   });
 };
+const resolveFamily = ({
+  address,
+  family
+}) => {
+  if (!utils$1.isString(address)) {
+    throw new AxiosError('address must be a string', AxiosError.ERR_BAD_OPTION_VALUE);
+  }
+  return {
+    address,
+    family: family || (address.indexOf('.') < 0 ? 6 : 4)
+  };
+};
+const buildAddressEntry = (address, family) => resolveFamily(utils$1.isObject(address) ? address : {
+  address,
+  family
+});
+const normalizedLookupCache = new WeakMap();
+const normalizeLookup = lookup => {
+  let normalized = normalizedLookupCache.get(lookup);
+  if (normalized) {
+    return normalized;
+  }
+  const callbackLookup = callbackify(lookup, value => utils$1.isArray(value) ? value : [value]);
 
-const buildAddressEntry = (address, family) => resolveFamily(utils$1.isObject(address) ? address : {address, family});
+  // Support opt.all, which is required by current Node.js releases.
+  normalized = (hostname, opt, cb) => {
+    callbackLookup(hostname, opt, (err, arg0, arg1) => {
+      if (err) {
+        return cb(err);
+      }
+      let addresses;
+      try {
+        addresses = utils$1.isArray(arg0) ? arg0.map(addr => buildAddressEntry(addr)) : [buildAddressEntry(arg0, arg1)];
+      } catch (error) {
+        return cb(error);
+      }
+      opt.all ? cb(err, addresses) : cb(err, addresses[0].address, addresses[0].family);
+    });
+  };
+  normalizedLookupCache.set(lookup, normalized);
+  return normalized;
+};
+const http2Transport = {
+  request(options, cb) {
+    const authority = options.protocol + '//' + options.hostname + ':' + (options.port || (options.protocol === 'https:' ? 443 : 80));
+    const {
+      http2Options,
+      headers
+    } = options;
+    const session = http2Sessions.getSession(authority, http2Options);
+    const {
+      HTTP2_HEADER_SCHEME,
+      HTTP2_HEADER_METHOD,
+      HTTP2_HEADER_PATH,
+      HTTP2_HEADER_STATUS
+    } = http2.constants;
+    const http2Headers = {
+      [HTTP2_HEADER_SCHEME]: options.protocol.replace(':', ''),
+      [HTTP2_HEADER_METHOD]: options.method,
+      [HTTP2_HEADER_PATH]: options.path
+    };
+    utils$1.forEach(headers, (header, name) => {
+      name.charAt(0) !== ':' && (http2Headers[name] = header);
+    });
+    const req = session.request(http2Headers);
+    req.once('response', responseHeaders => {
+      const response = req; //duplex
+
+      responseHeaders = Object.assign({}, responseHeaders);
+      const status = responseHeaders[HTTP2_HEADER_STATUS];
+      delete responseHeaders[HTTP2_HEADER_STATUS];
+      response.headers = responseHeaders;
+      response.statusCode = +status;
+      cb(response);
+    });
+    return req;
+  }
+};
 
 /*eslint consistent-return:0*/
-const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
+var httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
   return wrapAsync(async function dispatchHttpRequest(resolve, reject, onDone) {
-    let {data, lookup, family} = config;
-    const {responseType, responseEncoding} = config;
-    const method = config.method.toUpperCase();
+    // Read config pollution-safely: own properties and members inherited from
+    // a non-Object.prototype source (e.g. an Object.create(defaults) template)
+    // are honored, but values injected onto a polluted Object.prototype are
+    // ignored. All behavior-affecting reads in this adapter go through own()
+    // so the protection boundary stays consistent.
+    const own = key => utils$1.getSafeProp(config, key);
+    const transitional = own('transitional') || transitionalDefaults;
+    let data = own('data');
+    let lookup = own('lookup');
+    let family = own('family');
+    let httpVersion = own('httpVersion');
+    if (httpVersion === undefined) httpVersion = 1;
+    const rawHttpVersion = httpVersion;
+    let http2Options = own('http2Options');
+    const httpAgent = own('httpAgent');
+    const httpsAgent = own('httpsAgent');
+    const configProxy = own('proxy');
+    const responseType = own('responseType');
+    const responseEncoding = own('responseEncoding');
+    const socketPath = own('socketPath');
+    const method = own('method').toUpperCase();
+    const maxRedirects = own('maxRedirects');
+    const maxBodyLength = own('maxBodyLength');
+    const maxContentLength = own('maxContentLength');
+    const decompress = own('decompress');
     let isDone;
     let rejected = false;
     let req;
-
-    if (lookup) {
-      const _lookup = callbackify$1(lookup, (value) => utils$1.isArray(value) ? value : [value]);
-      // hotfix to support opt.all option which is required for node 20.x
-      lookup = (hostname, opt, cb) => {
-        _lookup(hostname, opt, (err, arg0, arg1) => {
-          if (err) {
-            return cb(err);
-          }
-
-          const addresses = utils$1.isArray(arg0) ? arg0.map(addr => buildAddressEntry(addr)) : [buildAddressEntry(arg0, arg1)];
-
-          opt.all ? cb(err, addresses) : cb(err, addresses[0].address, addresses[0].family);
-        });
-      };
+    let connectPhaseTimer;
+    try {
+      httpVersion = +httpVersion;
+    } catch (err) {
+      throw new AxiosError('Invalid protocol version: value is not a number', AxiosError.ERR_BAD_OPTION_VALUE, config);
     }
-
-    // temporary internal emitter until the AxiosRequest class will be implemented
-    const emitter = new events$2.EventEmitter();
-
+    if (Number.isNaN(httpVersion)) {
+      throw new AxiosError(`Invalid protocol version: '${rawHttpVersion}' is not a number`, AxiosError.ERR_BAD_OPTION_VALUE, config);
+    }
+    if (httpVersion !== 1 && httpVersion !== 2) {
+      throw new AxiosError(`Unsupported protocol version '${httpVersion}'`, AxiosError.ERR_BAD_OPTION_VALUE, config);
+    }
+    const isHttp2 = httpVersion === 2;
+    if (lookup) {
+      lookup = normalizeLookup(lookup);
+    }
+    const abortEmitter = new events$2.EventEmitter();
+    function abort(reason) {
+      try {
+        abortEmitter.emit('abort', !reason || reason.type ? new CanceledError(null, config, req) : reason);
+      } catch (err) {
+        // ignore emit errors
+      }
+    }
+    function clearConnectPhaseTimer() {
+      if (connectPhaseTimer) {
+        clearTimeout(connectPhaseTimer);
+        connectPhaseTimer = null;
+      }
+    }
+    function createTimeoutError() {
+      const configTimeout = own('timeout');
+      let timeoutErrorMessage = configTimeout ? 'timeout of ' + configTimeout + 'ms exceeded' : 'timeout exceeded';
+      const configTimeoutErrorMessage = own('timeoutErrorMessage');
+      if (configTimeoutErrorMessage) {
+        timeoutErrorMessage = configTimeoutErrorMessage;
+      }
+      return new AxiosError(timeoutErrorMessage, transitional.clarifyTimeoutError ? AxiosError.ETIMEDOUT : AxiosError.ECONNABORTED, config, req);
+    }
+    abortEmitter.once('abort', reject);
     const onFinished = () => {
+      clearConnectPhaseTimer();
       if (config.cancelToken) {
         config.cancelToken.unsubscribe(abort);
       }
-
       if (config.signal) {
         config.signal.removeEventListener('abort', abort);
       }
-
-      emitter.removeAllListeners();
+      abortEmitter.removeAllListeners();
     };
-
-    onDone((value, isRejected) => {
-      isDone = true;
-      if (isRejected) {
-        rejected = true;
-        onFinished();
-      }
-    });
-
-    function abort(reason) {
-      emitter.emit('abort', !reason || reason.type ? new CanceledError(null, config, req) : reason);
-    }
-
-    emitter.once('abort', reject);
-
     if (config.cancelToken || config.signal) {
       config.cancelToken && config.cancelToken.subscribe(abort);
       if (config.signal) {
         config.signal.aborted ? abort() : config.signal.addEventListener('abort', abort);
       }
     }
+    onDone((response, isRejected) => {
+      isDone = true;
+      clearConnectPhaseTimer();
+      if (isRejected) {
+        rejected = true;
+        onFinished();
+        return;
+      }
+      const {
+        data
+      } = response;
+      if (data instanceof stream.Readable || data instanceof stream.Duplex) {
+        const offListeners = stream.finished(data, () => {
+          offListeners();
+          onFinished();
+        });
+      } else {
+        onFinished();
+      }
+    });
 
     // Parse url
-    const fullPath = buildFullPath(config.baseURL, config.url, config.allowAbsoluteUrls);
-    const parsed = new URL(fullPath, platform.hasBrowserEnv ? platform.origin : undefined);
+    const fullPath = buildFullPath(own('baseURL'), own('url'), own('allowAbsoluteUrls'), config);
+    // Unix-socket requests (own socketPath) commonly pass a path-only url
+    // like '/foo'; supply a synthetic base so new URL() can still parse it.
+    // Use the own-property value (not config.socketPath) so a polluted
+    // prototype cannot influence URL base selection.
+    const urlBase = socketPath ? 'http://localhost' : platform.hasBrowserEnv ? platform.origin : undefined;
+    const parsed = new URL(fullPath, urlBase);
     const protocol = parsed.protocol || supportedProtocols[0];
-
     if (protocol === 'data:') {
       // Apply the same semantics as HTTP: only enforce if a finite, non-negative cap is set.
-      if (config.maxContentLength > -1) {
-        // Use the exact string passed to fromDataURI (config.url); fall back to fullPath if needed.
-        const dataUrl = String(config.url || fullPath || '');
-        const estimated = estimateDataURLDecodedBytes(dataUrl);
-
-        if (estimated > config.maxContentLength) {
-          return reject(new AxiosError(
-            'maxContentLength size of ' + config.maxContentLength + ' exceeded',
-            AxiosError.ERR_BAD_RESPONSE,
-            config
-          ));
+      if (maxContentLength > -1) {
+        // Use the exact string passed to fromDataURI (the configured url); fall back to fullPath if needed.
+        const dataUrl = String(own('url') || fullPath || '');
+        const estimated = estimateDataURLBufferAllocation(dataUrl);
+        if (estimated > maxContentLength) {
+          return reject(new AxiosError('maxContentLength size of ' + maxContentLength + ' exceeded', AxiosError.ERR_BAD_RESPONSE, config));
         }
       }
-
       let convertedData;
-
       if (method !== 'GET') {
         return settle(resolve, reject, {
           status: 405,
@@ -34957,51 +37139,43 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
           config
         });
       }
-
       try {
-        convertedData = fromDataURI(config.url, responseType === 'blob', {
+        convertedData = fromDataURI(own('url'), responseType === 'blob', {
           Blob: config.env && config.env.Blob
         });
       } catch (err) {
         throw AxiosError.from(err, AxiosError.ERR_BAD_REQUEST, config);
       }
-
       if (responseType === 'text') {
         convertedData = convertedData.toString(responseEncoding);
-
         if (!responseEncoding || responseEncoding === 'utf8') {
           convertedData = utils$1.stripBOM(convertedData);
         }
       } else if (responseType === 'stream') {
-        convertedData = stream__default["default"].Readable.from(convertedData);
+        convertedData = stream.Readable.from(convertedData);
       }
-
       return settle(resolve, reject, {
         data: convertedData,
         status: 200,
         statusText: 'OK',
-        headers: new AxiosHeaders$1(),
+        headers: new AxiosHeaders(),
         config
       });
     }
-
     if (supportedProtocols.indexOf(protocol) === -1) {
-      return reject(new AxiosError(
-        'Unsupported protocol ' + protocol,
-        AxiosError.ERR_BAD_REQUEST,
-        config
-      ));
+      return reject(new AxiosError('Unsupported protocol ' + protocol, AxiosError.ERR_BAD_REQUEST, config));
     }
-
-    const headers = AxiosHeaders$1.from(config.headers).normalize();
+    const headers = AxiosHeaders.from(config.headers).normalize();
 
     // Set User-Agent (required by some servers)
     // See https://github.com/axios/axios/issues/69
     // User-Agent is specified; handle case where no UA header is desired
     // Only set header if it hasn't been set in config
     headers.set('User-Agent', 'axios/' + VERSION, false);
-
-    const {onUploadProgress, onDownloadProgress} = config;
+    const {
+      onUploadProgress,
+      onDownloadProgress
+    } = config;
     const maxRate = config.maxRate;
     let maxUploadRate = undefined;
     let maxDownloadRate = undefined;
@@ -35009,190 +37183,237 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
     // support for spec compliant FormData objects
     if (utils$1.isSpecCompliantForm(data)) {
       const userBoundary = headers.getContentType(/boundary=([-_\w\d]{10,70})/i);
-
-      data = formDataToStream$1(data, (formHeaders) => {
+      data = formDataToStream(data, formHeaders => {
         headers.set(formHeaders);
       }, {
         tag: `axios-${VERSION}-boundary`,
         boundary: userBoundary && userBoundary[1] || undefined
       });
       // support for https://www.npmjs.com/package/form-data api
-    } else if (utils$1.isFormData(data) && utils$1.isFunction(data.getHeaders)) {
-      headers.set(data.getHeaders());
-
+    } else if (utils$1.isFormData(data) && utils$1.isFunction(data.getHeaders) && data.getHeaders !== Object.prototype.getHeaders) {
+      setFormDataHeaders(headers, data.getHeaders(), own('formDataHeaderPolicy'));
       if (!headers.hasContentLength()) {
         try {
-          const knownLength = await util__default["default"].promisify(data.getLength).call(data);
+          const knownLength = await util.promisify(data.getLength).call(data);
           Number.isFinite(knownLength) && knownLength >= 0 && headers.setContentLength(knownLength);
           /*eslint no-empty:0*/
-        } catch (e) {
-        }
+        } catch (e) {}
       }
     } else if (utils$1.isBlob(data) || utils$1.isFile(data)) {
       data.size && headers.setContentType(data.type || 'application/octet-stream');
       headers.setContentLength(data.size || 0);
-      data = stream__default["default"].Readable.from(readBlob$1(data));
+      data = stream.Readable.from(readBlob(data));
     } else if (data && !utils$1.isStream(data)) {
       if (Buffer.isBuffer(data)) ; else if (utils$1.isArrayBuffer(data)) {
         data = Buffer.from(new Uint8Array(data));
       } else if (utils$1.isString(data)) {
         data = Buffer.from(data, 'utf-8');
       } else {
-        return reject(new AxiosError(
-          'Data after transformation must be a string, an ArrayBuffer, a Buffer, or a Stream',
-          AxiosError.ERR_BAD_REQUEST,
-          config
-        ));
+        return reject(new AxiosError('Data after transformation must be a string, an ArrayBuffer, a Buffer, or a Stream', AxiosError.ERR_BAD_REQUEST, config));
       }
 
       // Add Content-Length header if data exists
       headers.setContentLength(data.length, false);
-
-      if (config.maxBodyLength > -1 && data.length > config.maxBodyLength) {
-        return reject(new AxiosError(
-          'Request body larger than maxBodyLength limit',
-          AxiosError.ERR_BAD_REQUEST,
-          config
-        ));
+      if (maxBodyLength > -1 && data.length > maxBodyLength) {
+        return reject(new AxiosError('Request body larger than maxBodyLength limit', AxiosError.ERR_BAD_REQUEST, config));
       }
     }
-
     const contentLength = utils$1.toFiniteNumber(headers.getContentLength());
-
     if (utils$1.isArray(maxRate)) {
       maxUploadRate = maxRate[0];
       maxDownloadRate = maxRate[1];
     } else {
       maxUploadRate = maxDownloadRate = maxRate;
     }
-
     if (data && (onUploadProgress || maxUploadRate)) {
       if (!utils$1.isStream(data)) {
-        data = stream__default["default"].Readable.from(data, {objectMode: false});
+        data = stream.Readable.from(data, {
+          objectMode: false
+        });
       }
-
-      data = stream__default["default"].pipeline([data, new AxiosTransformStream$1({
+      data = stream.pipeline([data, new AxiosTransformStream({
         maxRate: utils$1.toFiniteNumber(maxUploadRate)
       })], utils$1.noop);
-
-      onUploadProgress && data.on('progress', flushOnFinish(
-        data,
-        progressEventDecorator(
-          contentLength,
-          progressEventReducer(asyncDecorator(onUploadProgress), false, 3)
-        )
-      ));
+      onUploadProgress && data.on('progress', flushOnFinish(data, progressEventDecorator(contentLength, progressEventReducer(asyncDecorator(onUploadProgress, scheduleProgress), false, 3))));
     }
 
     // HTTP basic authentication
     let auth = undefined;
-    if (config.auth) {
-      const username = config.auth.username || '';
-      const password = config.auth.password || '';
+    const configAuth = own('auth');
+    if (configAuth) {
+      const username = utils$1.getSafeProp(configAuth, 'username') || '';
+      const password = utils$1.getSafeProp(configAuth, 'password') || '';
       auth = username + ':' + password;
     }
-
-    if (!auth && parsed.username) {
-      const urlUsername = parsed.username;
-      const urlPassword = parsed.password;
+    if (!auth && (parsed.username || parsed.password)) {
+      const urlUsername = decodeURIComponentSafe$1(parsed.username);
+      const urlPassword = decodeURIComponentSafe$1(parsed.password);
       auth = urlUsername + ':' + urlPassword;
     }
-
     auth && headers.delete('authorization');
-
-    let path;
-
+    let path$1;
     try {
-      path = buildURL(
-        parsed.pathname + parsed.search,
-        config.params,
-        config.paramsSerializer
-      ).replace(/^\?/, '');
+      path$1 = buildURL(parsed.pathname + parsed.search, own('params'), own('paramsSerializer')).replace(/^\?/, '');
     } catch (err) {
-      const customErr = new Error(err.message);
-      customErr.config = config;
-      customErr.url = config.url;
-      customErr.exists = true;
-      return reject(customErr);
+      return reject(AxiosError.from(err, AxiosError.ERR_BAD_REQUEST, config, null, null, {
+        url: own('url'),
+        exists: true
+      }));
+    }
+    headers.set('Accept-Encoding', utils$1.hasOwnProp(transitional, 'advertiseZstdAcceptEncoding') && transitional.advertiseZstdAcceptEncoding === true ? ACCEPT_ENCODING_WITH_ZSTD : ACCEPT_ENCODING, false);
+    if (isHttp2 && lookup) {
+      http2Options = Object.assign(Object.create(null), http2Options, {
+        lookup
+      });
     }
 
-    headers.set(
-      'Accept-Encoding',
-      'gzip, compress, deflate' + (isBrotliSupported ? ', br' : ''), false
-      );
-
-    const options = {
-      path,
+    // Null-prototype to block prototype pollution gadgets on properties read
+    // directly by Node's http.request (e.g. insecureHTTPParser, lookup).
+    const options = Object.assign(Object.create(null), {
+      path: path$1,
       method: method,
-      headers: headers.toJSON(),
-      agents: { http: config.httpAgent, https: config.httpsAgent },
+      headers: toByteStringHeaderObject(headers),
+      agents: {
+        http: httpAgent,
+        https: httpsAgent
+      },
       auth,
       protocol,
       family,
       beforeRedirect: dispatchBeforeRedirect,
-      beforeRedirects: {}
-    };
+      beforeRedirects: Object.create(null),
+      http2Options,
+      createConnection: undefined
+    });
 
     // cacheable-lookup integration hotfix
     !utils$1.isUndefined(lookup) && (options.lookup = lookup);
-
-    if (config.socketPath) {
-      options.socketPath = config.socketPath;
+    let proxyApplied = false;
+    if (socketPath) {
+      if (typeof socketPath !== 'string') {
+        return reject(new AxiosError('socketPath must be a string', AxiosError.ERR_BAD_OPTION_VALUE, config));
+      }
+      const allowedSocketPaths = own('allowedSocketPaths');
+      if (allowedSocketPaths != null) {
+        const allowed = Array.isArray(allowedSocketPaths) ? allowedSocketPaths : [allowedSocketPaths];
+        const resolvedSocket = path.resolve(socketPath);
+        const isAllowed = allowed.some(entry => typeof entry === 'string' && path.resolve(entry) === resolvedSocket);
+        if (!isAllowed) {
+          return reject(new AxiosError(`socketPath "${socketPath}" is not permitted by allowedSocketPaths`, AxiosError.ERR_BAD_OPTION_VALUE, config));
+        }
+      }
+      options.socketPath = socketPath;
     } else {
-      options.hostname = parsed.hostname.startsWith("[") ? parsed.hostname.slice(1, -1) : parsed.hostname;
+      options.hostname = parsed.hostname.startsWith('[') ? parsed.hostname.slice(1, -1) : parsed.hostname;
       options.port = parsed.port;
-      setProxy(options, config.proxy, protocol + '//' + parsed.hostname + (parsed.port ? ':' + parsed.port : '') + options.path);
+      proxyApplied = setProxy(options, configProxy, protocol + '//' + parsed.hostname + (parsed.port ? ':' + parsed.port : '') + options.path, false, httpsAgent, httpAgent,
+      // The HTTP/2 transport connects independently of HTTP/1 agents, so it
+      // cannot apply either axios-resolved or agent-local environment proxies.
+      // Explicit proxy config is still processed and rejected below.
+      !isHttp2);
     }
-
     let transport;
+    let isNativeTransport = false;
+    // True only for the follow-redirects transport, which applies
+    // options.maxBodyLength itself. Every other transport (http2, native
+    // http/https, a user-supplied custom transport) needs the explicit
+    // byte-counting pipeline below to enforce maxBodyLength on streamed uploads.
+    let transportEnforcesMaxBodyLength = false;
     const isHttpsRequest = isHttps.test(options.protocol);
-    options.agent = isHttpsRequest ? config.httpsAgent : config.httpAgent;
-    if (config.transport) {
-      transport = config.transport;
-    } else if (config.maxRedirects === 0) {
-      transport = isHttpsRequest ? https__default["default"] : http__default["default"];
+    // Don't clobber a CONNECT-tunneling agent installed by setProxy() for an
+    // HTTPS target.
+    if (options.agent == null) {
+      options.agent = isHttpsRequest ? httpsAgent : httpAgent;
+    }
+    if (isHttp2) {
+      if (proxyApplied) {
+        return reject(new AxiosError('HTTP/2 requests with a proxy are not supported', AxiosError.ERR_NOT_SUPPORT, config));
+      }
+      transport = http2Transport;
     } else {
-      if (config.maxRedirects) {
-        options.maxRedirects = config.maxRedirects;
+      const configTransport = own('transport');
+      if (configTransport) {
+        transport = configTransport;
+      } else if (maxRedirects === 0) {
+        transport = isHttpsRequest ? https : http;
+        isNativeTransport = true;
+      } else {
+        transportEnforcesMaxBodyLength = true;
+        options.sensitiveHeaders = [];
+        if (maxRedirects) {
+          options.maxRedirects = maxRedirects;
+        }
+        const configBeforeRedirect = own('beforeRedirect');
+        if (configBeforeRedirect) {
+          options.beforeRedirects.config = configBeforeRedirect;
+        }
+        if (auth) {
+          // Restore HTTP Basic credentials on same-origin redirects only.
+          // follow-redirects >= 1.15.8 strips Authorization on every redirect (see #6929);
+          // cross-origin stripping is the documented mitigation for T-R2 in THREATMODEL.md
+          // and is preserved by deliberately not restoring on origin change.
+          const requestOrigin = parsed.origin;
+          const authToRestore = auth;
+          options.beforeRedirects.auth = function beforeRedirectAuth(redirectOptions) {
+            try {
+              if (new URL(redirectOptions.href).origin === requestOrigin) {
+                redirectOptions.auth = authToRestore;
+              }
+            } catch (e) {
+              // ignore malformed URL: leaving auth stripped is fail-safe
+            }
+          };
+        }
+        const sensitiveHeaders = own('sensitiveHeaders');
+        if (sensitiveHeaders != null) {
+          if (!utils$1.isArray(sensitiveHeaders)) {
+            return reject(new AxiosError('sensitiveHeaders must be an array of strings', AxiosError.ERR_BAD_OPTION_VALUE, config));
+          }
+          const sensitiveSet = new Set();
+          for (const header of sensitiveHeaders) {
+            if (!utils$1.isString(header)) {
+              return reject(new AxiosError('sensitiveHeaders must be an array of strings', AxiosError.ERR_BAD_OPTION_VALUE, config));
+            }
+            sensitiveSet.add(header.toLowerCase());
+          }
+          if (sensitiveSet.size) {
+            options.sensitiveHeaders = Array.from(sensitiveSet);
+            options.beforeRedirects.sensitiveHeaders = function beforeRedirectSensitiveHeaders(redirectOptions, requestDetails) {
+              if (!isSameOriginRedirect(redirectOptions, requestDetails)) {
+                stripMatchingHeaders(redirectOptions.headers, sensitiveSet);
+              }
+            };
+          }
+        }
+        transport = isHttpsRequest ? httpsFollow : httpFollow;
       }
-      if (config.beforeRedirect) {
-        options.beforeRedirects.config = config.beforeRedirect;
-      }
-      transport = isHttpsRequest ? httpsFollow : httpFollow;
     }
 
-    if (config.maxBodyLength > -1) {
-      options.maxBodyLength = config.maxBodyLength;
+    // Set an explicit maxBodyLength option for transports that inspect it.
+    // When maxBodyLength is -1 (default/unlimited), use Infinity so
+    // follow-redirects does not fall back to its own 10MB default.
+    if (maxBodyLength > -1) {
+      options.maxBodyLength = maxBodyLength;
     } else {
-      // follow-redirects does not skip comparison, so it should always succeed for axios -1 unlimited
       options.maxBodyLength = Infinity;
     }
 
-    if (config.insecureHTTPParser) {
-      options.insecureHTTPParser = config.insecureHTTPParser;
-    }
+    // Always set an explicit own value so a polluted
+    // Object.prototype.insecureHTTPParser cannot enable the lenient parser
+    // through Node's internal options copy
+    options.insecureHTTPParser = Boolean(own('insecureHTTPParser'));
 
     // Create the request
     req = transport.request(options, function handleResponse(res) {
+      clearConnectPhaseTimer();
       if (req.destroyed) return;
-
       const streams = [res];
-
-      const responseLength = +res.headers['content-length'];
-
+      const responseLength = utils$1.toFiniteNumber(res.headers['content-length']);
       if (onDownloadProgress || maxDownloadRate) {
-        const transformStream = new AxiosTransformStream$1({
+        const transformStream = new AxiosTransformStream({
           maxRate: utils$1.toFiniteNumber(maxDownloadRate)
         });
-
-        onDownloadProgress && transformStream.on('progress', flushOnFinish(
-          transformStream,
-          progressEventDecorator(
-            responseLength,
-            progressEventReducer(asyncDecorator(onDownloadProgress), true, 3)
-          )
-        ));
-
+        onDownloadProgress && transformStream.on('progress', flushOnFinish(transformStream, progressEventDecorator(responseLength, progressEventReducer(asyncDecorator(onDownloadProgress, scheduleProgress), true, 3))));
         streams.push(transformStream);
       }
 
@@ -35203,98 +37424,104 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
       const lastRequest = res.req || req;
 
       // if decompress disabled we should not decompress
-      if (config.decompress !== false && res.headers['content-encoding']) {
+      if (decompress !== false && res.headers['content-encoding']) {
         // if no content, but headers still say that it is encoded,
         // remove the header not confuse downstream operations
         if (method === 'HEAD' || res.statusCode === 204) {
           delete res.headers['content-encoding'];
         }
-
         switch ((res.headers['content-encoding'] || '').toLowerCase()) {
-        /*eslint default-case:0*/
-        case 'gzip':
-        case 'x-gzip':
-        case 'compress':
-        case 'x-compress':
-          // add the unzipper to the body stream processing pipeline
-          streams.push(zlib__default["default"].createUnzip(zlibOptions));
+          /*eslint default-case:0*/
+          case 'gzip':
+          case 'x-gzip':
+          case 'compress':
+          case 'x-compress':
+            // add the unzipper to the body stream processing pipeline
+            streams.push(zlib.createUnzip(zlibOptions));
 
-          // remove the content-encoding in order to not confuse downstream operations
-          delete res.headers['content-encoding'];
-          break;
-        case 'deflate':
-          streams.push(new ZlibHeaderTransformStream$1());
-
-          // add the unzipper to the body stream processing pipeline
-          streams.push(zlib__default["default"].createUnzip(zlibOptions));
-
-          // remove the content-encoding in order to not confuse downstream operations
-          delete res.headers['content-encoding'];
-          break;
-        case 'br':
-          if (isBrotliSupported) {
-            streams.push(zlib__default["default"].createBrotliDecompress(brotliOptions));
+            // remove the content-encoding in order to not confuse downstream operations
             delete res.headers['content-encoding'];
-          }
+            break;
+          case 'deflate':
+            streams.push(new ZlibHeaderTransformStream());
+
+            // add the unzipper to the body stream processing pipeline
+            streams.push(zlib.createUnzip(zlibOptions));
+
+            // remove the content-encoding in order to not confuse downstream operations
+            delete res.headers['content-encoding'];
+            break;
+          case 'br':
+            if (isBrotliSupported) {
+              streams.push(zlib.createBrotliDecompress(brotliOptions));
+              delete res.headers['content-encoding'];
+            }
+            break;
+          case 'zstd':
+            if (isZstdSupported) {
+              streams.push(zlib.createZstdDecompress(zstdOptions));
+              delete res.headers['content-encoding'];
+            }
+            break;
         }
       }
-
-      responseStream = streams.length > 1 ? stream__default["default"].pipeline(streams, utils$1.noop) : streams[0];
-
-      const offListeners = stream__default["default"].finished(responseStream, () => {
-        offListeners();
-        onFinished();
-      });
-
+      responseStream = streams.length > 1 ? stream.pipeline(streams, utils$1.noop) : streams[0];
       const response = {
         status: res.statusCode,
         statusText: res.statusMessage,
-        headers: new AxiosHeaders$1(res.headers),
+        headers: new AxiosHeaders(res.headers),
         config,
         request: lastRequest
       };
-
       if (responseType === 'stream') {
+        // Enforce maxContentLength on streamed responses; previously this
+        // was applied only to buffered responses.
+        if (maxContentLength > -1) {
+          const limit = maxContentLength;
+          const source = responseStream;
+          async function* enforceMaxContentLength() {
+            let totalResponseBytes = 0;
+            for await (const chunk of source) {
+              totalResponseBytes += chunk.length;
+              if (totalResponseBytes > limit) {
+                throw new AxiosError('maxContentLength size of ' + limit + ' exceeded', AxiosError.ERR_BAD_RESPONSE, config, lastRequest);
+              }
+              yield chunk;
+            }
+          }
+          responseStream = stream.Readable.from(enforceMaxContentLength(), {
+            objectMode: false
+          });
+        }
         response.data = responseStream;
         settle(resolve, reject, response);
       } else {
         const responseBuffer = [];
         let totalResponseBytes = 0;
-
         responseStream.on('data', function handleStreamData(chunk) {
           responseBuffer.push(chunk);
           totalResponseBytes += chunk.length;
 
           // make sure the content length is not over the maxContentLength if specified
-          if (config.maxContentLength > -1 && totalResponseBytes > config.maxContentLength) {
+          if (maxContentLength > -1 && totalResponseBytes > maxContentLength) {
             // stream.destroy() emit aborted event before calling reject() on Node.js v16
             rejected = true;
             responseStream.destroy();
-            reject(new AxiosError('maxContentLength size of ' + config.maxContentLength + ' exceeded',
-              AxiosError.ERR_BAD_RESPONSE, config, lastRequest));
+            abort(new AxiosError('maxContentLength size of ' + maxContentLength + ' exceeded', AxiosError.ERR_BAD_RESPONSE, config, lastRequest));
           }
         });
-
         responseStream.on('aborted', function handlerStreamAborted() {
           if (rejected) {
             return;
           }
-
-          const err = new AxiosError(
-            'stream has been aborted',
-            AxiosError.ERR_BAD_RESPONSE,
-            config,
-            lastRequest
-          );
+          const err = new AxiosError('stream has been aborted', AxiosError.ERR_BAD_RESPONSE, config, lastRequest, response);
           responseStream.destroy(err);
           reject(err);
         });
-
         responseStream.on('error', function handleStreamError(err) {
-          if (req.destroyed) return;
-          reject(AxiosError.from(err, null, config, lastRequest));
+          if (rejected) return;
+          reject(AxiosError.from(err, null, config, lastRequest, response));
         });
-
         responseStream.on('end', function handleStreamEnd() {
           try {
             let responseData = responseBuffer.length === 1 ? responseBuffer[0] : Buffer.concat(responseBuffer);
@@ -35311,47 +37538,80 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
           settle(resolve, reject, response);
         });
       }
-
-      emitter.once('abort', err => {
+      abortEmitter.once('abort', err => {
         if (!responseStream.destroyed) {
           responseStream.emit('error', err);
           responseStream.destroy();
         }
       });
     });
-
-    emitter.once('abort', err => {
-      reject(err);
-      req.destroy(err);
+    abortEmitter.once('abort', err => {
+      if (req.close) {
+        req.close();
+      } else {
+        req.destroy(err);
+      }
     });
 
     // Handle errors
     req.on('error', function handleRequestError(err) {
-      // @todo remove
-      // if (req.aborted && err.code !== AxiosError.ERR_FR_TOO_MANY_REDIRECTS) return;
       reject(AxiosError.from(err, null, config, req));
     });
 
     // set tcp keep alive to prevent drop connection by peer
+    // Track every socket bound to this outer RedirectableRequest so a single
+    // 'close' listener can release ownership on all of them. follow-redirects
+    // re-emits the 'socket' event for each hop's native request onto the same
+    // outer request, so attaching per-request listeners inside this handler
+    // would accumulate across hops and trigger MaxListenersExceededWarning at
+    // >= 11 redirects. Clearing only the last-bound socket would leave stale
+    // kAxiosCurrentReq refs on earlier hop sockets returned to the keep-alive
+    // pool, causing an idle-pool 'error' to be attributed to a closed req.
+    const boundSockets = new Set();
     req.on('socket', function handleRequestSocket(socket) {
       // default interval of sending ack packet is 1 minute
-      socket.setKeepAlive(true, 1000 * 60);
+      // proxy agents (e.g. agent-base) may return a generic Duplex stream
+      // that doesn't have setKeepAlive, so guard before calling
+      if (typeof socket.setKeepAlive === 'function') {
+        socket.setKeepAlive(true, 1000 * 60);
+      }
+
+      // Install one shared 'error' listener per socket. The symbol follows the
+      // currently-active request as pooled sockets are reassigned (issue #10780).
+      if (!socket[kAxiosSocketListener]) {
+        socket.on('error', handleSocketError);
+        socket[kAxiosSocketListener] = true;
+      }
+      socket[kAxiosCurrentReq] = req;
+      boundSockets.add(socket);
+    });
+    req.once('close', function clearCurrentReq() {
+      clearConnectPhaseTimer();
+      for (const socket of boundSockets) {
+        if (socket[kAxiosCurrentReq] === req) {
+          socket[kAxiosCurrentReq] = null;
+        }
+      }
+      boundSockets.clear();
     });
 
     // Handle request timeout
-    if (config.timeout) {
+    if (own('timeout')) {
       // This is forcing a int timeout to avoid problems if the `req` interface doesn't handle other types.
-      const timeout = parseInt(config.timeout, 10);
-
+      const timeout = parseInt(own('timeout'), 10);
       if (Number.isNaN(timeout)) {
-        reject(new AxiosError(
-          'error trying to parse `config.timeout` to int',
-          AxiosError.ERR_BAD_OPTION_VALUE,
-          config,
-          req
-        ));
-
+        abort(new AxiosError('error trying to parse `config.timeout` to int', AxiosError.ERR_BAD_OPTION_VALUE, config, req));
         return;
+      }
+      const handleTimeout = function handleTimeout() {
+        if (isDone) return;
+        abort(createTimeoutError());
+      };
+      if (isNativeTransport && timeout > 0) {
+        // Native ClientRequest#setTimeout starts from the socket lifecycle and
+        // may not fire while TCP connect is still pending. Mirror the
+        // follow-redirects wall-clock timer for the maxRedirects === 0 path.
+        connectPhaseTimer = setTimeout(handleTimeout, timeout);
       }
 
       // Sometime, the response will be very slow, and does not respond, the connect event will be block by event loop system.
@@ -35359,104 +37619,129 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
       // At this time, if we have a large number of request, nodejs will hang up some socket on background. and the number will up and up.
       // And then these socket which be hang up will devouring CPU little by little.
       // ClientRequest.setTimeout will be fired on the specify milliseconds, and can make sure that abort() will be fired after connect.
-      req.setTimeout(timeout, function handleRequestTimeout() {
-        if (isDone) return;
-        let timeoutErrorMessage = config.timeout ? 'timeout of ' + config.timeout + 'ms exceeded' : 'timeout exceeded';
-        const transitional = config.transitional || transitionalDefaults;
-        if (config.timeoutErrorMessage) {
-          timeoutErrorMessage = config.timeoutErrorMessage;
-        }
-        reject(new AxiosError(
-          timeoutErrorMessage,
-          transitional.clarifyTimeoutError ? AxiosError.ETIMEDOUT : AxiosError.ECONNABORTED,
-          config,
-          req
-        ));
-        abort();
-      });
+      req.setTimeout(timeout, handleTimeout);
+    } else {
+      // explicitly reset the socket timeout value for a possible `keep-alive` request
+      req.setTimeout(0);
     }
-
 
     // Send the request
     if (utils$1.isStream(data)) {
       let ended = false;
       let errored = false;
-
       data.on('end', () => {
         ended = true;
       });
-
       data.once('error', err => {
         errored = true;
         req.destroy(err);
       });
-
       data.on('close', () => {
         if (!ended && !errored) {
           abort(new CanceledError('Request stream has been aborted', config, req));
         }
       });
 
-      data.pipe(req);
+      // Enforce maxBodyLength for streamed uploads on every transport that
+      // does not apply options.maxBodyLength itself (native http/https, http2,
+      // and user-supplied custom transports). The follow-redirects transport
+      // enforces it on the redirected HTTP/1 path.
+      let uploadStream = data;
+      if (maxBodyLength > -1 && !transportEnforcesMaxBodyLength) {
+        const limit = maxBodyLength;
+        let bytesSent = 0;
+        uploadStream = stream.pipeline([data, new stream.Transform({
+          transform(chunk, _enc, cb) {
+            bytesSent += chunk.length;
+            if (bytesSent > limit) {
+              return cb(new AxiosError('Request body larger than maxBodyLength limit', AxiosError.ERR_BAD_REQUEST, config, req));
+            }
+            cb(null, chunk);
+          }
+        })], utils$1.noop);
+        uploadStream.on('error', err => {
+          if (!req.destroyed) req.destroy(err);
+        });
+      }
+      uploadStream.pipe(req);
     } else {
-      req.end(data);
+      data && req.write(data);
+      req.end();
     }
   });
 };
 
-const isURLSameOrigin = platform.hasStandardBrowserEnv ? ((origin, isMSIE) => (url) => {
+var isURLSameOrigin = platform.hasStandardBrowserEnv ? ((origin, isMSIE) => url => {
   url = new URL(url, platform.origin);
+  return origin.protocol === url.protocol && origin.host === url.host && (isMSIE || origin.port === url.port);
+})(new URL(platform.origin), platform.navigator && /(msie|trident)/i.test(platform.navigator.userAgent)) : () => true;
 
-  return (
-    origin.protocol === url.protocol &&
-    origin.host === url.host &&
-    (isMSIE || origin.port === url.port)
-  );
-})(
-  new URL(platform.origin),
-  platform.navigator && /(msie|trident)/i.test(platform.navigator.userAgent)
-) : () => true;
-
-const cookies = platform.hasStandardBrowserEnv ?
-
-  // Standard browser envs support document.cookie
-  {
-    write(name, value, expires, path, domain, secure) {
-      const cookie = [name + '=' + encodeURIComponent(value)];
-
-      utils$1.isNumber(expires) && cookie.push('expires=' + new Date(expires).toGMTString());
-
-      utils$1.isString(path) && cookie.push('path=' + path);
-
-      utils$1.isString(domain) && cookie.push('domain=' + domain);
-
-      secure === true && cookie.push('secure');
-
-      document.cookie = cookie.join('; ');
-    },
-
-    read(name) {
-      const match = document.cookie.match(new RegExp('(^|;\\s*)(' + name + ')=([^;]*)'));
-      return (match ? decodeURIComponent(match[3]) : null);
-    },
-
-    remove(name) {
-      this.write(name, '', Date.now() - 86400000);
+var cookies = platform.hasStandardBrowserEnv ?
+// Standard browser envs support document.cookie
+{
+  write(name, value, expires, path, domain, secure, sameSite) {
+    if (typeof document === 'undefined') return;
+    const cookie = [`${name}=${encodeURIComponent(value)}`];
+    if (utils$1.isNumber(expires)) {
+      cookie.push(`expires=${new Date(expires).toUTCString()}`);
     }
+    if (utils$1.isString(path)) {
+      cookie.push(`path=${path}`);
+    }
+    if (utils$1.isString(domain)) {
+      cookie.push(`domain=${domain}`);
+    }
+    if (secure === true) {
+      cookie.push('secure');
+    }
+    if (utils$1.isString(sameSite)) {
+      cookie.push(`SameSite=${sameSite}`);
+    }
+    document.cookie = cookie.join('; ');
+  },
+  read(name) {
+    if (typeof document === 'undefined') return null;
+    // Match name=value by splitting on the semicolon separator instead of building a
+    // RegExp from `name` — interpolating an unescaped string into a RegExp would let
+    // metacharacters (e.g. `.+?` in an attacker-influenced cookie name) cause ReDoS or
+    // match the wrong cookie. Browsers may serialize cookie pairs as either ";" or
+    // "; ", so ignore optional whitespace before each cookie name.
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].replace(/^\s+/, '');
+      const eq = cookie.indexOf('=');
+      if (eq !== -1 && cookie.slice(0, eq) === name) {
+        try {
+          return decodeURIComponent(cookie.slice(eq + 1));
+        } catch (e) {
+          return cookie.slice(eq + 1);
+        }
+      }
+    }
+    return null;
+  },
+  remove(name) {
+    this.write(name, '', Date.now() - 86400000, '/');
   }
+} :
+// Non-standard browser env (web workers, react-native) lack needed support.
+{
+  write() {},
+  read() {
+    return null;
+  },
+  remove() {}
+};
 
-  :
-
-  // Non-standard browser env (web workers, react-native) lack needed support.
-  {
-    write() {},
-    read() {
-      return null;
-    },
-    remove() {}
-  };
-
-const headersToObject = (thing) => thing instanceof AxiosHeaders$1 ? { ...thing } : thing;
+const headersToObject = thing => thing instanceof AxiosHeaders ? {
+  ...thing
+} : thing;
+const ownEnumerableKeys = thing => {
+  if (Object.getOwnPropertySymbols && Object.getOwnPropertyDescriptor) {
+    return Object.keys(thing).concat(Object.getOwnPropertySymbols(thing).filter(symbol => Object.getOwnPropertyDescriptor(thing, symbol).enumerable));
+  }
+  return Object.keys(thing);
+};
 
 /**
  * Config-specific merge-function which creates a new config-object
@@ -35469,12 +37754,28 @@ const headersToObject = (thing) => thing instanceof AxiosHeaders$1 ? { ...thing 
  */
 function mergeConfig(config1, config2) {
   // eslint-disable-next-line no-param-reassign
+  config1 = config1 || {};
   config2 = config2 || {};
-  const config = {};
 
+  // Use a null-prototype object so that downstream reads such as `config.auth`
+  // or `config.baseURL` cannot inherit polluted values from Object.prototype.
+  // `hasOwnProperty` is restored as a non-enumerable own slot to preserve
+  // ergonomics for user code that relies on it.
+  const config = Object.create(null);
+  Object.defineProperty(config, 'hasOwnProperty', {
+    // Null-proto descriptor so a polluted Object.prototype.get cannot turn
+    // this data descriptor into an accessor descriptor on the way in.
+    __proto__: null,
+    value: Object.prototype.hasOwnProperty,
+    enumerable: false,
+    writable: true,
+    configurable: true
+  });
   function getMergedValue(target, source, prop, caseless) {
     if (utils$1.isPlainObject(target) && utils$1.isPlainObject(source)) {
-      return utils$1.merge.call({caseless}, target, source);
+      return utils$1.merge.call({
+        caseless
+      }, target, source);
     } else if (utils$1.isPlainObject(source)) {
       return utils$1.merge({}, source);
     } else if (utils$1.isArray(source)) {
@@ -35482,13 +37783,11 @@ function mergeConfig(config1, config2) {
     }
     return source;
   }
-
-  // eslint-disable-next-line consistent-return
-  function mergeDeepProperties(a, b, prop , caseless) {
+  function mergeDeepProperties(a, b, prop, caseless) {
     if (!utils$1.isUndefined(b)) {
-      return getMergedValue(a, b, prop , caseless);
+      return getMergedValue(a, b, prop, caseless);
     } else if (!utils$1.isUndefined(a)) {
-      return getMergedValue(undefined, a, prop , caseless);
+      return getMergedValue(undefined, a, prop, caseless);
     }
   }
 
@@ -35507,16 +37806,32 @@ function mergeConfig(config1, config2) {
       return getMergedValue(undefined, a);
     }
   }
+  function getMergedTransitionalOption(prop) {
+    const transitional2 = utils$1.hasOwnProp(config2, 'transitional') ? config2.transitional : undefined;
+    if (!utils$1.isUndefined(transitional2)) {
+      if (utils$1.isPlainObject(transitional2)) {
+        if (utils$1.hasOwnProp(transitional2, prop)) {
+          return transitional2[prop];
+        }
+      } else {
+        return undefined;
+      }
+    }
+    const transitional1 = utils$1.hasOwnProp(config1, 'transitional') ? config1.transitional : undefined;
+    if (utils$1.isPlainObject(transitional1) && utils$1.hasOwnProp(transitional1, prop)) {
+      return transitional1[prop];
+    }
+    return undefined;
+  }
 
   // eslint-disable-next-line consistent-return
   function mergeDirectKeys(a, b, prop) {
-    if (prop in config2) {
+    if (utils$1.hasOwnProp(config2, prop)) {
       return getMergedValue(a, b);
-    } else if (prop in config1) {
+    } else if (utils$1.hasOwnProp(config1, prop)) {
       return getMergedValue(undefined, a);
     }
   }
-
   const mergeMap = {
     url: valueFromConfig2,
     method: valueFromConfig2,
@@ -35526,7 +37841,7 @@ function mergeConfig(config1, config2) {
     transformResponse: defaultToConfig2,
     paramsSerializer: defaultToConfig2,
     timeout: defaultToConfig2,
-    timeoutMessage: defaultToConfig2,
+    timeoutErrorMessage: defaultToConfig2,
     withCredentials: defaultToConfig2,
     withXSRFToken: defaultToConfig2,
     adapter: defaultToConfig2,
@@ -35544,110 +37859,175 @@ function mergeConfig(config1, config2) {
     httpsAgent: defaultToConfig2,
     cancelToken: defaultToConfig2,
     socketPath: defaultToConfig2,
+    allowedSocketPaths: defaultToConfig2,
     responseEncoding: defaultToConfig2,
     validateStatus: mergeDirectKeys,
-    headers: (a, b , prop) => mergeDeepProperties(headersToObject(a), headersToObject(b),prop, true)
+    headers: (a, b, prop) => mergeDeepProperties(headersToObject(a), headersToObject(b), prop, true)
   };
-
-  utils$1.forEach(Object.keys({...config1, ...config2}), function computeConfigValue(prop) {
-    const merge = mergeMap[prop] || mergeDeepProperties;
-    const configValue = merge(config1[prop], config2[prop], prop);
-    (utils$1.isUndefined(configValue) && merge !== mergeDirectKeys) || (config[prop] = configValue);
+  utils$1.forEach(ownEnumerableKeys({
+    ...config1,
+    ...config2
+  }), function computeConfigValue(prop) {
+    if (prop === '__proto__' || prop === 'constructor' || prop === 'prototype') return;
+    const merge = utils$1.hasOwnProp(mergeMap, prop) ? mergeMap[prop] : mergeDeepProperties;
+    const a = utils$1.hasOwnProp(config1, prop) ? config1[prop] : undefined;
+    const b = utils$1.hasOwnProp(config2, prop) ? config2[prop] : undefined;
+    const configValue = merge(a, b, prop);
+    utils$1.isUndefined(configValue) && merge !== mergeDirectKeys || (config[prop] = configValue);
   });
-
+  if (utils$1.hasOwnProp(config2, 'validateStatus') && utils$1.isUndefined(config2.validateStatus) && getMergedTransitionalOption('validateStatusUndefinedResolves') === false) {
+    if (utils$1.hasOwnProp(config1, 'validateStatus')) {
+      config.validateStatus = getMergedValue(undefined, config1.validateStatus);
+    } else {
+      delete config.validateStatus;
+    }
+  }
   return config;
 }
 
-const resolveConfig = (config) => {
+/**
+ * Encode a UTF-8 string to a Latin-1 byte string for use with btoa().
+ * This is a modern replacement for the deprecated unescape(encodeURIComponent(str)) pattern.
+ *
+ * @param {string} str The string to encode
+ *
+ * @returns {string} UTF-8 bytes as a Latin-1 string
+ */
+const encodeUTF8$1 = str => encodeURIComponent(str).replace(/%([0-9A-F]{2})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+function resolveConfig(config) {
   const newConfig = mergeConfig({}, config);
 
-  let { data, withXSRFToken, xsrfHeaderName, xsrfCookieName, headers, auth } = newConfig;
-
-  newConfig.headers = headers = AxiosHeaders$1.from(headers);
-
-  newConfig.url = buildURL(buildFullPath(newConfig.baseURL, newConfig.url, newConfig.allowAbsoluteUrls), config.params, config.paramsSerializer);
+  // Read only own properties to prevent prototype pollution gadgets
+  // (e.g. Object.prototype.baseURL = 'https://evil.com').
+  const own = key => utils$1.hasOwnProp(newConfig, key) ? newConfig[key] : undefined;
+  const data = own('data');
+  let withXSRFToken = own('withXSRFToken');
+  const xsrfHeaderName = own('xsrfHeaderName');
+  const xsrfCookieName = own('xsrfCookieName');
+  let headers = own('headers');
+  const auth = own('auth');
+  const baseURL = own('baseURL');
+  const allowAbsoluteUrls = own('allowAbsoluteUrls');
+  const url = own('url');
+  newConfig.headers = headers = AxiosHeaders.from(headers);
+  newConfig.url = buildURL(buildFullPath(baseURL, url, allowAbsoluteUrls, newConfig), own('params'), own('paramsSerializer'));
 
   // HTTP basic authentication
   if (auth) {
-    headers.set('Authorization', 'Basic ' +
-      btoa((auth.username || '') + ':' + (auth.password ? unescape(encodeURIComponent(auth.password)) : ''))
-    );
-  }
-
-  if (utils$1.isFormData(data)) {
-    if (platform.hasStandardBrowserEnv || platform.hasStandardBrowserWebWorkerEnv) {
-      headers.setContentType(undefined); // browser handles it
-    } else if (utils$1.isFunction(data.getHeaders)) {
-      // Node.js FormData (like form-data package)
-      const formHeaders = data.getHeaders();
-      // Only set safe headers to avoid overwriting security headers
-      const allowedHeaders = ['content-type', 'content-length'];
-      Object.entries(formHeaders).forEach(([key, val]) => {
-        if (allowedHeaders.includes(key.toLowerCase())) {
-          headers.set(key, val);
-        }
-      });
+    const username = utils$1.getSafeProp(auth, 'username') || '';
+    const password = utils$1.getSafeProp(auth, 'password') || '';
+    try {
+      headers.set('Authorization', 'Basic ' + btoa(username + ':' + (password ? encodeUTF8$1(password) : '')));
+    } catch (e) {
+      throw AxiosError.from(e, AxiosError.ERR_BAD_OPTION_VALUE, config);
     }
-  }  
+  }
+  if (utils$1.isFormData(data)) {
+    const getHeaders = utils$1.getSafeProp(data, 'getHeaders');
+    if (platform.hasStandardBrowserEnv || platform.hasStandardBrowserWebWorkerEnv || utils$1.isReactNative(data)) {
+      headers.setContentType(undefined); // browser/web worker/RN handles it
+    } else if (utils$1.isFunction(getHeaders)) {
+      // Node.js FormData (like form-data package)
+      setFormDataHeaders(headers, getHeaders.call(data), own('formDataHeaderPolicy'));
+    }
+  }
 
   // Add xsrf header
   // This is only done if running in a standard browser environment.
   // Specifically not if we're in a web worker, or react-native.
 
   if (platform.hasStandardBrowserEnv) {
-    withXSRFToken && utils$1.isFunction(withXSRFToken) && (withXSRFToken = withXSRFToken(newConfig));
+    if (utils$1.isFunction(withXSRFToken)) {
+      withXSRFToken = withXSRFToken(newConfig);
+    }
 
-    if (withXSRFToken || (withXSRFToken !== false && isURLSameOrigin(newConfig.url))) {
-      // Add xsrf header
+    // Strict boolean check — prevents proto-pollution gadgets (e.g. Object.prototype.withXSRFToken = 1)
+    // and misconfigurations (e.g. "false") from short-circuiting the same-origin check and leaking
+    // the XSRF token cross-origin.
+    const shouldSendXSRF = withXSRFToken === true || withXSRFToken == null && isURLSameOrigin(newConfig.url);
+    if (shouldSendXSRF) {
       const xsrfValue = xsrfHeaderName && xsrfCookieName && cookies.read(xsrfCookieName);
-
       if (xsrfValue) {
         headers.set(xsrfHeaderName, xsrfValue);
       }
     }
   }
-
   return newConfig;
-};
+}
 
 const isXHRAdapterSupported = typeof XMLHttpRequest !== 'undefined';
-
-const xhrAdapter = isXHRAdapterSupported && function (config) {
+var xhrAdapter = isXHRAdapterSupported && function (config) {
   return new Promise(function dispatchXhrRequest(resolve, reject) {
     const _config = resolveConfig(config);
     let requestData = _config.data;
-    const requestHeaders = AxiosHeaders$1.from(_config.headers).normalize();
-    let {responseType, onUploadProgress, onDownloadProgress} = _config;
+    const requestHeaders = AxiosHeaders.from(_config.headers).normalize();
+    let {
+      responseType,
+      onUploadProgress,
+      onDownloadProgress
+    } = _config;
     let onCanceled;
     let uploadThrottled, downloadThrottled;
-    let flushUpload, flushDownload;
-
+    let flushUpload, flushDownload, flushDownloadWithEvent;
     function done() {
       flushUpload && flushUpload(); // flush events
       flushDownload && flushDownload(); // flush events
 
       _config.cancelToken && _config.cancelToken.unsubscribe(onCanceled);
-
       _config.signal && _config.signal.removeEventListener('abort', onCanceled);
     }
-
     let request = new XMLHttpRequest();
-
     request.open(_config.method.toUpperCase(), _config.url, true);
 
     // Set the request timeout in MS
     request.timeout = _config.timeout;
-
-    function onloadend() {
+    function onloadend(event) {
       if (!request) {
         return;
       }
+
+      // Status 0 means no response was received, which onerror and onabort normally
+      // reject before this runs. Firefox 152 fires only readystatechange and loadend for
+      // navigation-canceled requests (https://bugzilla.mozilla.org/show_bug.cgi?id=1505389),
+      // leaving settle() to resolve them as an empty success. ECONNABORTED is the error
+      // onabort raised on Firefox 151. Reads over file:, which some environments report as
+      // status 0 on success, are excluded by the request URL's scheme after browser-style
+      // preprocessing, by the page origin's scheme for relative URLs (which inherit it), or
+      // by responseURL where implemented.
+      if (request.status === 0 && (parseProtocol(normalizeURLForProtocolCheck(_config.url)) || parseProtocol(platform.origin)) !== 'file' && !(request.responseURL && request.responseURL.startsWith('file:'))) {
+        reject(new AxiosError('Request aborted', AxiosError.ECONNABORTED, config, request));
+        done();
+
+        // Clean up request
+        request = null;
+        return;
+      }
+
+      // When loadend is still dispatching, flushing with it gives progress
+      // listeners a final delivery whose event has a live target. The legacy
+      // ready-state fallback has no event, so replay its pending progress.
+      // A throwing listener must not block settlement; rethrow asynchronously,
+      // matching how listener errors surface on the throttle timer path.
+      try {
+        if (event) {
+          flushDownloadWithEvent && flushDownloadWithEvent(event);
+        } else {
+          flushDownload && flushDownload();
+        }
+      } catch (err) {
+        setTimeout(() => {
+          throw err;
+        });
+      }
+
+      // A final progress callback can cancel the request synchronously.
+      if (!request) {
+        return;
+      }
+
       // Prepare the response
-      const responseHeaders = AxiosHeaders$1.from(
-        'getAllResponseHeaders' in request && request.getAllResponseHeaders()
-      );
-      const responseData = !responseType || responseType === 'text' || responseType === 'json' ?
-        request.responseText : request.response;
+      const responseHeaders = AxiosHeaders.from('getAllResponseHeaders' in request && request.getAllResponseHeaders());
+      const responseData = !responseType || responseType === 'text' || responseType === 'json' ? request.responseText : request.response;
       const response = {
         data: responseData,
         status: request.status,
@@ -35656,7 +38036,6 @@ const xhrAdapter = isXHRAdapterSupported && function (config) {
         config,
         request
       };
-
       settle(function _resolve(value) {
         resolve(value);
         done();
@@ -35668,7 +38047,6 @@ const xhrAdapter = isXHRAdapterSupported && function (config) {
       // Clean up request
       request = null;
     }
-
     if ('onloadend' in request) {
       // Use onloadend if available
       request.onloadend = onloadend;
@@ -35683,7 +38061,7 @@ const xhrAdapter = isXHRAdapterSupported && function (config) {
         // handled by onerror instead
         // With one exception: request that using file: protocol, most browsers
         // will return status as 0 even though it's a successful request
-        if (request.status === 0 && !(request.responseURL && request.responseURL.indexOf('file:') === 0)) {
+        if (request.status === 0 && !(request.responseURL && request.responseURL.startsWith('file:'))) {
           return;
         }
         // readystate handler is calling before onerror or ontimeout handlers,
@@ -35697,26 +38075,27 @@ const xhrAdapter = isXHRAdapterSupported && function (config) {
       if (!request) {
         return;
       }
-
       reject(new AxiosError('Request aborted', AxiosError.ECONNABORTED, config, request));
+      done();
 
       // Clean up request
       request = null;
     };
 
     // Handle low level network errors
-  request.onerror = function handleError(event) {
-       // Browsers deliver a ProgressEvent in XHR onerror
-       // (message may be empty; when present, surface it)
-       // See https://developer.mozilla.org/docs/Web/API/XMLHttpRequest/error_event
-       const msg = event && event.message ? event.message : 'Network Error';
-       const err = new AxiosError(msg, AxiosError.ERR_NETWORK, config, request);
-       // attach the underlying event for consumers who want details
-       err.event = event || null;
-       reject(err);
-       request = null;
+    request.onerror = function handleError(event) {
+      // Browsers deliver a ProgressEvent in XHR onerror
+      // (message may be empty; when present, surface it)
+      // See https://developer.mozilla.org/docs/Web/API/XMLHttpRequest/error_event
+      const msg = event && event.message ? event.message : 'Network Error';
+      const err = new AxiosError(msg, AxiosError.ERR_NETWORK, config, request);
+      // attach the underlying event for consumers who want details
+      err.event = event || null;
+      reject(err);
+      done();
+      request = null;
     };
-    
+
     // Handle timeout
     request.ontimeout = function handleTimeout() {
       let timeoutErrorMessage = _config.timeout ? 'timeout of ' + _config.timeout + 'ms exceeded' : 'timeout exceeded';
@@ -35724,11 +38103,8 @@ const xhrAdapter = isXHRAdapterSupported && function (config) {
       if (_config.timeoutErrorMessage) {
         timeoutErrorMessage = _config.timeoutErrorMessage;
       }
-      reject(new AxiosError(
-        timeoutErrorMessage,
-        transitional.clarifyTimeoutError ? AxiosError.ETIMEDOUT : AxiosError.ECONNABORTED,
-        config,
-        request));
+      reject(new AxiosError(timeoutErrorMessage, transitional.clarifyTimeoutError ? AxiosError.ETIMEDOUT : AxiosError.ECONNABORTED, config, request));
+      done();
 
       // Clean up request
       request = null;
@@ -35739,7 +38115,7 @@ const xhrAdapter = isXHRAdapterSupported && function (config) {
 
     // Add headers to the request
     if ('setRequestHeader' in request) {
-      utils$1.forEach(requestHeaders.toJSON(), function setRequestHeader(val, key) {
+      utils$1.forEach(toByteStringHeaderObject(requestHeaders), function setRequestHeader(val, key) {
         request.setRequestHeader(key, val);
       });
     }
@@ -35756,19 +38132,16 @@ const xhrAdapter = isXHRAdapterSupported && function (config) {
 
     // Handle progress if needed
     if (onDownloadProgress) {
-      ([downloadThrottled, flushDownload] = progressEventReducer(onDownloadProgress, true));
+      [downloadThrottled, flushDownload, flushDownloadWithEvent] = progressEventReducer(onDownloadProgress, true);
       request.addEventListener('progress', downloadThrottled);
     }
 
     // Not all browsers support upload events
     if (onUploadProgress && request.upload) {
-      ([uploadThrottled, flushUpload] = progressEventReducer(onUploadProgress));
-
+      [uploadThrottled, flushUpload] = progressEventReducer(onUploadProgress);
       request.upload.addEventListener('progress', uploadThrottled);
-
       request.upload.addEventListener('loadend', flushUpload);
     }
-
     if (_config.cancelToken || _config.signal) {
       // Handle cancellation
       // eslint-disable-next-line func-names
@@ -35778,22 +38151,20 @@ const xhrAdapter = isXHRAdapterSupported && function (config) {
         }
         reject(!cancel || cancel.type ? new CanceledError(null, config, request) : cancel);
         request.abort();
+        done();
         request = null;
       };
-
       _config.cancelToken && _config.cancelToken.subscribe(onCanceled);
       if (_config.signal) {
         _config.signal.aborted ? onCanceled() : _config.signal.addEventListener('abort', onCanceled);
       }
     }
-
     const protocol = parseProtocol(_config.url);
-
-    if (protocol && platform.protocols.indexOf(protocol) === -1) {
+    if (protocol && !platform.protocols.includes(protocol)) {
       reject(new AxiosError('Unsupported protocol ' + protocol + ':', AxiosError.ERR_BAD_REQUEST, config));
+      done();
       return;
     }
-
 
     // Send the request
     request.send(requestData || null);
@@ -35801,84 +38172,85 @@ const xhrAdapter = isXHRAdapterSupported && function (config) {
 };
 
 const composeSignals = (signals, timeout) => {
-  const {length} = (signals = signals ? signals.filter(Boolean) : []);
-
-  if (timeout || length) {
-    let controller = new AbortController();
-
-    let aborted;
-
-    const onabort = function (reason) {
-      if (!aborted) {
-        aborted = true;
-        unsubscribe();
-        const err = reason instanceof Error ? reason : this.reason;
-        controller.abort(err instanceof AxiosError ? err : new CanceledError(err instanceof Error ? err.message : err));
-      }
-    };
-
-    let timer = timeout && setTimeout(() => {
-      timer = null;
-      onabort(new AxiosError(`timeout ${timeout} of ms exceeded`, AxiosError.ETIMEDOUT));
-    }, timeout);
-
-    const unsubscribe = () => {
-      if (signals) {
-        timer && clearTimeout(timer);
-        timer = null;
-        signals.forEach(signal => {
-          signal.unsubscribe ? signal.unsubscribe(onabort) : signal.removeEventListener('abort', onabort);
-        });
-        signals = null;
-      }
-    };
-
-    signals.forEach((signal) => signal.addEventListener('abort', onabort));
-
-    const {signal} = controller;
-
-    signal.unsubscribe = () => utils$1.asap(unsubscribe);
-
-    return signal;
+  signals = signals ? signals.filter(Boolean) : [];
+  if (!timeout && !signals.length) {
+    return;
   }
+  const controller = new AbortController();
+  let aborted = false;
+  const onabort = function (reason) {
+    if (!aborted) {
+      aborted = true;
+      unsubscribe();
+      const err = reason instanceof Error ? reason : this.reason;
+      controller.abort(err instanceof AxiosError ? err : new CanceledError(err instanceof Error ? err.message : err));
+    }
+  };
+  let timer = timeout && setTimeout(() => {
+    timer = null;
+    onabort(new AxiosError(`timeout of ${timeout}ms exceeded`, AxiosError.ETIMEDOUT));
+  }, timeout);
+  const unsubscribe = () => {
+    if (!signals) {
+      return;
+    }
+    timer && clearTimeout(timer);
+    timer = null;
+    signals.forEach(signal => {
+      signal.unsubscribe ? signal.unsubscribe(onabort) : signal.removeEventListener('abort', onabort);
+    });
+    signals = null;
+  };
+  signals.forEach(signal => {
+    if (aborted) {
+      return;
+    }
+    if (signal.aborted) {
+      onabort.call(signal);
+      return;
+    }
+    signal.addEventListener('abort', onabort, {
+      once: true
+    });
+  });
+  const {
+    signal
+  } = controller;
+  signal.unsubscribe = () => utils$1.asap(unsubscribe);
+  return signal;
 };
-
-const composeSignals$1 = composeSignals;
 
 const streamChunk = function* (chunk, chunkSize) {
   let len = chunk.byteLength;
-
-  if (!chunkSize || len < chunkSize) {
+  if (len < chunkSize) {
     yield chunk;
     return;
   }
-
   let pos = 0;
   let end;
-
   while (pos < len) {
     end = pos + chunkSize;
     yield chunk.slice(pos, end);
     pos = end;
   }
 };
-
 const readBytes = async function* (iterable, chunkSize) {
   for await (const chunk of readStream(iterable)) {
     yield* streamChunk(chunk, chunkSize);
   }
 };
-
 const readStream = async function* (stream) {
   if (stream[Symbol.asyncIterator]) {
     yield* stream;
     return;
   }
-
   const reader = stream.getReader();
   try {
     for (;;) {
-      const {done, value} = await reader.read();
+      const {
+        done,
+        value
+      } = await reader.read();
       if (done) {
         break;
       }
@@ -35888,30 +38260,28 @@ const readStream = async function* (stream) {
     await reader.cancel();
   }
 };
-
 const trackStream = (stream, chunkSize, onProgress, onFinish) => {
   const iterator = readBytes(stream, chunkSize);
-
   let bytes = 0;
   let done;
-  let _onFinish = (e) => {
+  let _onFinish = e => {
     if (!done) {
       done = true;
       onFinish && onFinish(e);
     }
   };
-
   return new ReadableStream({
     async pull(controller) {
       try {
-        const {done, value} = await iterator.next();
-
+        const {
+          done,
+          value
+        } = await iterator.next();
         if (done) {
-         _onFinish();
+          _onFinish();
           controller.close();
           return;
         }
-
         let len = value.byteLength;
         if (onProgress) {
           let loadedBytes = bytes += len;
@@ -35929,124 +38299,149 @@ const trackStream = (stream, chunkSize, onProgress, onFinish) => {
     }
   }, {
     highWaterMark: 2
-  })
+  });
 };
 
 const DEFAULT_CHUNK_SIZE = 64 * 1024;
-
-const {isFunction} = utils$1;
-
-const globalFetchAPI = (({Request, Response}) => ({
-  Request, Response
-}))(utils$1.global);
-
+const DEFAULT_REQUEST_OPTIONS = {
+  cache: 'default',
+  redirect: 'follow',
+  referrer: 'about:client',
+  referrerPolicy: '',
+  mode: 'cors',
+  integrity: '',
+  keepalive: false,
+  priority: 'auto',
+  window: null
+};
 const {
-  ReadableStream: ReadableStream$1, TextEncoder: TextEncoder$1
-} = utils$1.global;
+  isFunction
+} = utils$1;
 
+/**
+ * Encode a UTF-8 string to a Latin-1 byte string for use with btoa().
+ * This is a modern replacement for the deprecated unescape(encodeURIComponent(str)) pattern.
+ *
+ * @param {string} str The string to encode
+ *
+ * @returns {string} UTF-8 bytes as a Latin-1 string
+ */
+const encodeUTF8 = str => encodeURIComponent(str).replace(/%([0-9A-F]{2})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 
+// Node's WHATWG URL parser returns `username` and `password` percent-encoded.
+// Decode before composing the `auth` option so credentials such as
+// `my%40email.com:pass` are sent as `my@email.com:pass`. Falls back to the
+// original value for malformed input so a bad encoding never throws.
+const decodeURIComponentSafe = value => {
+  if (!utils$1.isString(value)) {
+    return value;
+  }
+  try {
+    return decodeURIComponent(value);
+  } catch (error) {
+    return value;
+  }
+};
 const test = (fn, ...args) => {
   try {
     return !!fn(...args);
   } catch (e) {
-    return false
+    return false;
   }
 };
-
-const factory = (env) => {
+const maybeWithAuthCredentials = url => {
+  const protocolIndex = url.indexOf('://');
+  let urlToCheck = url;
+  if (protocolIndex !== -1) {
+    urlToCheck = urlToCheck.slice(protocolIndex + 3);
+  }
+  return urlToCheck.includes('@') || urlToCheck.includes(':');
+};
+const factory = env => {
+  const globalObject = utils$1.global !== undefined && utils$1.global !== null ? utils$1.global : globalThis;
+  const {
+    ReadableStream,
+    TextEncoder
+  } = globalObject;
   env = utils$1.merge.call({
     skipUndefined: true
-  }, globalFetchAPI, env);
-
-  const {fetch: envFetch, Request, Response} = env;
+  }, {
+    Request: globalObject.Request,
+    Response: globalObject.Response
+  }, env);
+  const {
+    fetch: envFetch,
+    Request,
+    Response
+  } = env;
   const isFetchSupported = envFetch ? isFunction(envFetch) : typeof fetch === 'function';
   const isRequestSupported = isFunction(Request);
   const isResponseSupported = isFunction(Response);
-
   if (!isFetchSupported) {
     return false;
   }
-
-  const isReadableStreamSupported = isFetchSupported && isFunction(ReadableStream$1);
-
-  const encodeText = isFetchSupported && (typeof TextEncoder$1 === 'function' ?
-      ((encoder) => (str) => encoder.encode(str))(new TextEncoder$1()) :
-      async (str) => new Uint8Array(await new Request(str).arrayBuffer())
-  );
-
+  const isReadableStreamSupported = isFetchSupported && isFunction(ReadableStream);
+  const encodeText = isFetchSupported && (typeof TextEncoder === 'function' ? (encoder => str => encoder.encode(str))(new TextEncoder()) : async str => new Uint8Array(await new Request(str).arrayBuffer()));
   const supportsRequestStream = isRequestSupported && isReadableStreamSupported && test(() => {
     let duplexAccessed = false;
-
-    const hasContentType = new Request(platform.origin, {
-      body: new ReadableStream$1(),
+    const request = new Request(platform.origin, {
+      body: new ReadableStream(),
       method: 'POST',
       get duplex() {
         duplexAccessed = true;
         return 'half';
-      },
-    }).headers.has('Content-Type');
-
+      }
+    });
+    const hasContentType = request.headers.has('Content-Type');
+    if (request.body != null) {
+      request.body.cancel();
+    }
     return duplexAccessed && !hasContentType;
   });
-
-  const supportsResponseStream = isResponseSupported && isReadableStreamSupported &&
-    test(() => utils$1.isReadableStream(new Response('').body));
-
+  const supportsResponseStream = isResponseSupported && isReadableStreamSupported && test(() => utils$1.isReadableStream(new Response('').body));
   const resolvers = {
-    stream: supportsResponseStream && ((res) => res.body)
+    stream: supportsResponseStream && (res => res.body)
   };
-
-  isFetchSupported && ((() => {
+  isFetchSupported && (() => {
     ['text', 'arrayBuffer', 'blob', 'formData', 'stream'].forEach(type => {
       !resolvers[type] && (resolvers[type] = (res, config) => {
         let method = res && res[type];
-
         if (method) {
           return method.call(res);
         }
-
         throw new AxiosError(`Response type '${type}' is not supported`, AxiosError.ERR_NOT_SUPPORT, config);
       });
     });
-  })());
-
-  const getBodyLength = async (body) => {
+  })();
+  const getBodyLength = async body => {
     if (body == null) {
       return 0;
     }
-
     if (utils$1.isBlob(body)) {
       return body.size;
     }
-
     if (utils$1.isSpecCompliantForm(body)) {
       const _request = new Request(platform.origin, {
         method: 'POST',
-        body,
+        body
       });
       return (await _request.arrayBuffer()).byteLength;
     }
-
     if (utils$1.isArrayBufferView(body) || utils$1.isArrayBuffer(body)) {
       return body.byteLength;
     }
-
     if (utils$1.isURLSearchParams(body)) {
       body = body + '';
     }
-
     if (utils$1.isString(body)) {
       return (await encodeText(body)).byteLength;
     }
   };
-
   const resolveBodyLength = async (headers, body) => {
     const length = utils$1.toFiniteNumber(headers.getContentLength());
-
     return length == null ? getBodyLength(body) : length;
   };
-
-  return async (config) => {
+  return async config => {
     let {
       url,
       method,
@@ -36059,229 +38454,433 @@ const factory = (env) => {
       responseType,
       headers,
       withCredentials = 'same-origin',
-      fetchOptions
+      fetchOptions,
+      maxContentLength,
+      maxBodyLength,
+      maxRedirects
     } = resolveConfig(config);
-
+    const hasMaxContentLength = utils$1.isNumber(maxContentLength) && maxContentLength > -1;
+    const hasMaxBodyLength = utils$1.isNumber(maxBodyLength) && maxBodyLength > -1;
+    const own = key => utils$1.hasOwnProp(config, key) ? config[key] : undefined;
     let _fetch = envFetch || fetch;
-
     responseType = responseType ? (responseType + '').toLowerCase() : 'text';
-
-    let composedSignal = composeSignals$1([signal, cancelToken && cancelToken.toAbortSignal()], timeout);
-
+    let composedSignal = composeSignals([signal, cancelToken && cancelToken.toAbortSignal()], timeout);
     let request = null;
-
     const unsubscribe = composedSignal && composedSignal.unsubscribe && (() => {
       composedSignal.unsubscribe();
     });
-
     let requestContentLength;
 
+    // AxiosError we raise while the request body is being streamed. Captured
+    // by identity so the catch block can surface it directly, regardless of
+    // how the runtime wraps the resulting fetch rejection (undici exposes it
+    // as `err.cause`; some browsers drop the original error entirely).
+    let pendingBodyError = null;
+    const maxBodyLengthError = () => new AxiosError('Request body larger than maxBodyLength limit', AxiosError.ERR_BAD_REQUEST, config, request);
     try {
-      if (
-        onUploadProgress && supportsRequestStream && method !== 'get' && method !== 'head' &&
-        (requestContentLength = await resolveBodyLength(headers, data)) !== 0
-      ) {
-        let _request = new Request(url, {
-          method: 'POST',
-          body: data,
-          duplex: "half"
-        });
-
-        let contentTypeHeader;
-
-        if (utils$1.isFormData(data) && (contentTypeHeader = _request.headers.get('content-type'))) {
-          headers.setContentType(contentTypeHeader);
+      // HTTP basic authentication
+      let auth = undefined;
+      const configAuth = own('auth');
+      if (configAuth) {
+        const username = utils$1.getSafeProp(configAuth, 'username') || '';
+        const password = utils$1.getSafeProp(configAuth, 'password') || '';
+        auth = {
+          username,
+          password
+        };
+      }
+      if (maybeWithAuthCredentials(url)) {
+        const parsedURL = new URL(url, platform.origin);
+        if (!auth && (parsedURL.username || parsedURL.password)) {
+          const urlUsername = decodeURIComponentSafe(parsedURL.username);
+          const urlPassword = decodeURIComponentSafe(parsedURL.password);
+          auth = {
+            username: urlUsername,
+            password: urlPassword
+          };
         }
+        if (parsedURL.username || parsedURL.password) {
+          parsedURL.username = '';
+          parsedURL.password = '';
+          url = parsedURL.href;
+        }
+      }
+      if (auth) {
+        headers.delete('authorization');
+        headers.set('Authorization', 'Basic ' + btoa(encodeUTF8((auth.username || '') + ':' + (auth.password || ''))));
+      }
 
-        if (_request.body) {
-          const [onProgress, flush] = progressEventDecorator(
-            requestContentLength,
-            progressEventReducer(asyncDecorator(onUploadProgress))
-          );
-
-          data = trackStream(_request.body, DEFAULT_CHUNK_SIZE, onProgress, flush);
+      // Enforce maxContentLength for data: URLs up-front so we never materialize
+      // an oversized payload. The HTTP adapter applies the same check (see http.js
+      // "if (protocol === 'data:')" branch).
+      if (hasMaxContentLength && typeof url === 'string' && url.startsWith('data:')) {
+        const estimated = estimateDataURLDecodedBytes(url);
+        if (estimated > maxContentLength) {
+          throw new AxiosError('maxContentLength size of ' + maxContentLength + ' exceeded', AxiosError.ERR_BAD_RESPONSE, config, request);
         }
       }
 
+      // Enforce maxBodyLength against known-size bodies before dispatch using
+      // the body's *actual* size — never a caller-declared Content-Length,
+      // which could under-report to slip an oversized body past the check.
+      // Unknown-size streams return undefined here and are counted per-chunk
+      // below as fetch consumes them.
+      if (hasMaxBodyLength && method !== 'get' && method !== 'head') {
+        const outboundLength = await getBodyLength(data);
+        if (typeof outboundLength === 'number' && isFinite(outboundLength)) {
+          requestContentLength = outboundLength;
+          if (outboundLength > maxBodyLength) {
+            throw maxBodyLengthError();
+          }
+        }
+      }
+
+      // A streamed body under maxBodyLength must be counted as fetch consumes
+      // it; its size is never trusted from a caller-declared Content-Length.
+      const mustEnforceStreamBody = hasMaxBodyLength && (utils$1.isReadableStream(data) || utils$1.isStream(data));
+      const trackRequestStream = (stream, onProgress, flush) => trackStream(stream, DEFAULT_CHUNK_SIZE, loadedBytes => {
+        if (hasMaxBodyLength && loadedBytes > maxBodyLength) {
+          throw pendingBodyError = maxBodyLengthError();
+        }
+        onProgress && onProgress(loadedBytes);
+      }, flush);
+      if (supportsRequestStream && method !== 'get' && method !== 'head' && (onUploadProgress || mustEnforceStreamBody)) {
+        requestContentLength = requestContentLength == null ? await resolveBodyLength(headers, data) : requestContentLength;
+
+        // A declared length of 0 is only trusted to skip the wrap when we are
+        // not enforcing a stream limit (which must not rely on that header).
+        if (requestContentLength !== 0 || mustEnforceStreamBody) {
+          let _request = new Request(url, {
+            method: 'POST',
+            body: data,
+            duplex: 'half'
+          });
+          let contentTypeHeader;
+          if (utils$1.isFormData(data) && (contentTypeHeader = _request.headers.get('content-type'))) {
+            headers.setContentType(contentTypeHeader);
+          }
+          if (_request.body) {
+            const [onProgress, flush] = onUploadProgress && progressEventDecorator(requestContentLength, progressEventReducer(asyncDecorator(onUploadProgress))) || [];
+            data = trackRequestStream(_request.body, onProgress, flush);
+          }
+        }
+      } else if (mustEnforceStreamBody && !isRequestSupported && isReadableStreamSupported && method !== 'get' && method !== 'head') {
+        data = trackRequestStream(data);
+      } else if (mustEnforceStreamBody && isRequestSupported && !supportsRequestStream && method !== 'get' && method !== 'head') {
+        throw new AxiosError('Stream request bodies are not supported by the current fetch implementation', AxiosError.ERR_NOT_SUPPORT, config, request);
+      }
       if (!utils$1.isString(withCredentials)) {
         withCredentials = withCredentials ? 'include' : 'omit';
       }
 
       // Cloudflare Workers throws when credentials are defined
       // see https://github.com/cloudflare/workerd/issues/902
-      const isCredentialsSupported = isRequestSupported && "credentials" in Request.prototype;
+      const isCredentialsSupported = isRequestSupported && 'credentials' in Request.prototype;
 
-      const resolvedOptions = {
-        ...fetchOptions,
+      // If data is FormData and Content-Type is multipart/form-data without boundary,
+      // delete it so fetch can set it correctly with the boundary
+      if (utils$1.isFormData(data)) {
+        const contentType = headers.getContentType();
+        if (contentType && /^multipart\/form-data/i.test(contentType) && !/boundary=/i.test(contentType)) {
+          headers.delete('content-type');
+        }
+      }
+
+      // Set User-Agent header if not already set (fetch defaults to 'node' in Node.js)
+      headers.set('User-Agent', 'axios/' + VERSION, false);
+      const safeFetchOptions = fetchOptions == null ? fetchOptions : Object.assign(Object.create(null), fetchOptions);
+      if (safeFetchOptions) {
+        // These options are owned by Axios and are already reflected in the
+        // resolved Request passed to fetch.
+        delete safeFetchOptions.body;
+        delete safeFetchOptions.headers;
+        delete safeFetchOptions.method;
+        delete safeFetchOptions.signal;
+        delete safeFetchOptions.duplex;
+        delete safeFetchOptions.credentials;
+      }
+      const resolvedOptions = Object.assign(Object.create(null), safeFetchOptions, {
         signal: composedSignal,
         method: method.toUpperCase(),
-        headers: headers.normalize().toJSON(),
+        headers: toByteStringHeaderObject(headers.normalize()),
         body: data,
-        duplex: "half",
+        duplex: 'half',
         credentials: isCredentialsSupported ? withCredentials : undefined
-      };
-
+      });
+      if (isRequestSupported) {
+        utils$1.forEach(DEFAULT_REQUEST_OPTIONS, (value, key) => {
+          if (resolvedOptions[key] === undefined) {
+            resolvedOptions[key] = value;
+          }
+        });
+        if (resolvedOptions.signal === undefined) {
+          resolvedOptions.signal = null;
+        }
+        if (resolvedOptions.body === undefined) {
+          resolvedOptions.body = null;
+        }
+      }
+      if (maxRedirects === 0) {
+        resolvedOptions.redirect = 'manual';
+        if (safeFetchOptions) {
+          safeFetchOptions.redirect = 'manual';
+        }
+      }
       request = isRequestSupported && new Request(url, resolvedOptions);
+      let response = await (isRequestSupported ? _fetch(request, safeFetchOptions) : _fetch(url, resolvedOptions));
+      const responseHeaders = AxiosHeaders.from(response.headers);
 
-      let response = await (isRequestSupported ? _fetch(request, fetchOptions) : _fetch(url, resolvedOptions));
-
+      // Cheap pre-check: if the server honestly declares a content-length that
+      // already exceeds the cap, reject before we start streaming.
+      if (hasMaxContentLength) {
+        const declaredLength = utils$1.toFiniteNumber(responseHeaders.getContentLength());
+        if (declaredLength != null && declaredLength > maxContentLength) {
+          throw new AxiosError('maxContentLength size of ' + maxContentLength + ' exceeded', AxiosError.ERR_BAD_RESPONSE, config, request);
+        }
+      }
       const isStreamResponse = supportsResponseStream && (responseType === 'stream' || responseType === 'response');
-
-      if (supportsResponseStream && (onDownloadProgress || (isStreamResponse && unsubscribe))) {
+      if (supportsResponseStream && response.body && (onDownloadProgress || hasMaxContentLength || isStreamResponse && unsubscribe)) {
         const options = {};
-
         ['status', 'statusText', 'headers'].forEach(prop => {
           options[prop] = response[prop];
         });
-
-        const responseContentLength = utils$1.toFiniteNumber(response.headers.get('content-length'));
-
-        const [onProgress, flush] = onDownloadProgress && progressEventDecorator(
-          responseContentLength,
-          progressEventReducer(asyncDecorator(onDownloadProgress), true)
-        ) || [];
-
-        response = new Response(
-          trackStream(response.body, DEFAULT_CHUNK_SIZE, onProgress, () => {
-            flush && flush();
-            unsubscribe && unsubscribe();
-          }),
-          options
-        );
+        const responseContentLength = utils$1.toFiniteNumber(responseHeaders.getContentLength());
+        const [onProgress, flush] = onDownloadProgress && progressEventDecorator(responseContentLength, progressEventReducer(asyncDecorator(onDownloadProgress), true)) || [];
+        let bytesRead = 0;
+        const onChunkProgress = loadedBytes => {
+          if (hasMaxContentLength) {
+            bytesRead = loadedBytes;
+            if (bytesRead > maxContentLength) {
+              throw new AxiosError('maxContentLength size of ' + maxContentLength + ' exceeded', AxiosError.ERR_BAD_RESPONSE, config, request);
+            }
+          }
+          onProgress && onProgress(loadedBytes);
+        };
+        response = new Response(trackStream(response.body, DEFAULT_CHUNK_SIZE, onChunkProgress, () => {
+          flush && flush();
+          unsubscribe && unsubscribe();
+        }), options);
       }
-
       responseType = responseType || 'text';
-
       let responseData = await resolvers[utils$1.findKey(resolvers, responseType) || 'text'](response, config);
 
+      // Fallback enforcement for environments without ReadableStream support
+      // (legacy runtimes). Detect materialized size from typed output; skip
+      // streams/Response passthrough since the user will read those themselves.
+      if (hasMaxContentLength && !supportsResponseStream && !isStreamResponse) {
+        let materializedSize;
+        if (responseData != null) {
+          if (typeof responseData.byteLength === 'number') {
+            materializedSize = responseData.byteLength;
+          } else if (typeof responseData.size === 'number') {
+            materializedSize = responseData.size;
+          } else if (typeof responseData === 'string') {
+            materializedSize = typeof TextEncoder === 'function' ? new TextEncoder().encode(responseData).byteLength : responseData.length;
+          }
+        }
+        if (typeof materializedSize === 'number' && materializedSize > maxContentLength) {
+          throw new AxiosError('maxContentLength size of ' + maxContentLength + ' exceeded', AxiosError.ERR_BAD_RESPONSE, config, request);
+        }
+      }
       !isStreamResponse && unsubscribe && unsubscribe();
-
       return await new Promise((resolve, reject) => {
         settle(resolve, reject, {
           data: responseData,
-          headers: AxiosHeaders$1.from(response.headers),
+          headers: AxiosHeaders.from(response.headers),
           status: response.status,
           statusText: response.statusText,
           config,
           request
         });
-      })
+      });
     } catch (err) {
       unsubscribe && unsubscribe();
 
-      if (err && err.name === 'TypeError' && /Load failed|fetch/i.test(err.message)) {
-        throw Object.assign(
-          new AxiosError('Network Error', AxiosError.ERR_NETWORK, config, request),
-          {
-            cause: err.cause || err
-          }
-        )
+      // Safari can surface fetch aborts as a DOMException-like object whose
+      // branded getters throw. Prefer our composed signal reason before reading
+      // the caught error, preserving timeout vs cancellation semantics.
+      if (composedSignal && composedSignal.aborted && composedSignal.reason instanceof AxiosError) {
+        const canceledError = composedSignal.reason;
+        canceledError.config = config;
+        request && (canceledError.request = request);
+        if (err !== canceledError) {
+          // Non-enumerable to match native Error `cause` semantics so loggers
+          // don't recurse into circular fetch internals (see #7205).
+          Object.defineProperty(canceledError, 'cause', {
+            __proto__: null,
+            value: err,
+            writable: true,
+            enumerable: false,
+            configurable: true
+          });
+        }
+        throw canceledError;
       }
 
-      throw AxiosError.from(err, err && err.code, config, request);
+      // Surface a maxBodyLength violation we raised while the request body was
+      // being streamed. Matching by identity (rather than reading
+      // `err.cause.isAxiosError`) keeps the error deterministic across runtimes
+      // and avoids both prototype-pollution reads and mis-attributing a foreign
+      // AxiosError that merely happened to land in `err.cause`.
+      if (pendingBodyError) {
+        request && !pendingBodyError.request && (pendingBodyError.request = request);
+        throw pendingBodyError;
+      }
+
+      // Re-throw AxiosErrors we raised synchronously (data: URL / content-length
+      // pre-checks, response size enforcement) without re-wrapping them.
+      if (err instanceof AxiosError) {
+        request && !err.request && (err.request = request);
+        throw err;
+      }
+      if (err && err.name === 'TypeError' && /Load failed|fetch/i.test(err.message)) {
+        const networkError = new AxiosError('Network Error', AxiosError.ERR_NETWORK, config, request, err && err.response);
+        // Non-enumerable to match native Error `cause` semantics so loggers
+        // don't recurse into circular fetch internals (see #7205).
+        Object.defineProperty(networkError, 'cause', {
+          __proto__: null,
+          value: err.cause || err,
+          writable: true,
+          enumerable: false,
+          configurable: true
+        });
+        throw networkError;
+      }
+      throw AxiosError.from(err, err && err.code, config, request, err && err.response);
     }
-  }
+  };
 };
-
 const seedCache = new Map();
-
-const getFetch = (config) => {
-  let env = config ? config.env : {};
-  const {fetch, Request, Response} = env;
-  const seeds = [
-    Request, Response, fetch
-  ];
-
-  let len = seeds.length, i = len,
-    seed, target, map = seedCache;
-
+const getFetch = config => {
+  let env = config && config.env || {};
+  const {
+    fetch,
+    Request,
+    Response
+  } = env;
+  const seeds = [Request, Response, fetch];
+  let len = seeds.length,
+    i = len,
+    seed,
+    target,
+    map = seedCache;
   while (i--) {
     seed = seeds[i];
     target = map.get(seed);
-
-    target === undefined && map.set(seed, target = (i ? new Map() : factory(env)));
-
+    target === undefined && map.set(seed, target = i ? new Map() : factory(env));
     map = target;
   }
-
   return target;
 };
-
 getFetch();
 
+/**
+ * Known adapters mapping.
+ * Provides environment-specific adapters for Axios:
+ * - `http` for Node.js
+ * - `xhr` for browsers
+ * - `fetch` for fetch API-based requests
+ *
+ * @type {Object<string, Function|Object>}
+ */
 const knownAdapters = {
   http: httpAdapter,
   xhr: xhrAdapter,
   fetch: {
-    get: getFetch,
+    get: getFetch
   }
 };
 
+// Assign adapter names for easier debugging and identification
 utils$1.forEach(knownAdapters, (fn, value) => {
   if (fn) {
     try {
-      Object.defineProperty(fn, 'name', {value});
+      // Null-proto descriptors so a polluted Object.prototype.get cannot turn
+      // these data descriptors into accessor descriptors on the way in.
+      Object.defineProperty(fn, 'name', {
+        __proto__: null,
+        value
+      });
     } catch (e) {
       // eslint-disable-next-line no-empty
     }
-    Object.defineProperty(fn, 'adapterName', {value});
+    Object.defineProperty(fn, 'adapterName', {
+      __proto__: null,
+      value
+    });
   }
 });
 
-const renderReason = (reason) => `- ${reason}`;
+/**
+ * Render a rejection reason string for unknown or unsupported adapters
+ *
+ * @param {string} reason
+ * @returns {string}
+ */
+const renderReason = reason => `- ${reason}`;
 
-const isResolvedHandle = (adapter) => utils$1.isFunction(adapter) || adapter === null || adapter === false;
+/**
+ * Check if the adapter is resolved (function, null, or false)
+ *
+ * @param {Function|null|false} adapter
+ * @returns {boolean}
+ */
+const isResolvedHandle = adapter => utils$1.isFunction(adapter) || adapter === null || adapter === false;
 
-const adapters = {
-  getAdapter: (adapters, config) => {
-    adapters = utils$1.isArray(adapters) ? adapters : [adapters];
-
-    const {length} = adapters;
-    let nameOrAdapter;
-    let adapter;
-
-    const rejectedReasons = {};
-
-    for (let i = 0; i < length; i++) {
-      nameOrAdapter = adapters[i];
-      let id;
-
-      adapter = nameOrAdapter;
-
-      if (!isResolvedHandle(nameOrAdapter)) {
-        adapter = knownAdapters[(id = String(nameOrAdapter)).toLowerCase()];
-
-        if (adapter === undefined) {
-          throw new AxiosError(`Unknown adapter '${id}'`);
-        }
+/**
+ * Get the first suitable adapter from the provided list.
+ * Tries each adapter in order until a supported one is found.
+ * Throws an AxiosError if no adapter is suitable.
+ *
+ * @param {Array<string|Function>|string|Function} adapters - Adapter(s) by name or function.
+ * @param {Object} config - Axios request configuration
+ * @throws {AxiosError} If no suitable adapter is available
+ * @returns {Function} The resolved adapter function
+ */
+function getAdapter(adapters, config) {
+  adapters = utils$1.isArray(adapters) ? adapters : [adapters];
+  const {
+    length
+  } = adapters;
+  let nameOrAdapter;
+  let adapter;
+  const rejectedReasons = {};
+  for (let i = 0; i < length; i++) {
+    nameOrAdapter = adapters[i];
+    let id;
+    adapter = nameOrAdapter;
+    if (!isResolvedHandle(nameOrAdapter)) {
+      adapter = knownAdapters[(id = String(nameOrAdapter)).toLowerCase()];
+      if (adapter === undefined) {
+        throw new AxiosError(`Unknown adapter '${id}'`);
       }
-
-      if (adapter && (utils$1.isFunction(adapter) || (adapter = adapter.get(config)))) {
-        break;
-      }
-
-      rejectedReasons[id || '#' + i] = adapter;
     }
-
-    if (!adapter) {
-
-      const reasons = Object.entries(rejectedReasons)
-        .map(([id, state]) => `adapter ${id} ` +
-          (state === false ? 'is not supported by the environment' : 'is not available in the build')
-        );
-
-      let s = length ?
-        (reasons.length > 1 ? 'since :\n' + reasons.map(renderReason).join('\n') : ' ' + renderReason(reasons[0])) :
-        'as no adapter specified';
-
-      throw new AxiosError(
-        `There is no suitable adapter to dispatch the request ` + s,
-        'ERR_NOT_SUPPORT'
-      );
+    if (adapter && (utils$1.isFunction(adapter) || (adapter = adapter.get(config)))) {
+      break;
     }
+    rejectedReasons[id || '#' + i] = adapter;
+  }
+  if (!adapter) {
+    const reasons = Object.entries(rejectedReasons).map(([id, state]) => `adapter ${id} ` + (state === false ? 'is not supported by the environment' : 'is not available in the build'));
+    let s = length ? reasons.length > 1 ? 'since :\n' + reasons.map(renderReason).join('\n') : ' ' + renderReason(reasons[0]) : 'as no adapter specified';
+    throw new AxiosError(`There is no suitable adapter to dispatch the request ` + s, AxiosError.ERR_NOT_SUPPORT);
+  }
+  return adapter;
+}
 
-    return adapter;
-  },
+/**
+ * Exports Axios adapters and utility to resolve an adapter
+ */
+var adapters = {
+  /**
+   * Resolve an adapter from a list of adapter names or functions.
+   * @type {Function}
+   */
+  getAdapter,
+  /**
+   * Exposes all known adapters
+   * @type {Object<string, Function|Object>}
+   */
   adapters: knownAdapters
 };
 
@@ -36296,7 +38895,6 @@ function throwIfCancellationRequested(config) {
   if (config.cancelToken) {
     config.cancelToken.throwIfRequested();
   }
-
   if (config.signal && config.signal.aborted) {
     throw new CanceledError(null, config);
   }
@@ -36309,35 +38907,33 @@ function throwIfCancellationRequested(config) {
  *
  * @returns {Promise} The Promise to be fulfilled
  */
-function dispatchRequest(config) {
+function dispatchRequest(_config) {
+  // Interceptors may replace the merged config with an ordinary object. Flatten
+  // it at the dispatch boundary so shared prototype members cannot become
+  // request behavior, while preserving intentional template/class members.
+  const config = utils$1.toSafeFlatObject(_config);
   throwIfCancellationRequested(config);
-
-  config.headers = AxiosHeaders$1.from(config.headers);
+  config.headers = AxiosHeaders.from(utils$1.getSafeProp(config, 'headers'));
 
   // Transform request data
-  config.data = transformData.call(
-    config,
-    config.transformRequest
-  );
-
+  config.data = transformData.call(config, config.transformRequest);
   if (['post', 'put', 'patch'].indexOf(config.method) !== -1) {
     config.headers.setContentType('application/x-www-form-urlencoded', false);
   }
-
-  const adapter = adapters.getAdapter(config.adapter || defaults$1.adapter, config);
-
+  const adapter = adapters.getAdapter(config.adapter || defaults.adapter, config);
   return adapter(config).then(function onAdapterResolution(response) {
     throwIfCancellationRequested(config);
 
-    // Transform response data
-    response.data = transformData.call(
-      config,
-      config.transformResponse,
-      response
-    );
-
-    response.headers = AxiosHeaders$1.from(response.headers);
-
+    // Expose the current response on config so that transformResponse can
+    // attach it to any AxiosError it throws (e.g. on JSON parse failure).
+    // We clean it up afterwards to avoid polluting the config object.
+    config.response = response;
+    try {
+      response.data = transformData.call(config, config.transformResponse, response);
+    } finally {
+      delete config.response;
+    }
+    response.headers = AxiosHeaders.from(response.headers);
     return response;
   }, function onAdapterRejection(reason) {
     if (!isCancel(reason)) {
@@ -36345,15 +38941,15 @@ function dispatchRequest(config) {
 
       // Transform response data
       if (reason && reason.response) {
-        reason.response.data = transformData.call(
-          config,
-          config.transformResponse,
-          reason.response
-        );
-        reason.response.headers = AxiosHeaders$1.from(reason.response.headers);
+        config.response = reason.response;
+        try {
+          reason.response.data = transformData.call(config, config.transformResponse, reason.response);
+        } finally {
+          delete config.response;
+        }
+        reason.response.headers = AxiosHeaders.from(reason.response.headers);
       }
     }
-
     return Promise.reject(reason);
   });
 }
@@ -36366,7 +38962,6 @@ const validators$1 = {};
     return typeof thing === type || 'a' + (i < 1 ? 'n ' : ' ') + type;
   };
 });
-
 const deprecatedWarnings = {};
 
 /**
@@ -36380,39 +38975,28 @@ const deprecatedWarnings = {};
  */
 validators$1.transitional = function transitional(validator, version, message) {
   function formatMessage(opt, desc) {
-    return '[Axios v' + VERSION + '] Transitional option \'' + opt + '\'' + desc + (message ? '. ' + message : '');
+    return '[Axios v' + VERSION + "] Transitional option '" + opt + "'" + desc + (message ? '. ' + message : '');
   }
 
   // eslint-disable-next-line func-names
   return (value, opt, opts) => {
     if (validator === false) {
-      throw new AxiosError(
-        formatMessage(opt, ' has been removed' + (version ? ' in ' + version : '')),
-        AxiosError.ERR_DEPRECATED
-      );
+      throw new AxiosError(formatMessage(opt, ' has been removed' + (version ? ' in ' + version : '')), AxiosError.ERR_DEPRECATED);
     }
-
     if (version && !deprecatedWarnings[opt]) {
       deprecatedWarnings[opt] = true;
       // eslint-disable-next-line no-console
-      console.warn(
-        formatMessage(
-          opt,
-          ' has been deprecated since v' + version + ' and will be removed in the near future'
-        )
-      );
+      console.warn(formatMessage(opt, ' has been deprecated since v' + version + ' and will be removed in the near future'));
     }
-
     return validator ? validator(value, opt, opts) : true;
   };
 };
-
 validators$1.spelling = function spelling(correctSpelling) {
   return (value, opt) => {
     // eslint-disable-next-line no-console
     console.warn(`${opt} is likely a misspelling of ${correctSpelling}`);
     return true;
-  }
+  };
 };
 
 /**
@@ -36426,14 +39010,16 @@ validators$1.spelling = function spelling(correctSpelling) {
  */
 
 function assertOptions(options, schema, allowUnknown) {
-  if (typeof options !== 'object') {
+  if (typeof options !== 'object' || options === null) {
     throw new AxiosError('options must be an object', AxiosError.ERR_BAD_OPTION_VALUE);
   }
   const keys = Object.keys(options);
   let i = keys.length;
   while (i-- > 0) {
     const opt = keys[i];
-    const validator = schema[opt];
+    // Use hasOwnProperty so a polluted Object.prototype.<opt> cannot supply
+    // a non-function validator and cause a TypeError.
+    const validator = Object.prototype.hasOwnProperty.call(schema, opt) ? schema[opt] : undefined;
     if (validator) {
       const value = options[opt];
       const result = value === undefined || validator(value, opt, options);
@@ -36447,8 +39033,7 @@ function assertOptions(options, schema, allowUnknown) {
     }
   }
 }
-
-const validator = {
+var validator = {
   assertOptions,
   validators: validators$1
 };
@@ -36466,8 +39051,8 @@ class Axios {
   constructor(instanceConfig) {
     this.defaults = instanceConfig || {};
     this.interceptors = {
-      request: new InterceptorManager$1(),
-      response: new InterceptorManager$1()
+      request: new InterceptorManager(),
+      response: new InterceptorManager()
     };
   }
 
@@ -36484,28 +39069,35 @@ class Axios {
       return await this._request(configOrUrl, config);
     } catch (err) {
       if (err instanceof Error) {
-        let dummy = {};
-
-        Error.captureStackTrace ? Error.captureStackTrace(dummy) : (dummy = new Error());
-
-        // slice off the Error: ... line
-        const stack = dummy.stack ? dummy.stack.replace(/^.+\n/, '') : '';
         try {
+          let dummy = {};
+          Error.captureStackTrace ? Error.captureStackTrace(dummy) : dummy = new Error();
+          const dummyStack = dummy.stack;
+          let stack = '';
+
+          // slice off the Error: ... line
+          if (typeof dummyStack === 'string') {
+            const firstNewlineIndex = dummyStack.indexOf('\n');
+            stack = firstNewlineIndex === -1 ? '' : dummyStack.slice(firstNewlineIndex + 1);
+          }
           if (!err.stack) {
             err.stack = stack;
             // match without the 2 top stack lines
-          } else if (stack && !String(err.stack).endsWith(stack.replace(/^.+\n.+\n/, ''))) {
-            err.stack += '\n' + stack;
+          } else if (stack) {
+            const firstNewlineIndex = stack.indexOf('\n');
+            const secondNewlineIndex = firstNewlineIndex === -1 ? -1 : stack.indexOf('\n', firstNewlineIndex + 1);
+            const stackWithoutTwoTopLines = secondNewlineIndex === -1 ? '' : stack.slice(secondNewlineIndex + 1);
+            if (!String(err.stack).endsWith(stackWithoutTwoTopLines)) {
+              err.stack += '\n' + stack;
+            }
           }
         } catch (e) {
-          // ignore the case where "stack" is an un-writable property
+          // Ignore failures from custom stack hooks or un-writable stack properties.
         }
       }
-
       throw err;
     }
   }
-
   _request(configOrUrl, config) {
     /*eslint no-param-reassign:0*/
     // Allow for axios('example/url'[, config]) a la fetch API
@@ -36515,19 +39107,22 @@ class Axios {
     } else {
       config = configOrUrl || {};
     }
-
     config = mergeConfig(this.defaults, config);
-
-    const {transitional, paramsSerializer, headers} = config;
-
+    const {
+      transitional,
+      paramsSerializer,
+      headers
+    } = config;
     if (transitional !== undefined) {
       validator.assertOptions(transitional, {
         silentJSONParsing: validators.transitional(validators.boolean),
         forcedJSONParsing: validators.transitional(validators.boolean),
-        clarifyTimeoutError: validators.transitional(validators.boolean)
+        clarifyTimeoutError: validators.transitional(validators.boolean),
+        legacyInterceptorReqResOrdering: validators.transitional(validators.boolean),
+        advertiseZstdAcceptEncoding: validators.transitional(validators.boolean),
+        validateStatusUndefinedResolves: validators.transitional(validators.boolean)
       }, false);
     }
-
     if (paramsSerializer != null) {
       if (utils$1.isFunction(paramsSerializer)) {
         config.paramsSerializer = {
@@ -36547,29 +39142,20 @@ class Axios {
     } else {
       config.allowAbsoluteUrls = true;
     }
-
     validator.assertOptions(config, {
       baseUrl: validators.spelling('baseURL'),
       withXsrfToken: validators.spelling('withXSRFToken')
     }, true);
 
     // Set config.method
-    config.method = (config.method || this.defaults.method || 'get').toLowerCase();
+    config.method = (utils$1.getSafeProp(config, 'method') || utils$1.getSafeProp(this.defaults, 'method') || 'get').toLowerCase();
 
     // Flatten headers
-    let contextHeaders = headers && utils$1.merge(
-      headers.common,
-      headers[config.method]
-    );
-
-    headers && utils$1.forEach(
-      ['delete', 'get', 'head', 'post', 'put', 'patch', 'common'],
-      (method) => {
-        delete headers[method];
-      }
-    );
-
-    config.headers = AxiosHeaders$1.concat(contextHeaders, headers);
+    let contextHeaders = headers && utils$1.merge(headers.common, headers[config.method]);
+    headers && utils$1.forEach(methodList.concat('common'), method => {
+      delete headers[method];
+    });
+    config.headers = AxiosHeaders.concat(contextHeaders, headers);
 
     // filter out skipped interceptors
     const requestInterceptorChain = [];
@@ -36578,70 +39164,73 @@ class Axios {
       if (typeof interceptor.runWhen === 'function' && interceptor.runWhen(config) === false) {
         return;
       }
-
       synchronousRequestInterceptors = synchronousRequestInterceptors && interceptor.synchronous;
-
-      requestInterceptorChain.unshift(interceptor.fulfilled, interceptor.rejected);
+      const transitional = config.transitional || transitionalDefaults;
+      const legacyInterceptorReqResOrdering = transitional && transitional.legacyInterceptorReqResOrdering;
+      if (legacyInterceptorReqResOrdering) {
+        requestInterceptorChain.unshift(interceptor.fulfilled, interceptor.rejected);
+      } else {
+        requestInterceptorChain.push(interceptor.fulfilled, interceptor.rejected);
+      }
     });
-
     const responseInterceptorChain = [];
     this.interceptors.response.forEach(function pushResponseInterceptors(interceptor) {
       responseInterceptorChain.push(interceptor.fulfilled, interceptor.rejected);
     });
-
     let promise;
     let i = 0;
     let len;
-
     if (!synchronousRequestInterceptors) {
       const chain = [dispatchRequest.bind(this), undefined];
       chain.unshift(...requestInterceptorChain);
       chain.push(...responseInterceptorChain);
       len = chain.length;
-
       promise = Promise.resolve(config);
-
       while (i < len) {
         promise = promise.then(chain[i++], chain[i++]);
       }
-
       return promise;
     }
-
     len = requestInterceptorChain.length;
-
     let newConfig = config;
-
     while (i < len) {
       const onFulfilled = requestInterceptorChain[i++];
       const onRejected = requestInterceptorChain[i++];
       try {
-        newConfig = onFulfilled(newConfig);
+        newConfig = onFulfilled ? onFulfilled(newConfig) : newConfig;
       } catch (error) {
-        onRejected.call(this, error);
+        if (!onRejected) {
+          promise = Promise.reject(error);
+          break;
+        }
+        try {
+          const rejectedResult = onRejected.call(this, error);
+          if (utils$1.isThenable(rejectedResult)) {
+            promise = Promise.resolve(rejectedResult).then(() => dispatchRequest.call(this, newConfig));
+          }
+        } catch (rejectedError) {
+          promise = Promise.reject(rejectedError);
+        }
         break;
       }
     }
-
-    try {
-      promise = dispatchRequest.call(this, newConfig);
-    } catch (error) {
-      return Promise.reject(error);
+    if (!promise) {
+      try {
+        promise = dispatchRequest.call(this, newConfig);
+      } catch (error) {
+        promise = Promise.reject(error);
+      }
     }
-
     i = 0;
     len = responseInterceptorChain.length;
-
     while (i < len) {
       promise = promise.then(responseInterceptorChain[i++], responseInterceptorChain[i++]);
     }
-
     return promise;
   }
-
   getUri(config) {
     config = mergeConfig(this.defaults, config);
-    const fullPath = buildFullPath(config.baseURL, config.url, config.allowAbsoluteUrls);
+    const fullPath = buildFullPath(config.baseURL, config.url, config.allowAbsoluteUrls, config);
     return buildURL(fullPath, config.params, config.paramsSerializer);
   }
 }
@@ -36649,18 +39238,15 @@ class Axios {
 // Provide aliases for supported request methods
 utils$1.forEach(['delete', 'get', 'head', 'options'], function forEachMethodNoData(method) {
   /*eslint func-names:0*/
-  Axios.prototype[method] = function(url, config) {
+  Axios.prototype[method] = function (url, config) {
     return this.request(mergeConfig(config || {}, {
       method,
       url,
-      data: (config || {}).data
+      data: config && utils$1.hasOwnProp(config, 'data') ? config.data : undefined
     }));
   };
 });
-
-utils$1.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
-  /*eslint func-names:0*/
-
+utils$1.forEach(['post', 'put', 'patch', 'query'], function forEachMethodWithData(method) {
   function generateHTTPMethod(isForm) {
     return function httpMethod(url, data, config) {
       return this.request(mergeConfig(config || {}, {
@@ -36673,13 +39259,14 @@ utils$1.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method)
       }));
     };
   }
-
   Axios.prototype[method] = generateHTTPMethod();
 
-  Axios.prototype[method + 'Form'] = generateHTTPMethod(true);
+  // QUERY is a safe/idempotent read method; multipart form bodies don't fit
+  // its semantics, so no queryForm shorthand is generated.
+  if (method !== 'query') {
+    Axios.prototype[method + 'Form'] = generateHTTPMethod(true);
+  }
 });
-
-const Axios$1 = Axios;
 
 /**
  * A `CancelToken` is an object that can be used to request cancellation of an operation.
@@ -36693,21 +39280,16 @@ class CancelToken {
     if (typeof executor !== 'function') {
       throw new TypeError('executor must be a function.');
     }
-
     let resolvePromise;
-
     this.promise = new Promise(function promiseExecutor(resolve) {
       resolvePromise = resolve;
     });
-
     const token = this;
 
     // eslint-disable-next-line func-names
     this.promise.then(cancel => {
       if (!token._listeners) return;
-
       let i = token._listeners.length;
-
       while (i-- > 0) {
         token._listeners[i](cancel);
       }
@@ -36722,20 +39304,16 @@ class CancelToken {
         token.subscribe(resolve);
         _resolve = resolve;
       }).then(onfulfilled);
-
       promise.cancel = function reject() {
         token.unsubscribe(_resolve);
       };
-
       return promise;
     };
-
     executor(function cancel(message, config, request) {
       if (token.reason) {
         // Cancellation has already been requested
         return;
       }
-
       token.reason = new CanceledError(message, config, request);
       resolvePromise(token.reason);
     });
@@ -36759,7 +39337,6 @@ class CancelToken {
       listener(this.reason);
       return;
     }
-
     if (this._listeners) {
       this._listeners.push(listener);
     } else {
@@ -36780,18 +39357,13 @@ class CancelToken {
       this._listeners.splice(index, 1);
     }
   }
-
   toAbortSignal() {
     const controller = new AbortController();
-
-    const abort = (err) => {
+    const abort = err => {
       controller.abort(err);
     };
-
     this.subscribe(abort);
-
     controller.signal.unsubscribe = () => this.unsubscribe(abort);
-
     return controller.signal;
   }
 
@@ -36811,8 +39383,6 @@ class CancelToken {
   }
 }
 
-const CancelToken$1 = CancelToken;
-
 /**
  * Syntactic sugar for invoking a function and expanding an array for arguments.
  *
@@ -36820,7 +39390,7 @@ const CancelToken$1 = CancelToken;
  *
  *  ```js
  *  function f(x, y, z) {}
- *  var args = [1, 2, 3];
+ *  const args = [1, 2, 3];
  *  f.apply(null, args);
  *  ```
  *
@@ -36848,7 +39418,7 @@ function spread(callback) {
  * @returns {boolean} True if the payload is an error thrown by Axios, otherwise false
  */
 function isAxiosError(payload) {
-  return utils$1.isObject(payload) && (payload.isAxiosError === true);
+  return utils$1.isObject(payload) && payload.isAxiosError === true;
 }
 
 const HttpStatusCode = {
@@ -36888,14 +39458,22 @@ const HttpStatusCode = {
   Gone: 410,
   LengthRequired: 411,
   PreconditionFailed: 412,
+  /**
+   * @deprecated Use `ContentTooLarge` instead.
+   */
   PayloadTooLarge: 413,
+  ContentTooLarge: 413,
   UriTooLong: 414,
   UnsupportedMediaType: 415,
   RangeNotSatisfiable: 416,
   ExpectationFailed: 417,
   ImATeapot: 418,
   MisdirectedRequest: 421,
+  /**
+   * @deprecated Use `UnprocessableContent` instead.
+   */
   UnprocessableEntity: 422,
+  UnprocessableContent: 422,
   Locked: 423,
   FailedDependency: 424,
   TooEarly: 425,
@@ -36915,13 +39493,19 @@ const HttpStatusCode = {
   LoopDetected: 508,
   NotExtended: 510,
   NetworkAuthenticationRequired: 511,
+  WebServerReturnsAnUnknownError: 520,
+  WebServerIsDown: 521,
+  ConnectionTimedOut: 522,
+  OriginIsUnreachable: 523,
+  TimeoutOccurred: 524,
+  SslHandshakeFailed: 525,
+  InvalidSslCertificate: 526
 };
-
 Object.entries(HttpStatusCode).forEach(([key, value]) => {
-  HttpStatusCode[value] = key;
+  if (HttpStatusCode[value] === undefined) {
+    HttpStatusCode[value] = key;
+  }
 });
-
-const HttpStatusCode$1 = HttpStatusCode;
 
 /**
  * Create an instance of Axios
@@ -36931,32 +39515,35 @@ const HttpStatusCode$1 = HttpStatusCode;
  * @returns {Axios} A new instance of Axios
  */
 function createInstance(defaultConfig) {
-  const context = new Axios$1(defaultConfig);
-  const instance = bind(Axios$1.prototype.request, context);
+  const context = new Axios(defaultConfig);
+  const instance = bind(Axios.prototype.request, context);
 
   // Copy axios.prototype to instance
-  utils$1.extend(instance, Axios$1.prototype, context, {allOwnKeys: true});
+  utils$1.extend(instance, Axios.prototype, context, {
+    allOwnKeys: true
+  });
 
   // Copy context to instance
-  utils$1.extend(instance, context, null, {allOwnKeys: true});
+  utils$1.extend(instance, context, null, {
+    allOwnKeys: true
+  });
 
   // Factory for creating new instances
   instance.create = function create(instanceConfig) {
     return createInstance(mergeConfig(defaultConfig, instanceConfig));
   };
-
   return instance;
 }
 
 // Create the default instance to be exported
-const axios$1 = createInstance(defaults$1);
+const axios$1 = createInstance(defaults);
 
 // Expose Axios class to allow class inheritance
-axios$1.Axios = Axios$1;
+axios$1.Axios = Axios;
 
 // Expose Cancel & CancelToken
 axios$1.CanceledError = CanceledError;
-axios$1.CancelToken = CancelToken$1;
+axios$1.CancelToken = CancelToken;
 axios$1.isCancel = isCancel;
 axios$1.VERSION = VERSION;
 axios$1.toFormData = toFormData;
@@ -36971,7 +39558,6 @@ axios$1.Cancel = axios$1.CanceledError;
 axios$1.all = function all(promises) {
   return Promise.all(promises);
 };
-
 axios$1.spread = spread;
 
 // Expose isAxiosError
@@ -36979,15 +39565,10 @@ axios$1.isAxiosError = isAxiosError;
 
 // Expose mergeConfig
 axios$1.mergeConfig = mergeConfig;
-
-axios$1.AxiosHeaders = AxiosHeaders$1;
-
+axios$1.AxiosHeaders = AxiosHeaders;
 axios$1.formToJSON = thing => formDataToJSON(utils$1.isHTMLForm(thing) ? new FormData(thing) : thing);
-
 axios$1.getAdapter = adapters.getAdapter;
-
-axios$1.HttpStatusCode = HttpStatusCode$1;
-
+axios$1.HttpStatusCode = HttpStatusCode;
 axios$1.default = axios$1;
 
 var axios_1 = axios$1;
@@ -42231,16 +44812,16 @@ class CurveAMM$8 {
     }
 
     /**
-     * 根据自定义初始储备量计算 k 值
-     * @param {string|number|Decimal} initialVirtualSol - 初始虚拟SOL储备量（实际值，非lamports）
-     * @param {string|number|Decimal} initialVirtualToken - 初始虚拟Token储备量（实际值，非最小单位）
-     * @returns {Decimal} k值
+     * Calculate the k value based on custom initial reserves
+     * @param {string|number|Decimal} initialVirtualSol - Initial virtual SOL reserve (actual value, not lamports)
+     * @param {string|number|Decimal} initialVirtualToken - Initial virtual Token reserve (actual value, not smallest unit)
+     * @returns {Decimal} k value
      *
      * @example
-     * // 使用默认参数（30 SOL, 10.73亿 Token）
+     * // Use default parameters (30 SOL, 1.073 billion Token)
      * const k1 = CurveAMM.calculateK(30, 1073000000);
      *
-     * // 使用自定义参数（60 SOL, 10.73亿 Token）
+     * // Use custom parameters (60 SOL, 1.073 billion Token)
      * const k2 = CurveAMM.calculateK(60, 1073000000);
      */
     static calculateK(initialVirtualSol, initialVirtualToken) {
@@ -42250,7 +44831,7 @@ class CurveAMM$8 {
     }
 
     /**
-     * 使用默认参数计算初始k值（向后兼容）
+     * Calculate the initial k value using default parameters (backward compatible)
      * @returns {Decimal} Product k value of initial reserves
      */
     static calculateInitialK() {
@@ -42261,10 +44842,10 @@ class CurveAMM$8 {
     }
 
     /**
-     * 根据自定义初始储备量获取初始价格
-     * @param {string|number|Decimal} initialVirtualSol - 初始虚拟SOL储备量
-     * @param {string|number|Decimal} initialVirtualToken - 初始虚拟Token储备量
-     * @returns {bigint|null} u128格式的初始价格
+     * Get the initial price based on custom initial reserves
+     * @param {string|number|Decimal} initialVirtualSol - Initial virtual SOL reserve
+     * @param {string|number|Decimal} initialVirtualToken - Initial virtual Token reserve
+     * @returns {bigint|null} Initial price in u128 format
      */
     static getInitialPriceWithParams(initialVirtualSol, initialVirtualToken) {
         const sol = new Decimal$2(initialVirtualSol);
@@ -42274,7 +44855,7 @@ class CurveAMM$8 {
     }
 
     /**
-     * 使用默认参数获取初始价格（向后兼容）
+     * Get the initial price using default parameters (backward compatible)
      * Get initial price (SOL amount for 1 token)
      *
      * @returns {bigint|null} Initial price in u128 format, returns null if calculation fails
@@ -42287,12 +44868,12 @@ class CurveAMM$8 {
     }
 
     /**
-     * 根据自定义初始储备量计算从低价买入到高价所需的SOL和获得的Token
-     * @param {bigint|string|number} startLowPrice - 起始价格（较低）
-     * @param {bigint|string|number} endHighPrice - 目标价格（较高）
-     * @param {string|number|Decimal} initialVirtualSol - 初始虚拟SOL储备量
-     * @param {string|number|Decimal} initialVirtualToken - 初始虚拟Token储备量
-     * @returns {[bigint, bigint]|null} 成功返回 [需投入SOL数量, 获得token数量], 失败返回null
+     * Calculate the SOL required and Token obtained when buying from a low price up to a high price, based on custom initial reserves
+     * @param {bigint|string|number} startLowPrice - Starting price (lower)
+     * @param {bigint|string|number} endHighPrice - Target price (higher)
+     * @param {string|number|Decimal} initialVirtualSol - Initial virtual SOL reserve
+     * @param {string|number|Decimal} initialVirtualToken - Initial virtual Token reserve
+     * @returns {[bigint, bigint]|null} Returns [SOL amount to invest, token amount obtained] on success, null on failure
      */
     static buyFromPriceToPriceWithParams(startLowPrice, endHighPrice, initialVirtualSol, initialVirtualToken) {
         // Convert to Decimal for calculation
@@ -42342,7 +44923,7 @@ class CurveAMM$8 {
     }
 
     /**
-     * 使用默认参数计算从低价买入到高价（向后兼容）
+     * Calculate buying from a low price up to a high price using default parameters (backward compatible)
      * Calculate SOL required and token amount obtained when buying tokens from low to high price
      *
      * @param {bigint|string|number} startLowPrice - Starting price (lower)
@@ -42360,12 +44941,12 @@ class CurveAMM$8 {
     }
 
     /**
-     * 根据自定义初始储备量计算从高价卖出到低价所需的Token和获得的SOL
-     * @param {bigint|string|number} startHighPrice - 起始价格（较高）
-     * @param {bigint|string|number} endLowPrice - 目标价格（较低）
-     * @param {string|number|Decimal} initialVirtualSol - 初始虚拟SOL储备量
-     * @param {string|number|Decimal} initialVirtualToken - 初始虚拟Token储备量
-     * @returns {[bigint, bigint]|null} 成功返回 [需卖出token数量, 获得SOL数量], 失败返回null
+     * Calculate the Token required and SOL obtained when selling from a high price down to a low price, based on custom initial reserves
+     * @param {bigint|string|number} startHighPrice - Starting price (higher)
+     * @param {bigint|string|number} endLowPrice - Target price (lower)
+     * @param {string|number|Decimal} initialVirtualSol - Initial virtual SOL reserve
+     * @param {string|number|Decimal} initialVirtualToken - Initial virtual Token reserve
+     * @returns {[bigint, bigint]|null} Returns [token amount to sell, SOL amount obtained] on success, null on failure
      */
     static sellFromPriceToPriceWithParams(startHighPrice, endLowPrice, initialVirtualSol, initialVirtualToken) {
         // Convert to Decimal for calculation
@@ -42415,7 +44996,7 @@ class CurveAMM$8 {
     }
 
     /**
-     * 使用默认参数计算从高价卖出到低价（向后兼容）
+     * Calculate selling from a high price down to a low price using default parameters (backward compatible)
      * Calculate SOL amount obtained when selling tokens from high to low price
      *
      * @param {bigint|string|number} startHighPrice - Starting price (higher)
@@ -42433,9 +45014,9 @@ class CurveAMM$8 {
     }
 
     /**
-     * 根据价格和自定义k值计算储备量
-     * @param {bigint|string} price - u128格式价格
-     * @param {Decimal} k - 自定义k值
+     * Calculate reserves based on a price and a custom k value
+     * @param {bigint|string} price - Price in u128 format
+     * @param {Decimal} k - Custom k value
      * @returns {{solReserve: Decimal, tokenReserve: Decimal}|null}
      */
     static priceToReservesWithK(price, k) {
@@ -42468,10 +45049,10 @@ class CurveAMM$8 {
     }
 
     /**
-     * 根据价格和自定义初始储备量计算储备量
-     * @param {bigint|string} price - u128格式价格
-     * @param {string|number|Decimal} initialVirtualSol - 初始虚拟SOL储备量
-     * @param {string|number|Decimal} initialVirtualToken - 初始虚拟Token储备量
+     * Calculate reserves based on a price and custom initial reserves
+     * @param {bigint|string} price - Price in u128 format
+     * @param {string|number|Decimal} initialVirtualSol - Initial virtual SOL reserve
+     * @param {string|number|Decimal} initialVirtualToken - Initial virtual Token reserve
      * @returns {{solReserve: Decimal, tokenReserve: Decimal}|null}
      */
     static priceToReservesWithParams(price, initialVirtualSol, initialVirtualToken) {
@@ -42480,8 +45061,8 @@ class CurveAMM$8 {
     }
 
     /**
-     * 使用默认参数根据价格计算储备量（向后兼容）
-     * @param {bigint|string} price - u128格式价格
+     * Calculate reserves based on a price using default parameters (backward compatible)
+     * @param {bigint|string} price - Price in u128 format
      * @returns {{solReserve: Decimal, tokenReserve: Decimal}|null}
      */
     static priceToReserves(price) {
@@ -42562,12 +45143,12 @@ class CurveAMM$8 {
     }
 
     /**
-     * 根据自定义初始储备量，基于起始价格和SOL输入量计算token输出量和结束价格
-     * @param {bigint|string|number} startLowPrice - 起始价格
-     * @param {bigint|string|number} solInputAmount - 用于买入的SOL数量
-     * @param {string|number|Decimal} initialVirtualSol - 初始虚拟SOL储备量
-     * @param {string|number|Decimal} initialVirtualToken - 初始虚拟Token储备量
-     * @returns {[bigint, bigint]|null} 成功返回 [交易后价格, 获得的token数量], 失败返回null
+     * Based on custom initial reserves, calculate the token output amount and ending price from a starting price and SOL input amount
+     * @param {bigint|string|number} startLowPrice - Starting price
+     * @param {bigint|string|number} solInputAmount - SOL amount used for buying
+     * @param {string|number|Decimal} initialVirtualSol - Initial virtual SOL reserve
+     * @param {string|number|Decimal} initialVirtualToken - Initial virtual Token reserve
+     * @returns {[bigint, bigint]|null} Returns [price after transaction, token amount obtained] on success, null on failure
      */
     static buyFromPriceWithSolInputWithParams(startLowPrice, solInputAmount, initialVirtualSol, initialVirtualToken) {
         // Convert to Decimal for calculation
@@ -42628,7 +45209,7 @@ class CurveAMM$8 {
     }
 
     /**
-     * 使用默认参数计算token输出量和结束价格（向后兼容）
+     * Calculate the token output amount and ending price using default parameters (backward compatible)
      * Calculate token output amount and ending price based on starting price and SOL input amount
      *
      * @param {bigint|string|number} startLowPrice - Starting price
@@ -42646,12 +45227,12 @@ class CurveAMM$8 {
     }
 
     /**
-     * 根据自定义初始储备量，基于起始价格和token输入量计算SOL输出量和结束价格
-     * @param {bigint|string|number} startHighPrice - 起始价格
-     * @param {bigint|string|number} tokenInputAmount - 要卖出的token数量
-     * @param {string|number|Decimal} initialVirtualSol - 初始虚拟SOL储备量
-     * @param {string|number|Decimal} initialVirtualToken - 初始虚拟Token储备量
-     * @returns {[bigint, bigint]|null} 成功返回 [交易后价格, 获得的SOL数量], 失败返回null
+     * Based on custom initial reserves, calculate the SOL output amount and ending price from a starting price and token input amount
+     * @param {bigint|string|number} startHighPrice - Starting price
+     * @param {bigint|string|number} tokenInputAmount - Token amount to sell
+     * @param {string|number|Decimal} initialVirtualSol - Initial virtual SOL reserve
+     * @param {string|number|Decimal} initialVirtualToken - Initial virtual Token reserve
+     * @returns {[bigint, bigint]|null} Returns [price after transaction, SOL amount obtained] on success, null on failure
      */
     static sellFromPriceWithTokenInputWithParams(startHighPrice, tokenInputAmount, initialVirtualSol, initialVirtualToken) {
         // Convert to Decimal for calculation
@@ -42686,7 +45267,7 @@ class CurveAMM$8 {
         // Calculate token reserves for ending state
         const endTokenReserve = startTokenReserve.add(tokenInputDec);
 
-        // 根据AMM公式计算结束状态的SOL储备量
+        // Calculate the SOL reserve for the ending state according to the AMM formula
         const endSolReserve = k.div(endTokenReserve);
 
         // Calculate SOL output amount
@@ -42712,7 +45293,7 @@ class CurveAMM$8 {
     }
 
     /**
-     * 使用默认参数计算SOL输出量和结束价格（向后兼容）
+     * Calculate the SOL output amount and ending price using default parameters (backward compatible)
      * Calculate SOL output amount and ending price based on starting price and token input amount
      *
      * @param {bigint|string|number} startHighPrice - Starting price
@@ -42770,14 +45351,14 @@ class CurveAMM$8 {
         // Calculate token reserves for ending state
         const endTokenReserve = startTokenReserve.sub(tokenOutputDec);
 
-        //console.log('buyFromPriceWithTokenOutput  结束token储备 = 起始token储备 - token输出量:', endTokenReserve.toString());
+        //console.log('buyFromPriceWithTokenOutput  ending token reserve = starting token reserve - token output amount:', endTokenReserve.toString());
 
         // Check if token reserves are sufficient
         if (endTokenReserve.lte(0)) {
             return null;
         }
 
-        // 根据AMM公式计算结束状态的SOL储备量
+        // Calculate the SOL reserve for the ending state according to the AMM formula
         const endSolReserve = k.div(endTokenReserve);
 
         // Calculate required SOL input amount
@@ -42803,7 +45384,7 @@ class CurveAMM$8 {
     }
 
     /**
-     * 基于起始价格和期望token输出量计算需要的SOL输入量和结束价格（带自定义流动池参数）
+     * Based on a starting price and desired token output amount, calculate the required SOL input amount and ending price (with custom liquidity pool parameters)
      * Based on starting price and desired token output, calculate required SOL input and ending price (with custom pool params)
      *
      * @param {bigint|string|number} startLowPrice - Starting price (lower)
@@ -42948,7 +45529,7 @@ class CurveAMM$8 {
     }
 
     /**
-     * 基于起始价格和期望SOL输出量计算需要的token输入量和结束价格（带自定义流动池参数）
+     * Based on a starting price and desired SOL output amount, calculate the required token input amount and ending price (with custom liquidity pool parameters)
      * Based on starting price and desired SOL output, calculate required token input and ending price (with custom pool params)
      *
      * @param {bigint|string|number} startHighPrice - Starting price (higher)
@@ -43197,10 +45778,10 @@ class FastModule$1 {
   }
 
   /**
-   * Get token list (获取代币列表)
+   * Get token list
    * @param {Object} options - Query parameters
-   * @param {number} options.limit - Items per page, default 10 (每页数量，默认 10)
-   * @param {number} options.before_timestamp - Cursor for pagination (分页游标，Unix 时间戳)
+   * @param {number} options.limit - Items per page, default 10
+   * @param {number} options.before_timestamp - Cursor for pagination (Unix timestamp)
    * @returns {Promise<Object>} Token list data
    *
    * @example
@@ -43246,8 +45827,8 @@ class FastModule$1 {
    * const page2 = await sdk.fast.mints({ limit: 5, before_timestamp: page1.data.next_cursor });
    *
    * // Access token data:
-   * const tokens = result.data.tokens; // 完整代币对象数组
-   * const mintAddresses = tokens.map(t => t.mint_account); // 提取代币地址
+   * const tokens = result.data.tokens; // Full array of token objects
+   * const mintAddresses = tokens.map(t => t.mint_account); // Extract token addresses
    */
   async mints(options = {}) {
     const params = {
@@ -43266,8 +45847,8 @@ class FastModule$1 {
   }
 
   /**
-   * Get token details (获取代币详情信息)
-   * @param {string} mint - Token mint address (代币地址)
+   * Get token details
+   * @param {string} mint - Token mint address
    * @returns {Promise<Object>} Token details data
    *
    * @example
@@ -43321,11 +45902,11 @@ class FastModule$1 {
   }
 
   /**
-   * 直接API调用方法
+   * Direct API call method
    * @private
-   * @param {Object} config - 数据配置
-   * @param {Object} params - 请求参数
-   * @returns {Promise<Object>} API响应数据
+   * @param {Object} config - Data configuration
+   * @param {Object} params - Request parameters
+   * @returns {Promise<Object>} API response data
    */
   async _directApiCall(config, params = {}) {
     // Ensure FastModule is properly configured before making API calls
@@ -43346,33 +45927,33 @@ class FastModule$1 {
         url: url
       };
 
-      // 根据请求方法设置参数
+      // Set parameters based on request method
       if (config.method === 'POST') {
-        requestConfig.data = queryParams; // POST 请求使用 data
+        requestConfig.data = queryParams; // POST request uses data
       } else {
-        requestConfig.params = queryParams; // GET 请求使用 params
+        requestConfig.params = queryParams; // GET request uses params
       }
 
       const response = await this.httpClient.request(requestConfig);
 
-      // 检查新旧API响应格式
-      // 新格式: { code: 200, msg: "success", data: {...} }
-      // 旧格式: { success: true, data: {...}, message: "..." }
+      // Check new and old API response formats
+      // New format: { code: 200, msg: "success", data: {...} }
+      // Old format: { success: true, data: {...}, message: "..." }
       const isNewFormat = response.data && typeof response.data.code === 'number';
       const isOldFormat = response.data && typeof response.data.success === 'boolean';
 
       if (isNewFormat) {
-        // 新 API 格式
+        // New API format
         if (response.data.code !== 200) {
           throw new Error(`API请求失败: ${response.data.msg || '未知错误'}`);
         }
       } else if (isOldFormat) {
-        // 旧 API 格式（向后兼容）
+        // Old API format (backward compatible)
         if (!response.data.success) {
           throw new Error(`API请求失败: ${response.data.message || '未知错误'}`);
         }
       } else {
-        // 未知格式
+        // Unknown format
         throw new Error('API返回格式无法识别');
       }
 
@@ -43380,14 +45961,14 @@ class FastModule$1 {
 
     } catch (error) {
       if (error.response) {
-        // API返回错误
+        // API returned error
         const errorMsg = error.response.data?.msg || error.response.data?.message || error.message;
         throw new Error(`API请求失败 [${error.response.status}]: ${errorMsg}`);
       } else if (error.request) {
-        // 网络错误
+        // Network error
         throw new Error(`网络请求失败: 无法连接到 ${this.baseUrl}`);
       } else {
-        // 其他错误
+        // Other errors
         throw new Error(`请求处理失败: ${error.message}`);
       }
     }
@@ -43396,71 +45977,71 @@ class FastModule$1 {
 
 
   /**
-   * 获取订单数据 Get Orders Data (查询活跃订单 Active Orders)
-   * @param {string} mint - 代币地址 Token mint address
-   * @param {Object} options - 查询参数 Query parameters
-   * @param {string} options.type - 订单类型 Order type: "up_orders" (做空/short) 或 "down_orders" (做多/long)
-   * @param {number} options.page - 页码，默认1 Page number, default 1
-   * @param {number} options.limit - 每页数量，默认500 Items per page, default 500
-   * @returns {Promise<Object>} 订单数据，包含订单列表及分页信息 Order data with order list and pagination info
+   * Get Orders Data (Active Orders)
+   * @param {string} mint - Token mint address
+   * @param {Object} options - Query parameters
+   * @param {string} options.type - Order type: "up_orders" (short) or "down_orders" (long)
+   * @param {number} options.page - Page number, default 1
+   * @param {number} options.limit - Items per page, default 500
+   * @returns {Promise<Object>} Order data with order list and pagination info
    *
    * @example
-   * // 获取做多订单 Get long orders
+   * // Get long orders
    * const ordersData = await sdk.fast.orders('T3NFPvYvpULCTgrhHb4b4Sj5J1qtSNvyKZfE8hCvuKM', { type: 'down_orders' });
    *
-   * // 返回值示例 Return value example (compatible with chain.js format):
+   * // Return value example (compatible with chain.js format):
    * // {
    * //   "success": true,
    * //   "data": {
    * //     "orders": [
    * //       {
-   * //         "index": 0,                                            // 订单在 OrderBook 中的索引位置
-   * //         "user": "7621yjkZJ1jxBHw3oCPoazFfMx82NWBSARk2AGV7EBig",   // 用户地址
-   * //         "lock_lp_start_price": "2656104380242311276",          // LP 开始价格（字符串）
-   * //         "lock_lp_end_price": "2325402748045870207",            // LP 结束价格（字符串）
-   * //         "open_price": "2795899347623485554",                   // 开仓价格（字符串）
-   * //         "order_id": "0",                                       // 订单 ID（字符串）
-   * //         "lock_lp_sol_amount": 1880793407,                      // LP 锁定 SOL 数量（lamports）
-   * //         "lock_lp_token_amount": 75677963031921,                // LP 锁定代币数量（最小单位）
-   * //         "next_lp_sol_amount": 0,                               // Next LP SOL 数量
-   * //         "next_lp_token_amount": 0,                             // Next LP Token 数量
-   * //         "margin_init_sol_amount": 418211213,                   // 初始保证金
-   * //         "margin_sol_amount": 418211213,                        // 保证金 SOL 数量（lamports）
-   * //         "borrow_amount": 2276435100,                           // 借款数量（lamports）
-   * //         "position_asset_amount": 75677963031921,               // 持仓资产数量（最小单位）
-   * //         "realized_sol_amount": 0,                              // 已实现收益
-   * //         "version": 2,                                          // 版本号
-   * //         "start_time": 1764047379,                              // 开始时间（Unix 时间戳）
-   * //         "end_time": 1764652179,                                // 结束时间（Unix 时间戳）
-   * //         "next_order": 1,                                       // 链表中下一个订单索引 (65535=none)
-   * //         "prev_order": 65535,                                   // 链表中上一个订单索引 (65535=none)
-   * //         "borrow_fee": 1200,                                    // 借款费用（基点，1200 = 12%）
-   * //         "order_type": "down_orders"                            // 订单类型（字符串）
+   * //         "index": 0,                                            // Order index position in the OrderBook
+   * //         "user": "7621yjkZJ1jxBHw3oCPoazFfMx82NWBSARk2AGV7EBig",   // User address
+   * //         "lock_lp_start_price": "2656104380242311276",          // LP start price (string)
+   * //         "lock_lp_end_price": "2325402748045870207",            // LP end price (string)
+   * //         "open_price": "2795899347623485554",                   // Open price (string)
+   * //         "order_id": "0",                                       // Order ID (string)
+   * //         "lock_lp_sol_amount": 1880793407,                      // LP locked SOL amount (lamports)
+   * //         "lock_lp_token_amount": 75677963031921,                // LP locked token amount (min unit)
+   * //         "next_lp_sol_amount": 0,                               // Next LP SOL amount
+   * //         "next_lp_token_amount": 0,                             // Next LP Token amount
+   * //         "margin_init_sol_amount": 418211213,                   // Initial margin
+   * //         "margin_sol_amount": 418211213,                        // Margin SOL amount (lamports)
+   * //         "borrow_amount": 2276435100,                           // Borrow amount (lamports)
+   * //         "position_asset_amount": 75677963031921,               // Position asset amount (min unit)
+   * //         "realized_sol_amount": 0,                              // Realized profit
+   * //         "version": 2,                                          // Version number
+   * //         "start_time": 1764047379,                              // Start time (Unix timestamp)
+   * //         "end_time": 1764652179,                                // End time (Unix timestamp)
+   * //         "next_order": 1,                                       // Next order index in linked list (65535=none)
+   * //         "prev_order": 65535,                                   // Previous order index in linked list (65535=none)
+   * //         "borrow_fee": 1200,                                    // Borrow fee (basis points, 1200 = 12%)
+   * //         "order_type": "down_orders"                            // Order type (string)
    * //       }
    * //     ],
-   * //     "total": 10,                                               // 总订单数量 (total_count)
-   * //     "order_type": "down_orders",                               // 订单类型（字符串）
-   * //     "mint_account": "T3NFPvYvpULCTgrhHb4b4Sj5J1qtSNvyKZfE8hCvuKM", // 查询的代币地址
-   * //     "page": 1,                                                 // 当前页码
-   * //     "limit": 3,                                                // 每页限制
-   * //     "has_next": true,                                          // 是否有下一页
-   * //     "has_prev": false                                          // 是否有上一页
+   * //     "total": 10,                                               // Total order count (total_count)
+   * //     "order_type": "down_orders",                               // Order type (string)
+   * //     "mint_account": "T3NFPvYvpULCTgrhHb4b4Sj5J1qtSNvyKZfE8hCvuKM", // Queried token address
+   * //     "page": 1,                                                 // Current page number
+   * //     "limit": 3,                                                // Items per page
+   * //     "has_next": true,                                          // Whether there is a next page
+   * //     "has_prev": false                                          // Whether there is a previous page
    * //   },
-   * //   "message": "Operation successful"                            // 操作结果消息
+   * //   "message": "Operation successful"                            // Operation result message
    * // }
    *
-   * // 访问订单数据 Access order data:
-   * const orders = ordersData.data.orders;                        // 订单数组
-   * const totalOrders = ordersData.data.total;                    // 总订单数量
-   * const firstOrder = orders[0];                                 // 第一个订单
-   * const userAddress = firstOrder.user;                          // 用户地址
-   * const marginAmount = firstOrder.margin_sol_amount;            // 保证金数量（lamports）
-   * const borrowFee = firstOrder.borrow_fee;                      // 借款费用（基点）
+   * // Access order data:
+   * const orders = ordersData.data.orders;                        // Order array
+   * const totalOrders = ordersData.data.total;                    // Total order count
+   * const firstOrder = orders[0];                                 // First order
+   * const userAddress = firstOrder.user;                          // User address
+   * const marginAmount = firstOrder.margin_sol_amount;            // Margin amount (lamports)
+   * const borrowFee = firstOrder.borrow_fee;                      // Borrow fee (basis points)
    *
-   * // 获取做空订单 Get short orders:
+   * // Get short orders:
    * const shortOrders = await sdk.fast.orders(mint, { type: 'up_orders' });
    *
-   * // 分页获取订单 Get paginated orders:
+   * // Get paginated orders:
    * const pageTwo = await sdk.fast.orders(mint, { type: 'down_orders', page: 2, limit: 100 });
    */
   async orders(mint, options = {}) {
@@ -43574,17 +46155,17 @@ class FastModule$1 {
       }));
 
       // Sort orders by lock_lp_start_price
-      // down_orders (做多): descending order (从大到小)
-      // up_orders (做空): ascending order (从小到大)
+      // down_orders (long): descending order
+      // up_orders (short): ascending order
       processedOrders.sort((a, b) => {
         const priceA = BigInt(a.lock_lp_start_price);
         const priceB = BigInt(b.lock_lp_start_price);
 
         if (type === 'down_orders') {
-          // 做多订单：从大到小排列
+          // Long orders: sort in descending order
           return priceB > priceA ? 1 : (priceB < priceA ? -1 : 0);
         } else {
-          // 做空订单：从小到大排列
+          // Short orders: sort in ascending order
           return priceA > priceB ? 1 : (priceA < priceB ? -1 : 0);
         }
       });
@@ -43621,9 +46202,9 @@ class FastModule$1 {
   }
 
   /**
-   * Get token price (获取代币价格)
-   * @param {string} mint - Token mint address (代币地址)
-   * @returns {Promise<string>} Latest price string (最新价格字符串)
+   * Get token price
+   * @param {string} mint - Token mint address
+   * @returns {Promise<string>} Latest price string
    *
    * @example
    * // Get token latest price
@@ -43639,12 +46220,12 @@ class FastModule$1 {
     // Call mint_info API
     const result = await this.mint_info(mint);
 
-    // Check return data (新格式: { code: 200, msg: "success", data: {...} })
+    // Check return data (new format: { code: 200, msg: "success", data: {...} })
     if (!result || !result.data) {
       throw new Error('price: 无法获取代币信息 Unable to fetch token information');
     }
 
-    // Extract latest price (新格式直接返回对象，不是数组)
+    // Extract latest price (new format returns object directly, not array)
     let latestPrice = result.data.latest_price;
 
     if (!latestPrice) {
@@ -43660,16 +46241,16 @@ class FastModule$1 {
   }
 
   /**
-   * Get User Active Orders (获取用户活跃订单)
+   * Get User Active Orders
    * Compatible with chain.js user_orders() method
    *
-   * @param {string} user - User wallet address (用户钱包地址)
-   * @param {string} mint - Token mint address (optional, null/undefined for all tokens) (代币地址，可选)
-   * @param {Object} options - Query parameters (查询参数)
-   * @param {string} options.direction - Order direction (optional: 'up'=short, 'dn'=long, omit=all) (订单方向)
-   * @param {number} options.page - Page number, default 1 (页码，默认1)
-   * @param {number} options.limit - Items per page, default 20 (每页数量，默认20)
-   * @param {string} options.order_by - Sort order: 'start_time_desc' or 'start_time_asc', default 'start_time_desc' (排序方式)
+   * @param {string} user - User wallet address
+   * @param {string} mint - Token mint address (optional, null/undefined for all tokens)
+   * @param {Object} options - Query parameters
+   * @param {string} options.direction - Order direction (optional: 'up'=short, 'dn'=long, omit=all)
+   * @param {number} options.page - Page number, default 1
+   * @param {number} options.limit - Items per page, default 20
+   * @param {string} options.order_by - Sort order: 'start_time_desc' or 'start_time_asc', default 'start_time_desc'
    * @returns {Promise<Object>} User orders data compatible with chain.js format
    *
    * @example
@@ -43915,8 +46496,8 @@ function transformOrdersData$1(ordersData) {
     lock_lp_end_price: BigInt(order.lock_lp_end_price),
     lock_lp_sol_amount: order.lock_lp_sol_amount,
     lock_lp_token_amount: order.lock_lp_token_amount,
-    index: order.index,           // 保留 OrderBook 中的索引
-    order_id: order.order_id       // 保留订单ID
+    index: order.index,           // Preserve the index in the OrderBook
+    order_id: order.order_id       // Preserve the order ID
   }));
 }
 
@@ -43925,164 +46506,164 @@ function transformOrdersData$1(ordersData) {
  * @property {number} order_type - Order type (e.g., 1 for down_orders, 2 for up_orders).
  * @property {bigint} lock_lp_start_price - Locked liquidity start price.
  * @property {bigint} lock_lp_end_price - Locked liquidity end price.
- * @property {number} lock_lp_sol_amount - 锁定的SOL数量。
- * @property {number} lock_lp_token_amount - 锁定的代币数量。
+ * @property {number} lock_lp_sol_amount - Locked SOL amount.
+ * @property {number} lock_lp_token_amount - Locked token amount.
  */
 
 /**
  * @typedef {Object} OverlapResult
- * @property {boolean} no_overlap - 是否没有重叠。`true` 表示没有重叠（可以安全插入），`false` 表示有重叠。
- * @property {number[]} close_insert_indices - 平仓时插入订单簿的位置索引数组。包含主位置索引及其前后3个节点的索引。
- * @property {string} overlap_reason - 重叠原因说明。当没有重叠时为空字符串，有重叠时说明具体原因。
+ * @property {boolean} no_overlap - Whether there is no overlap. `true` means no overlap (safe to insert), `false` means there is an overlap.
+ * @property {number[]} close_insert_indices - Array of position indices for inserting into the order book when closing. Contains the main position index and the indices of the 3 nodes before and after it.
+ * @property {string} overlap_reason - Description of the overlap reason. Empty string when there is no overlap, otherwise describes the specific reason.
  */
 
 /**
- * 检查给定价格区间是否与已排序的订单列表中的任何区间发生重叠，并返回合适的插入位置索引。
+ * Checks whether the given price range overlaps with any range in the sorted order list, and returns a suitable insertion position index.
  *
- * ## 功能说明
- * 此函数用于保证金交易（long/short）场景，在开仓时需要确定平仓订单应该插入到订单簿（OrderBook）的哪个位置。
- * 函数会检查新订单的价格区间是否与现有订单重叠，并返回多个候选插入位置索引，以提高合约执行成功率。
+ * ## Description
+ * This function is used in margin trading (long/short) scenarios, where the position to insert the closing order into the order book (OrderBook) needs to be determined when opening a position.
+ * The function checks whether the new order's price range overlaps with existing orders, and returns multiple candidate insertion position indices to improve the contract execution success rate.
  *
- * ## 核心逻辑
- * 1. **价格区间检查**：使用二分查找算法在已排序的订单列表中查找合适的插入位置
- * 2. **重叠检测**：
- *    - 基础重叠：新区间与现有订单的价格区间直接重叠
- *    - 流动性预留重叠：考虑到流动性预留区域（默认100%），防止价格区间过于接近
- * 3. **候选索引生成**：
- *    - 主插入位置：逻辑上最合适的插入位置索引
- *    - 备选位置：该位置前后各若干个节点的索引（数量由 MAX_CANDIDATE_INDICES 常量决定）
- *    - 目的：即使主位置的订单被删除或移动，合约也能找到其他合适位置
+ * ## Core Logic
+ * 1. **Price range check**: Use a binary search algorithm to find a suitable insertion position in the sorted order list
+ * 2. **Overlap detection**:
+ *    - Basic overlap: the new range directly overlaps with the price range of an existing order
+ *    - Liquidity reservation overlap: considering the liquidity reservation area (default 100%), to prevent price ranges from being too close
+ * 3. **Candidate index generation**:
+ *    - Main insertion position: the logically most suitable insertion position index
+ *    - Alternative positions: the indices of several nodes before and after that position (the count is determined by the MAX_CANDIDATE_INDICES constant)
+ *    - Purpose: even if the order at the main position is deleted or moved, the contract can still find another suitable position
  *
- * ## 返回值说明
- * - **无重叠时**：返回 `close_insert_indices` 数组，包含候选插入位置的 OrderBook 索引
- *   - 优先级：主位置 → 前1个 → 后1个 → 前2个 → 后2个 → ... → 前N个 → 后N个
- *   - 索引数量由 MAX_CANDIDATE_INDICES 常量决定（默认21个，即主位置+前10个+后10个）
- * - **有重叠时**：返回空数组 `[]`，表示无法插入
- * - **空订单簿**：返回 `[65535]` (u16::MAX)，表示插入到头部
+ * ## Return Value Description
+ * - **When no overlap**: returns the `close_insert_indices` array, containing the OrderBook indices of candidate insertion positions
+ *   - Priority: main position → 1 before → 1 after → 2 before → 2 after → ... → N before → N after
+ *   - The number of indices is determined by the MAX_CANDIDATE_INDICES constant (default 21, i.e. main position + 10 before + 10 after)
+ * - **When there is overlap**: returns an empty array `[]`, indicating insertion is not possible
+ * - **Empty order book**: returns `[65535]` (u16::MAX), indicating insertion at the head
  *
- * ## 订单类型规则
- * - **down_orders（做多订单）**：价格从高到低排序
- *   - lock_lp_start_price > lock_lp_end_price（价格下跌）
- *   - 新订单的 end_price 必须 >= 下一个订单的 start_price
- * - **up_orders（做空订单）**：价格从低到高排序
- *   - lock_lp_start_price < lock_lp_end_price（价格上涨）
- *   - 新订单的 end_price 必须 <= 下一个订单的 start_price
+ * ## Order Type Rules
+ * - **down_orders (long orders)**: prices sorted from high to low
+ *   - lock_lp_start_price > lock_lp_end_price (price falling)
+ *   - the new order's end_price must be >= the next order's start_price
+ * - **up_orders (short orders)**: prices sorted from low to high
+ *   - lock_lp_start_price < lock_lp_end_price (price rising)
+ *   - the new order's end_price must be <= the next order's start_price
  *
- * @param {'down_orders' | 'up_orders'} order_type - 订单类型
- *   - 'down_orders': 做多订单，价格从高到低排序
- *   - 'up_orders': 做空订单，价格从低到高排序
+ * @param {'down_orders' | 'up_orders'} order_type - Order type
+ *   - 'down_orders': long orders, prices sorted from high to low
+ *   - 'up_orders': short orders, prices sorted from low to high
  *
- * @param {Order[]} order_list - 已排序的订单对象数组
- *   - 每个订单必须包含以下字段：
- *     - `index` {number}: 订单在 OrderBook 中的原始索引值（这是合约需要的关键字段）
- *     - `lock_lp_start_price` {bigint|string}: 锁定流动池区间起始价格
- *     - `lock_lp_end_price` {bigint|string}: 锁定流动池区间结束价格
- *   - 数组必须已按价格排序（down_orders 从高到低，up_orders 从低到高）
- *   - 通常来自 `sdk.chain.orders()` 或 `sdk.fast.orders()` 的返回数据
+ * @param {Order[]} order_list - Sorted array of order objects
+ *   - Each order must contain the following fields:
+ *     - `index` {number}: the original index value of the order in the OrderBook (this is the key field required by the contract)
+ *     - `lock_lp_start_price` {bigint|string}: the start price of the locked liquidity pool range
+ *     - `lock_lp_end_price` {bigint|string}: the end price of the locked liquidity pool range
+ *   - The array must already be sorted by price (down_orders from high to low, up_orders from low to high)
+ *   - Usually comes from the data returned by `sdk.chain.orders()` or `sdk.fast.orders()`
  *
- * @param {bigint | number | string} lp_start_price - 新订单的起始价格
- *   - 对于 down_orders：这是较高的价格（开仓价附近）
- *   - 对于 up_orders：这是较低的价格（止损价附近）
+ * @param {bigint | number | string} lp_start_price - The start price of the new order
+ *   - For down_orders: this is the higher price (near the opening price)
+ *   - For up_orders: this is the lower price (near the stop loss price)
  *
- * @param {bigint | number | string} lp_end_price - 新订单的结束价格
- *   - 对于 down_orders：这是较低的价格（止损价附近）
- *   - 对于 up_orders：这是较高的价格（开仓价附近）
+ * @param {bigint | number | string} lp_end_price - The end price of the new order
+ *   - For down_orders: this is the lower price (near the stop loss price)
+ *   - For up_orders: this is the higher price (near the opening price)
  *
- * @returns {OverlapResult} 返回包含重叠检查结果和候选插入索引的对象
- * @returns {boolean} returns.no_overlap - 是否没有重叠
- *   - `true`: 可以安全插入，使用 `close_insert_indices` 中的索引
- *   - `false`: 存在重叠，无法插入
- * @returns {number[]} returns.close_insert_indices - 候选插入位置的 OrderBook 索引数组
- *   - 无重叠时：包含主位置及前后3个节点的索引（最多7个）
- *   - 有重叠时：空数组 `[]`
- *   - 空订单簿时：`[65535]` 表示插入到头部
- * @returns {string} returns.overlap_reason - 重叠原因说明
- *   - 无重叠时：空字符串 `""`
- *   - 有重叠时：描述具体原因（如 "Overlaps with existing order range"）
+ * @returns {OverlapResult} Returns an object containing the overlap check result and candidate insertion indices
+ * @returns {boolean} returns.no_overlap - Whether there is no overlap
+ *   - `true`: safe to insert, use the indices in `close_insert_indices`
+ *   - `false`: there is an overlap, cannot insert
+ * @returns {number[]} returns.close_insert_indices - Array of OrderBook indices for candidate insertion positions
+ *   - When no overlap: contains the main position and the indices of the 3 nodes before and after (up to 7)
+ *   - When there is overlap: empty array `[]`
+ *   - When order book is empty: `[65535]` indicates insertion at the head
+ * @returns {string} returns.overlap_reason - Description of the overlap reason
+ *   - When no overlap: empty string `""`
+ *   - When there is overlap: describes the specific reason (e.g. "Overlaps with existing order range")
  *
  * @example
- * // 示例 1: down_orders（做多订单）- 插入到中间位置
+ * // Example 1: down_orders (long orders) - insert into the middle position
  * const downOrders = [
- *   { index: 10, lock_lp_start_price: 100n, lock_lp_end_price: 90n },  // 订单1
- *   { index: 25, lock_lp_start_price: 80n, lock_lp_end_price: 70n },   // 订单2
- *   { index: 33, lock_lp_start_price: 60n, lock_lp_end_price: 50n }    // 订单3
+ *   { index: 10, lock_lp_start_price: 100n, lock_lp_end_price: 90n },  // Order 1
+ *   { index: 25, lock_lp_start_price: 80n, lock_lp_end_price: 70n },   // Order 2
+ *   { index: 33, lock_lp_start_price: 60n, lock_lp_end_price: 50n }    // Order 3
  * ];
  *
- * // 检查新订单 [75, 72] 是否可以插入
+ * // Check whether the new order [75, 72] can be inserted
  * const result = checkPriceRangeOverlap('down_orders', downOrders, 75n, 72n);
  * console.log(result);
- * // 返回: {
+ * // Returns: {
  * //   no_overlap: true,
  * //   close_insert_indices: [25, 10, 33],
- * //   // 主位置是 25（订单2），因为新订单应该插入到订单2和订单3之间
- * //   // 备选位置：10（订单1在前），33（订单3在后）
+ * //   // The main position is 25 (Order 2), because the new order should be inserted between Order 2 and Order 3
+ * //   // Alternative positions: 10 (Order 1 before), 33 (Order 3 after)
  * //   overlap_reason: ""
  * // }
  *
  * @example
- * // 示例 2: down_orders - 价格重叠的情况
+ * // Example 2: down_orders - price overlap case
  * const downOrders = [
  *   { index: 10, lock_lp_start_price: 100n, lock_lp_end_price: 90n },
  *   { index: 25, lock_lp_start_price: 80n, lock_lp_end_price: 70n }
  * ];
  *
- * // 新订单 [95, 85] 与订单1 [100, 90] 重叠
+ * // New order [95, 85] overlaps with Order 1 [100, 90]
  * const result = checkPriceRangeOverlap('down_orders', downOrders, 95n, 85n);
  * console.log(result);
- * // 返回: {
+ * // Returns: {
  * //   no_overlap: false,
  * //   close_insert_indices: [],
  * //   overlap_reason: "Overlaps with existing order range"
  * // }
  *
  * @example
- * // 示例 3: up_orders（做空订单）- 插入到末尾
+ * // Example 3: up_orders (short orders) - insert at the end
  * const upOrders = [
  *   { index: 5, lock_lp_start_price: 70n, lock_lp_end_price: 80n },
  *   { index: 12, lock_lp_start_price: 90n, lock_lp_end_price: 100n }
  * ];
  *
- * // 新订单 [110, 120] 应该插入到末尾
+ * // New order [110, 120] should be inserted at the end
  * const result = checkPriceRangeOverlap('up_orders', upOrders, 110n, 120n);
  * console.log(result);
- * // 返回: {
+ * // Returns: {
  * //   no_overlap: true,
  * //   close_insert_indices: [12, 5],
- * //   // 主位置是 12（订单2），因为新订单应该插入到订单2之后
- * //   // 备选位置：5（订单1在前）
+ * //   // The main position is 12 (Order 2), because the new order should be inserted after Order 2
+ * //   // Alternative positions: 5 (Order 1 before)
  * //   overlap_reason: ""
  * // }
  *
  * @example
- * // 示例 4: 空订单簿 - 第一个订单
+ * // Example 4: empty order book - the first order
  * const emptyOrders = [];
  * const result = checkPriceRangeOverlap('down_orders', emptyOrders, 100n, 90n);
  * console.log(result);
- * // 返回: {
+ * // Returns: {
  * //   no_overlap: true,
  * //   close_insert_indices: [65535],
- * //   // 65535 是 u16::MAX，表示插入到头部（空订单簿时的特殊值）
+ * //   // 65535 is u16::MAX, indicating insertion at the head (special value when the order book is empty)
  * //   overlap_reason: ""
  * // }
  *
  * @example
- * // 示例 5: 实际使用场景 - 做多交易
+ * // Example 5: actual usage scenario - long trade
  * async function openLongPosition(sdk, mint, buyTokenAmount, stopLossPrice) {
- *   // 1. 获取 down_orders 数据
+ *   // 1. Get down_orders data
  *   const ordersData = await sdk.data.orders(mint, { type: 'down_orders' });
  *   const orders = ordersData.data.orders;
  *
- *   // 2. 获取当前价格
+ *   // 2. Get the current price
  *   const currentPrice = BigInt(await sdk.data.price(mint));
  *
- *   // 3. 计算平仓价格区间（模拟）
+ *   // 3. Calculate the closing price range (simulation)
  *   const simulateResult = await sdk.simulator.simulateLongStopLoss(
  *     mint,
  *     buyTokenAmount,
  *     stopLossPrice
  *   );
  *
- *   // 4. 检查价格区间是否可以插入
+ *   // 4. Check whether the price range can be inserted
  *   const overlapCheck = checkPriceRangeOverlap(
  *     'down_orders',
  *     orders,
@@ -44091,29 +46672,29 @@ function transformOrdersData$1(ordersData) {
  *   );
  *
  *   if (!overlapCheck.no_overlap) {
- *     throw new Error(`无法开仓: ${overlapCheck.overlap_reason}`);
+ *     throw new Error(`Unable to open position: ${overlapCheck.overlap_reason}`);
  *   }
  *
- *   // 5. 使用 close_insert_indices 调用合约
+ *   // 5. Use close_insert_indices to call the contract
  *   const tx = await sdk.trading.long({
  *     mint,
  *     buyTokenAmount,
  *     maxSolAmount,
  *     marginSolMax,
  *     closePrice: stopLossPrice,
- *     closeInsertIndices: overlapCheck.close_insert_indices  // 传递给合约
+ *     closeInsertIndices: overlapCheck.close_insert_indices  // Passed to the contract
  *   });
  *
  *   return tx;
  * }
  *
- * @throws {Error} 当输入的起始和结束价格与订单类型规则不匹配时抛出错误
+ * @throws {Error} Throws an error when the input start and end prices do not match the order type rules
  *
- * @see {@link https://github.com/your-repo/docs/orderbook.md|OrderBook 文档}
- * @see {@link transformOrdersData} 数据格式转换函数
+ * @see {@link https://github.com/your-repo/docs/orderbook.md|OrderBook documentation}
+ * @see {@link transformOrdersData} Data format transformation function
  *
  * @since 2.0.0
- * @version 2.0.0 - 从返回 prev_order_pda/next_order_pda 改为返回 close_insert_indices
+ * @version 2.0.0 - Changed from returning prev_order_pda/next_order_pda to returning close_insert_indices
  */
 function checkPriceRangeOverlap$1(order_type, order_list, lp_start_price, lp_end_price) {
   // console.log("checkPriceRangeOverlap=",order_type,lp_start_price, lp_end_price)
@@ -44128,7 +46709,7 @@ function checkPriceRangeOverlap$1(order_type, order_list, lp_start_price, lp_end
 
   const isDown = order_type === 'down_orders';
 
-  // 验证并规范化输入价格区间，确保 minPrice <= maxPrice
+  // Validate and normalize the input price range, ensuring minPrice <= maxPrice
   if ((isDown && startPrice < endPrice) || (!isDown && startPrice > endPrice)) {
     throw new Error('输入的起始和结束价格与订单类型规则不匹配。');
   }
@@ -44137,7 +46718,7 @@ function checkPriceRangeOverlap$1(order_type, order_list, lp_start_price, lp_end
 
   let low = 0;
   let high = order_list.length - 1;
-  let insertionIndex = order_list.length; // 默认插入到最后
+  let insertionIndex = order_list.length; // Default to inserting at the end
 
   while (low <= high) {
     const mid = Math.floor((low + high) / 2);
@@ -44148,9 +46729,9 @@ function checkPriceRangeOverlap$1(order_type, order_list, lp_start_price, lp_end
     const orderMin = isDown ? orderEnd : orderStart;
     const orderMax = isDown ? orderStart : orderEnd;
 
-    // 核心重叠判断: (StartA < EndB) and (EndA > StartB)
+    // Core overlap check: (StartA < EndB) and (EndA > StartB)
     if (minPrice < orderMax && maxPrice > orderMin) {
-      // 发生基础重叠
+      // Basic overlap occurred
       return {
         no_overlap: false,
         close_insert_indices: [],
@@ -44159,16 +46740,16 @@ function checkPriceRangeOverlap$1(order_type, order_list, lp_start_price, lp_end
     }
 
     if (isDown) {
-      // down_orders: 价格从大到小 (orderMax 递减)
-      if (maxPrice > orderMax) { // 新区间在当前区间的“左边”（价格更高）
+      // down_orders: prices from high to low (orderMax decreasing)
+      if (maxPrice > orderMax) { // The new range is to the "left" of the current range (higher price)
         insertionIndex = mid;
         high = mid - 1;
       } else {
         low = mid + 1;
       }
     } else {
-      // up_orders: 价格从小到大 (orderMin 递增)
-      if (minPrice < orderMin) { // 新区间在当前区间的“左边”（价格更低）
+      // up_orders: prices from low to high (orderMin increasing)
+      if (minPrice < orderMin) { // The new range is to the "left" of the current range (lower price)
         insertionIndex = mid;
         high = mid - 1;
       } else {
@@ -44177,12 +46758,12 @@ function checkPriceRangeOverlap$1(order_type, order_list, lp_start_price, lp_end
     }
   }
 
-  // 根据找到的插入点，确定逻辑上的前后订单
-  // insertionIndex 是新区间应该插入的位置，使得列表依然有序
+  // Based on the found insertion point, determine the logical previous and next orders
+  // insertionIndex is the position where the new range should be inserted so the list remains sorted
   order_list[insertionIndex] || null;
   const prevOrder = order_list[insertionIndex - 1] || null;
 
-  // 检查流动性预留重叠
+  // Check liquidity reservation overlap
   function checkLiquidityReservationOverlap(checkOrder) {
     if (!checkOrder) return false;
 
@@ -44191,16 +46772,16 @@ function checkPriceRangeOverlap$1(order_type, order_list, lp_start_price, lp_end
     const orderMin = isDown ? orderEnd : orderStart;
     const orderMax = isDown ? orderStart : orderEnd;
 
-    // 计算扩大区间值
+    // Calculate the expanded range value
     const expansionAmount = (orderMax - orderMin) * BigInt(Math.floor(LIQUIDITY_RESERVATION)) / 100n;
 
     let hasOverlap;
     if (isDown) {
-      // down_orders: start不变，end向下扩大
+      // down_orders: start unchanged, end expands downward
       const expandedEnd = orderMin - expansionAmount;
       hasOverlap = startPrice >= expandedEnd;
     } else {
-      // up_orders: start不变，end向上扩大
+      // up_orders: start unchanged, end expands upward
       const expandedEnd = orderMax + expansionAmount;
       hasOverlap = startPrice <= expandedEnd;
     }
@@ -44208,7 +46789,7 @@ function checkPriceRangeOverlap$1(order_type, order_list, lp_start_price, lp_end
     return hasOverlap;
   }
 
-  // 检查与前一个订单的流动性预留重叠
+  // Check liquidity reservation overlap with the previous order
   if (prevOrder && checkLiquidityReservationOverlap(prevOrder)) {
     return {
       no_overlap: false,
@@ -44217,39 +46798,39 @@ function checkPriceRangeOverlap$1(order_type, order_list, lp_start_price, lp_end
     };
   }
 
-  // 无重叠，构建 close_insert_indices 数组
-  // 优先级：主位置 → 前1个 → 后1个 → 前2个 → 后2个 → 前3个 → 后3个
+  // No overlap, build the close_insert_indices array
+  // Priority: main position → 1 before → 1 after → 2 before → 2 after → 3 before → 3 after
   const indices = [];
 
-  // 主插入位置逻辑：
-  // - down_orders (价格从高到低): 插入到 prevOrder 之后
-  //   - 如果没有 prevOrder (insertionIndex=0)，说明价格最高，使用 u16::MAX 插入头部
-  //   - 如果有 prevOrder，使用 prevOrder.index，插入到它后面
-  // - up_orders (价格从低到高): 插入到 prevOrder 之后
-  //   - 如果没有 prevOrder (insertionIndex=0)，说明价格最低，使用 u16::MAX 插入头部
-  //   - 如果有 prevOrder，使用 prevOrder.index，插入到它后面
+  // Main insertion position logic:
+  // - down_orders (prices high to low): insert after prevOrder
+  //   - If there is no prevOrder (insertionIndex=0), the price is the highest, use u16::MAX to insert at the head
+  //   - If there is a prevOrder, use prevOrder.index, insert after it
+  // - up_orders (prices low to high): insert after prevOrder
+  //   - If there is no prevOrder (insertionIndex=0), the price is the lowest, use u16::MAX to insert at the head
+  //   - If there is a prevOrder, use prevOrder.index, insert after it
 
   if (prevOrder && prevOrder.index !== undefined) {
-    // 有前置订单，插入到它后面
+    // There is a previous order, insert after it
     indices.push(prevOrder.index);
   } else {
-    // 没有前置订单 (insertionIndex=0)
-    // down_orders: 价格最高，插入头部 (65535)
-    // up_orders: 价格最低，插入头部 (65535)
-    indices.push(65535); // u16::MAX - 插入到头部
+    // No previous order (insertionIndex=0)
+    // down_orders: highest price, insert at the head (65535)
+    // up_orders: lowest price, insert at the head (65535)
+    indices.push(65535); // u16::MAX - insert at the head
   }
 
-  // 添加前后节点的索引
-  // 根据 MAX_CANDIDATE_INDICES 常量计算需要添加多少个前后节点
+  // Add the indices of the nodes before and after
+  // Calculate how many before/after nodes to add based on the MAX_CANDIDATE_INDICES constant
   for (let offset = 1; offset <= CANDIDATE_NODES_EACH_SIDE$1; offset++) {
-    // 添加前面第 offset 个节点
+    // Add the offset-th node before
     const beforeIndex = insertionIndex - 1 - offset;
     if (beforeIndex >= 0 && order_list[beforeIndex] && order_list[beforeIndex].index !== undefined) {
       indices.push(order_list[beforeIndex].index);
     }
 
-    // 添加后面第 offset 个节点
-    // offset=1 应该是 nextOrder (insertionIndex)，offset=2 是 insertionIndex+1，以此类推
+    // Add the offset-th node after
+    // offset=1 should be nextOrder (insertionIndex), offset=2 is insertionIndex+1, and so on
     const afterIndex = insertionIndex + offset - 1;
     if (afterIndex < order_list.length && order_list[afterIndex] && order_list[afterIndex].index !== undefined) {
       indices.push(order_list[afterIndex].index);
@@ -45123,122 +47704,122 @@ jsonBigintExports({ storeAsString: false });
 /**
  * Simulate long position stop loss calculation
  *
- * 模拟做多仓位的止损计算,返回可执行的止损价格和相关参数。
- * 该函数会自动调整止损价格以避免与现有订单的价格区间重叠,
- * 并返回合约执行时需要的插入位置索引数组。
+ * Simulates the stop loss calculation for a long position, returning the executable stop loss price and related parameters.
+ * This function automatically adjusts the stop loss price to avoid overlapping with the price ranges of existing orders,
+ * and returns the insertion position index array required for contract execution.
  *
- * @param {string} mint - Token address / 代币地址
- * @param {bigint|string|number} buyTokenAmount - Token amount to buy for long position (u64 format, precision 10^9) / 做多买入的代币数量 (u64格式, 精度 10^9)
- * @param {bigint|string|number} stopLossPrice - User desired stop loss price (u128 format) / 用户期望的止损价格 (u128格式)
- * @param {Object|null} lastPrice - Token info, default null / 代币当前价格信息,默认null会自动获取
- * @param {Object|null} ordersData - Orders data, default null / 订单数据,默认null会自动获取
- * @param {number} borrowFee - Borrow fee rate, default 2000 (2000/100000 = 0.02%) / 借贷手续费率,默认2000 (2000/100000 = 0.02%)
+ * @param {string} mint - Token address
+ * @param {bigint|string|number} buyTokenAmount - Token amount to buy for long position (u64 format, precision 10^9)
+ * @param {bigint|string|number} stopLossPrice - User desired stop loss price (u128 format)
+ * @param {Object|null} lastPrice - Token info, default null (auto-fetched if null)
+ * @param {Object|null} ordersData - Orders data, default null (auto-fetched if null)
+ * @param {number} borrowFee - Borrow fee rate, default 2000 (2000/100000 = 0.02%)
  *
- * @returns {Promise<Object>} Stop loss analysis result / 止损分析结果对象
- * @returns {bigint} returns.executableStopLossPrice - 计算出的可执行止损价格 (u128格式)
- *   - 这是经过调整后不与现有订单重叠的止损价格
- *   - 可能低于用户输入的 stopLossPrice (因为需要避免重叠)
- *   - 可以直接用于调用 sdk.trading.long() 的 closePrice 参数
+ * @returns {Promise<Object>} Stop loss analysis result
+ * @returns {bigint} returns.executableStopLossPrice - Calculated executable stop loss price (u128 format)
+ *   - This is the stop loss price adjusted to not overlap with existing orders
+ *   - May be lower than the user-provided stopLossPrice (to avoid overlap)
+ *   - Can be used directly as the closePrice parameter of sdk.trading.long()
  *
- * @returns {bigint} returns.tradeAmount - 止损时预计卖出获得的SOL数量 (lamports)
- *   - 这是在 executableStopLossPrice 价格卖出 buyTokenAmount 代币能获得的SOL
- *   - 不包含手续费扣除
- *   - 用于估算止损时的收益
+ * @returns {bigint} returns.tradeAmount - Estimated SOL amount obtained from selling at stop loss (lamports)
+ *   - This is the SOL obtained from selling buyTokenAmount tokens at the executableStopLossPrice
+ *   - Does not include fee deduction
+ *   - Used to estimate the proceeds at stop loss
  *
- * @returns {number} returns.stopLossPercentage - 止损百分比 (相对于当前价格)
- *   - 计算公式: ((currentPrice - executableStopLossPrice) / currentPrice) * 100
- *   - 例如: 3.5 表示止损价格比当前价格低3.5%
- *   - 做多时这个值应该是正数 (止损价低于当前价)
+ * @returns {number} returns.stopLossPercentage - Stop loss percentage (relative to current price)
+ *   - Formula: ((currentPrice - executableStopLossPrice) / currentPrice) * 100
+ *   - For example: 3.5 means the stop loss price is 3.5% lower than the current price
+ *   - For a long position this value should be positive (stop loss price below current price)
  *
- * @returns {number} returns.leverage - 杠杆倍数
- *   - 计算公式: currentPrice / (currentPrice - executableStopLossPrice)
- *   - 例如: 28.57 表示约28.57倍杠杆
- *   - 杠杆越高,风险越大,但潜在收益也越大
+ * @returns {number} returns.leverage - Leverage ratio
+ *   - Formula: currentPrice / (currentPrice - executableStopLossPrice)
+ *   - For example: 28.57 means about 28.57x leverage
+ *   - The higher the leverage, the higher the risk, but also the higher the potential return
  *
- * @returns {bigint} returns.currentPrice - 当前价格 (u128格式)
- *   - 计算时使用的代币当前价格
- *   - 用于参考和验证
+ * @returns {bigint} returns.currentPrice - Current price (u128 format)
+ *   - The current token price used in the calculation
+ *   - Used for reference and validation
  *
- * @returns {number} returns.iterations - 价格调整迭代次数
- *   - 为了避免价格区间重叠,函数自动调整止损价格的次数
- *   - 每次调整会将价格降低 PRICE_ADJUSTMENT_PERCENTAGE (默认0.5%)
- *   - 如果迭代次数过高,可能需要重新选择止损价格
+ * @returns {number} returns.iterations - Number of price adjustment iterations
+ *   - The number of times the function automatically adjusted the stop loss price to avoid price range overlap
+ *   - Each adjustment lowers the price by PRICE_ADJUSTMENT_PERCENTAGE (default 0.5%)
+ *   - If the iteration count is too high, you may need to reselect the stop loss price
  *
- * @returns {bigint} returns.originalStopLossPrice - 用户输入的原始止损价格 (u128格式)
- *   - 用于对比调整前后的价格差异
- *   - 如果 executableStopLossPrice 与此差异较大,说明现有订单较密集
+ * @returns {bigint} returns.originalStopLossPrice - User-provided original stop loss price (u128 format)
+ *   - Used to compare the price difference before and after adjustment
+ *   - If executableStopLossPrice differs greatly from this, it indicates existing orders are dense
  *
- * @returns {number[]} returns.close_insert_indices - 平仓订单插入位置的候选索引数组 ⭐ 新增
- *   - 数组包含多个候选插入位置的 OrderBook 索引值
- *   - 结构: [主位置index, 前1个index, 后1个index, 前2个index, 后2个index, 前3个index, 后3个index]
- *   - 例如: [25, 10, 33, 5, 40, 2, 50] 表示主位置是索引25,备选位置包括索引10、33等
- *   - 最多包含7个索引值 (1个主位置 + 前3个 + 后3个)
- *   - 如果订单簿为空,返回 [65535] (u16::MAX,表示插入到头部)
- *   - 用途: 传递给 sdk.trading.long() 的 closeInsertIndices 参数
- *   - 提高成功率: 即使主位置的订单被删除,合约也能尝试其他候选位置
+ * @returns {number[]} returns.close_insert_indices - Candidate index array for the closing order insertion position ⭐ New
+ *   - The array contains the OrderBook index values of multiple candidate insertion positions
+ *   - Structure: [main position index, 1st before, 1st after, 2nd before, 2nd after, 3rd before, 3rd after]
+ *   - For example: [25, 10, 33, 5, 40, 2, 50] means the main position is index 25, with alternative positions including indices 10, 33, etc.
+ *   - Contains up to 7 index values (1 main position + 3 before + 3 after)
+ *   - If the orderbook is empty, returns [65535] (u16::MAX, meaning insert at the head)
+ *   - Usage: passed as the closeInsertIndices parameter of sdk.trading.long()
+ *   - Improves success rate: even if the order at the main position is deleted, the contract can try other candidate positions
  *
- * @returns {bigint} returns.estimatedMargin - 预估所需保证金 (SOL lamports)
- *   - 计算公式: 买入成本 - 平仓收益(扣除手续费后)
- *   - 这是执行此止损策略需要的最少保证金
- *   - 可以用于 sdk.trading.long() 的 marginSolMax 参数
- *   - 实际调用时建议增加10-20%余量以应对价格波动
+ * @returns {bigint} returns.estimatedMargin - Estimated required margin (SOL lamports)
+ *   - Formula: buy cost - close proceeds (after fee deduction)
+ *   - This is the minimum margin required to execute this stop loss strategy
+ *   - Can be used as the marginSolMax parameter of sdk.trading.long()
+ *   - When actually calling, it is recommended to add a 10-20% buffer to handle price fluctuations
  *
- * @throws {Error} 当缺少必需参数时
- * @throws {Error} 当无法获取价格或订单数据时
- * @throws {Error} 当达到最大迭代次数仍无法找到合适的止损价格时
- * @throws {Error} 当价格调整后变为负数时
+ * @throws {Error} When required parameters are missing
+ * @throws {Error} When price or orders data cannot be fetched
+ * @throws {Error} When a suitable stop loss price cannot be found after reaching the maximum iterations
+ * @throws {Error} When the price becomes negative after adjustment
  *
  * @example
- * // 基础用法: 做多1个代币,止损价格为当前价格的97%
+ * // Basic usage: long 1 token, stop loss price at 97% of the current price
  * const result = await sdk.simulator.simulateLongStopLoss(
  *   '4Kq51Kt48FCwdo5CeKjRVPodH1ticHa7mZ5n5gqMEy1X',  // mint
- *   1000000000n,                                       // 1 token (精度10^9)
- *   BigInt('97000000000000000000')                     // 止损价格
+ *   1000000000n,                                       // 1 token (precision 10^9)
+ *   BigInt('97000000000000000000')                     // stop loss price
  * );
  *
- * console.log(`可执行止损价格: ${result.executableStopLossPrice}`);
- * console.log(`止损百分比: ${result.stopLossPercentage}%`);
- * console.log(`杠杆倍数: ${result.leverage}x`);
- * console.log(`预估保证金: ${result.estimatedMargin} lamports`);
- * console.log(`插入位置索引: ${result.close_insert_indices}`);
+ * console.log(`Executable stop loss price: ${result.executableStopLossPrice}`);
+ * console.log(`Stop loss percentage: ${result.stopLossPercentage}%`);
+ * console.log(`Leverage: ${result.leverage}x`);
+ * console.log(`Estimated margin: ${result.estimatedMargin} lamports`);
+ * console.log(`Insert position indices: ${result.close_insert_indices}`);
  *
  * @example
- * // 完整使用流程: 模拟后执行做多交易
+ * // Full workflow: simulate then execute a long trade
  * async function openLongPosition(sdk, mint, buyTokenAmount, stopLossPrice) {
- *   // 1. 模拟止损计算
+ *   // 1. Simulate stop loss calculation
  *   const simulation = await sdk.simulator.simulateLongStopLoss(
  *     mint,
  *     buyTokenAmount,
  *     stopLossPrice
  *   );
  *
- *   // 2. 检查止损价格是否被大幅调整
+ *   // 2. Check whether the stop loss price was significantly adjusted
  *   const priceDiff = Number((simulation.originalStopLossPrice - simulation.executableStopLossPrice) * 10000n / simulation.originalStopLossPrice) / 100;
  *   if (priceDiff > 1.0) {
- *     console.warn(`止损价格被调整了 ${priceDiff}%, 当前订单较密集`);
+ *     console.warn(`Stop loss price was adjusted by ${priceDiff}%, existing orders are dense`);
  *   }
  *
- *   // 3. 准备交易参数
- *   const maxSolAmount = simulation.estimatedMargin * 120n / 100n; // 增加20%余量
- *   const marginSolMax = simulation.estimatedMargin * 115n / 100n; // 增加15%余量
+ *   // 3. Prepare transaction parameters
+ *   const maxSolAmount = simulation.estimatedMargin * 120n / 100n; // add 20% buffer
+ *   const marginSolMax = simulation.estimatedMargin * 115n / 100n; // add 15% buffer
  *
- *   // 4. 执行做多交易
+ *   // 4. Execute the long trade
  *   const tx = await sdk.trading.long({
  *     mint: mint,
  *     buyTokenAmount: buyTokenAmount,
  *     maxSolAmount: maxSolAmount,
  *     marginSolMax: marginSolMax,
  *     closePrice: simulation.executableStopLossPrice,
- *     closeInsertIndices: simulation.close_insert_indices  // ⭐ 使用新的索引数组
+ *     closeInsertIndices: simulation.close_insert_indices  // ⭐ use the new index array
  *   });
  *
  *   return tx;
  * }
  *
- * @see {@link simulateShortStopLoss} 做空仓位的止损计算
- * @see {@link simulateLongSolStopLoss} 基于SOL金额的做多止损计算
+ * @see {@link simulateShortStopLoss} Stop loss calculation for short positions
+ * @see {@link simulateLongSolStopLoss} SOL-amount-based stop loss calculation for long positions
  * @since 2.0.0
- * @version 2.0.0 - 从返回 prev_order_pda/next_order_pda 改为返回 close_insert_indices
+ * @version 2.0.0 - Changed from returning prev_order_pda/next_order_pda to returning close_insert_indices
  */
 async function simulateLongStopLoss$1(mint, buyTokenAmount, stopLossPrice, lastPrice = null, ordersData = null, borrowFee = null, initialVirtualSol = null, initialVirtualToken = null) {
     try {
@@ -45247,12 +47828,12 @@ async function simulateLongStopLoss$1(mint, buyTokenAmount, stopLossPrice, lastP
             throw new Error('Missing required parameters');
         }
 
-        // 如果没有传入 borrowFee 或池子参数，从链上一次性获取
+        // If borrowFee or pool parameters are not provided, fetch them from the chain in a single call
         if (borrowFee === null || initialVirtualSol === null || initialVirtualToken === null) {
             const curveAccount = await this.sdk.chain.getCurveAccount(mint, { skipBalances: true });
             if (borrowFee === null) borrowFee = curveAccount.borrowFee;
-            // 链上返回的是 u64 原始单位（lamports/最小单位），需要除以 10^9 转为人类可读单位
-            // 与 calcLiq.js 中的转换方式一致
+            // The chain returns u64 raw units (lamports/smallest unit), which need to be divided by 10^9 to convert to human-readable units
+            // Consistent with the conversion method in calcLiq.js
             if (initialVirtualSol === null) initialVirtualSol = new Decimal$1(curveAccount.initialVirtualSol.toString()).div(CurveAMM$6.SOL_PRECISION_FACTOR_DECIMAL).toString();
             if (initialVirtualToken === null) initialVirtualToken = new Decimal$1(curveAccount.initialVirtualToken.toString()).div(CurveAMM$6.TOKEN_PRECISION_FACTOR_DECIMAL).toString();
         }
@@ -45306,7 +47887,7 @@ async function simulateLongStopLoss$1(mint, buyTokenAmount, stopLossPrice, lastP
         let finalOverlapResult = null; // Record final overlap result
         let finalTradeAmount = 0n; // Record final trade amount
 
-        // 检查并调整止损价格以满足最小距离要求 (做多: 止损价必须低于当前价至少 MIN_STOP_LOSS_PERCENT)
+        // Check and adjust the stop loss price to meet the minimum distance requirement (long: stop loss price must be below current price by at least MIN_STOP_LOSS_PERCENT)
         // Check and adjust stop loss price to meet minimum distance requirement (long: stop loss must be below current price by at least MIN_STOP_LOSS_PERCENT)
         const minAllowedStopLoss = currentPrice - (currentPrice * BigInt(MIN_STOP_LOSS_PERCENT)) / 1000n;
         if (stopLossStartPrice > minAllowedStopLoss) {
@@ -45345,33 +47926,33 @@ async function simulateLongStopLoss$1(mint, buyTokenAmount, stopLossPrice, lastP
             }
 
             stopLossEndPrice = tradeResult[0]; // Price after trade completion
-            const tradeAmount = tradeResult[1]; // SOL输出量 / SOL output amount
+            const tradeAmount = tradeResult[1]; // SOL output amount
 
             // console.log(`  - stopLossEndPrice: ${stopLossEndPrice.toString()}`);
             // console.log(`  - tradeAmount: ${tradeAmount.toString()}`);
 
-            //console.log(`迭代 ${iteration}: 起始价格=${stopLossStartPrice}, 结束价格=${stopLossEndPrice}, SOL输出量=${tradeAmount} / Iteration ${iteration}: Start=${stopLossStartPrice}, End=${stopLossEndPrice}, SOL output=${tradeAmount}`);
+            //console.log(`Iteration ${iteration}: startPrice=${stopLossStartPrice}, endPrice=${stopLossEndPrice}, SOL output=${tradeAmount} / Iteration ${iteration}: Start=${stopLossStartPrice}, End=${stopLossEndPrice}, SOL output=${tradeAmount}`);
 
-            // 检查价格区间重叠 / Check price range overlap
+            // Check price range overlap
             const overlapResult = checkPriceRangeOverlap('down_orders', downOrders, stopLossStartPrice, stopLossEndPrice);
-            
+
             if (overlapResult.no_overlap) {
-                //console.log('价格区间无重叠，可以执行 / No price range overlap, can execute');
-                finalOverlapResult = overlapResult; // 记录最终的overlap结果 / Record final overlap result
-                finalTradeAmount = tradeAmount; // 记录最终的交易金额 / Record final trade amount
+                //console.log('No price range overlap, can execute / No price range overlap, can execute');
+                finalOverlapResult = overlapResult; // Record final overlap result
+                finalTradeAmount = tradeAmount; // Record final trade amount
                 break;
             }
 
-            //console.log(`发现重叠: ${overlapResult.overlap_reason} / Found overlap: ${overlapResult.overlap_reason}`);
+            //console.log(`Found overlap: ${overlapResult.overlap_reason} / Found overlap: ${overlapResult.overlap_reason}`);
 
-            // 调整起始价格（减少0.5%）/ Adjust start price (decrease by 0.5%)
-            // 使用方案2：直接计算 0.5% = 5/1000
+            // Adjust start price (decrease by 0.5%)
+            // Using approach 2: directly compute 0.5% = 5/1000
             const adjustmentAmount = (stopLossStartPrice * BigInt(PRICE_ADJUSTMENT_PERCENTAGE)) / 1000n;
             stopLossStartPrice = stopLossStartPrice - adjustmentAmount;
 
-            //console.log(`调整后起始价格: ${stopLossStartPrice} / Adjusted start price: ${stopLossStartPrice}`);
+            //console.log(`Adjusted start price: ${stopLossStartPrice} / Adjusted start price: ${stopLossStartPrice}`);
 
-            // 安全检查：确保价格不会变成负数 / Safety check: ensure price doesn't become negative
+            // Safety check: ensure the price does not become negative
             if (stopLossStartPrice <= 0n) {
                 throw new Error('止损价格调整后变为负数，无法继续 / Stop loss price became negative after adjustment');
             }
@@ -45381,30 +47962,30 @@ async function simulateLongStopLoss$1(mint, buyTokenAmount, stopLossPrice, lastP
             throw new Error('达到最大迭代次数，无法找到合适的止损价格 / Reached maximum iterations, cannot find suitable stop loss price');
         }
 
-        // 计算最终返回值 / Calculate final return values
+        // Calculate final return values
         const executableStopLossPrice = stopLossStartPrice;
-        
-        // 计算止损百分比 / Calculate stop loss percentage
+
+        // Calculate stop loss percentage
         let stopLossPercentage = 0;
         let leverage = 1;
-        
+
         if (currentPrice !== executableStopLossPrice) {
             stopLossPercentage = Number((BigInt(10000) * (currentPrice - executableStopLossPrice)) / currentPrice) / 100;
             leverage = Number((BigInt(10000) * currentPrice) / (currentPrice - executableStopLossPrice)) / 10000;
         }
 
-        // 计算保证金 / Calculate margin requirement
+        // Calculate margin requirement
         let estimatedMargin = 0n;
         try {
-            // 1. 计算从当前价格买入所需的SOL
+            // 1. Calculate the SOL required to buy from the current price
             const buyResult = CurveAMM$6.buyFromPriceWithTokenOutputWithParams(currentPrice, buyTokenAmount, initialVirtualSol, initialVirtualToken);
             if (buyResult) {
                 const requiredSol = buyResult[1]; // SOL input amount
 
-                // 2. 计算平仓时扣除手续费后的收益
+                // 2. Calculate the proceeds at close after deducting the fee
                 const closeOutputSolAfterFee = CurveAMM$6.calculateAmountAfterFee(finalTradeAmount, borrowFee);
-                
-                // 3. 计算保证金 = 买入成本 - 平仓收益(扣费后)
+
+                // 3. Calculate margin = buy cost - close proceeds (after fee deduction)
                 if (closeOutputSolAfterFee !== null && requiredSol > closeOutputSolAfterFee) {
                     estimatedMargin = requiredSol - closeOutputSolAfterFee;
                 }
@@ -45443,122 +48024,122 @@ async function simulateLongStopLoss$1(mint, buyTokenAmount, stopLossPrice, lastP
 /**
  * Simulate short position stop loss calculation
  *
- * 模拟做空仓位的止损计算,返回可执行的止损价格和相关参数。
- * 该函数会自动调整止损价格以避免与现有订单的价格区间重叠,
- * 并返回合约执行时需要的插入位置索引数组。
+ * Simulates the stop loss calculation for a short position, returning the executable stop loss price and related parameters.
+ * This function automatically adjusts the stop loss price to avoid overlapping with the price ranges of existing orders,
+ * and returns the insertion position index array required for contract execution.
  *
- * @param {string} mint - Token address / 代币地址
- * @param {bigint|string|number} sellTokenAmount - Token amount to sell for short position (u64 format, precision 10^9) / 做空卖出的代币数量 (u64格式, 精度 10^9)
- * @param {bigint|string|number} stopLossPrice - User desired stop loss price (u128 format) / 用户期望的止损价格 (u128格式)
- * @param {Object|null} lastPrice - Token info, default null / 代币当前价格信息,默认null会自动获取
- * @param {Object|null} ordersData - Orders data, default null / 订单数据,默认null会自动获取
- * @param {number} borrowFee - Borrow fee rate, default 2000 (2000/100000 = 0.02%) / 借贷手续费率,默认2000 (2000/100000 = 0.02%)
+ * @param {string} mint - Token address
+ * @param {bigint|string|number} sellTokenAmount - Token amount to sell for short position (u64 format, precision 10^9)
+ * @param {bigint|string|number} stopLossPrice - User desired stop loss price (u128 format)
+ * @param {Object|null} lastPrice - Token info, default null (auto-fetched if null)
+ * @param {Object|null} ordersData - Orders data, default null (auto-fetched if null)
+ * @param {number} borrowFee - Borrow fee rate, default 2000 (2000/100000 = 0.02%)
  *
- * @returns {Promise<Object>} Stop loss analysis result / 止损分析结果对象
- * @returns {bigint} returns.executableStopLossPrice - 计算出的可执行止损价格 (u128格式)
- *   - 这是经过调整后不与现有订单重叠的止损价格
- *   - 可能高于用户输入的 stopLossPrice (因为需要避免重叠)
- *   - 可以直接用于调用 sdk.trading.short() 的 closePrice 参数
+ * @returns {Promise<Object>} Stop loss analysis result
+ * @returns {bigint} returns.executableStopLossPrice - Calculated executable stop loss price (u128 format)
+ *   - This is the stop loss price adjusted to not overlap with existing orders
+ *   - May be higher than the user-provided stopLossPrice (to avoid overlap)
+ *   - Can be used directly as the closePrice parameter of sdk.trading.short()
  *
- * @returns {bigint} returns.tradeAmount - 止损时预计买入需要的SOL数量 (lamports)
- *   - 这是在 executableStopLossPrice 价格买回 sellTokenAmount 代币需要的SOL
- *   - 不包含手续费
- *   - 用于估算止损时的成本
+ * @returns {bigint} returns.tradeAmount - Estimated SOL amount needed to buy back at stop loss (lamports)
+ *   - This is the SOL needed to buy back sellTokenAmount tokens at the executableStopLossPrice
+ *   - Does not include fees
+ *   - Used to estimate the cost at stop loss
  *
- * @returns {number} returns.stopLossPercentage - 止损百分比 (相对于当前价格)
- *   - 计算公式: ((executableStopLossPrice - currentPrice) / currentPrice) * 100
- *   - 例如: 3.5 表示止损价格比当前价格高3.5%
- *   - 做空时这个值应该是正数 (止损价高于当前价)
+ * @returns {number} returns.stopLossPercentage - Stop loss percentage (relative to current price)
+ *   - Formula: ((executableStopLossPrice - currentPrice) / currentPrice) * 100
+ *   - For example: 3.5 means the stop loss price is 3.5% higher than the current price
+ *   - For a short position this value should be positive (stop loss price above current price)
  *
- * @returns {number} returns.leverage - 杠杆倍数
- *   - 计算公式: currentPrice / (executableStopLossPrice - currentPrice)
- *   - 例如: 28.57 表示约28.57倍杠杆
- *   - 杠杆越高,风险越大,但潜在收益也越大
+ * @returns {number} returns.leverage - Leverage ratio
+ *   - Formula: currentPrice / (executableStopLossPrice - currentPrice)
+ *   - For example: 28.57 means about 28.57x leverage
+ *   - The higher the leverage, the higher the risk, but also the higher the potential return
  *
- * @returns {bigint} returns.currentPrice - 当前价格 (u128格式)
- *   - 计算时使用的代币当前价格
- *   - 用于参考和验证
+ * @returns {bigint} returns.currentPrice - Current price (u128 format)
+ *   - The current token price used in the calculation
+ *   - Used for reference and validation
  *
- * @returns {number} returns.iterations - 价格调整迭代次数
- *   - 为了避免价格区间重叠,函数自动调整止损价格的次数
- *   - 每次调整会将价格提高 PRICE_ADJUSTMENT_PERCENTAGE (默认0.5%)
- *   - 如果迭代次数过高,可能需要重新选择止损价格
+ * @returns {number} returns.iterations - Number of price adjustment iterations
+ *   - The number of times the function automatically adjusted the stop loss price to avoid price range overlap
+ *   - Each adjustment raises the price by PRICE_ADJUSTMENT_PERCENTAGE (default 0.5%)
+ *   - If the iteration count is too high, you may need to reselect the stop loss price
  *
- * @returns {bigint} returns.originalStopLossPrice - 用户输入的原始止损价格 (u128格式)
- *   - 用于对比调整前后的价格差异
- *   - 如果 executableStopLossPrice 与此差异较大,说明现有订单较密集
+ * @returns {bigint} returns.originalStopLossPrice - User-provided original stop loss price (u128 format)
+ *   - Used to compare the price difference before and after adjustment
+ *   - If executableStopLossPrice differs greatly from this, it indicates existing orders are dense
  *
- * @returns {number[]} returns.close_insert_indices - 平仓订单插入位置的候选索引数组 ⭐ 新增
- *   - 数组包含多个候选插入位置的 OrderBook 索引值
- *   - 结构: [主位置index, 前1个index, 后1个index, 前2个index, 后2个index, 前3个index, 后3个index]
- *   - 例如: [25, 10, 33, 5, 40, 2, 50] 表示主位置是索引25,备选位置包括索引10、33等
- *   - 最多包含7个索引值 (1个主位置 + 前3个 + 后3个)
- *   - 如果订单簿为空,返回 [65535] (u16::MAX,表示插入到头部)
- *   - 用途: 传递给 sdk.trading.short() 的 closeInsertIndices 参数
- *   - 提高成功率: 即使主位置的订单被删除,合约也能尝试其他候选位置
+ * @returns {number[]} returns.close_insert_indices - Candidate index array for the closing order insertion position ⭐ New
+ *   - The array contains the OrderBook index values of multiple candidate insertion positions
+ *   - Structure: [main position index, 1st before, 1st after, 2nd before, 2nd after, 3rd before, 3rd after]
+ *   - For example: [25, 10, 33, 5, 40, 2, 50] means the main position is index 25, with alternative positions including indices 10, 33, etc.
+ *   - Contains up to 7 index values (1 main position + 3 before + 3 after)
+ *   - If the orderbook is empty, returns [65535] (u16::MAX, meaning insert at the head)
+ *   - Usage: passed as the closeInsertIndices parameter of sdk.trading.short()
+ *   - Improves success rate: even if the order at the main position is deleted, the contract can try other candidate positions
  *
- * @returns {bigint} returns.estimatedMargin - 预估所需保证金 (SOL lamports)
- *   - 计算公式: 平仓成本(含手续费) - 开仓收益 - 开仓手续费
- *   - 这是执行此止损策略需要的最少保证金
- *   - 可以用于 sdk.trading.short() 的 marginSolMax 参数
- *   - 实际调用时建议增加10-20%余量以应对价格波动
+ * @returns {bigint} returns.estimatedMargin - Estimated required margin (SOL lamports)
+ *   - Formula: close cost (including fee) - open proceeds - open fee
+ *   - This is the minimum margin required to execute this stop loss strategy
+ *   - Can be used as the marginSolMax parameter of sdk.trading.short()
+ *   - When actually calling, it is recommended to add a 10-20% buffer to handle price fluctuations
  *
- * @throws {Error} 当缺少必需参数时
- * @throws {Error} 当无法获取价格或订单数据时
- * @throws {Error} 当达到最大迭代次数仍无法找到合适的止损价格时
- * @throws {Error} 当价格调整后超过最大值时
+ * @throws {Error} When required parameters are missing
+ * @throws {Error} When price or orders data cannot be fetched
+ * @throws {Error} When a suitable stop loss price cannot be found after reaching the maximum iterations
+ * @throws {Error} When the price exceeds the maximum value after adjustment
  *
  * @example
- * // 基础用法: 做空1个代币,止损价格为当前价格的103%
+ * // Basic usage: short 1 token, stop loss price at 103% of the current price
  * const result = await sdk.simulator.simulateShortStopLoss(
  *   '4Kq51Kt48FCwdo5CeKjRVPodH1ticHa7mZ5n5gqMEy1X',  // mint
- *   1000000000n,                                       // 1 token (精度10^9)
- *   BigInt('103000000000000000000')                    // 止损价格
+ *   1000000000n,                                       // 1 token (precision 10^9)
+ *   BigInt('103000000000000000000')                    // stop loss price
  * );
  *
- * console.log(`可执行止损价格: ${result.executableStopLossPrice}`);
- * console.log(`止损百分比: ${result.stopLossPercentage}%`);
- * console.log(`杠杆倍数: ${result.leverage}x`);
- * console.log(`预估保证金: ${result.estimatedMargin} lamports`);
- * console.log(`插入位置索引: ${result.close_insert_indices}`);
+ * console.log(`Executable stop loss price: ${result.executableStopLossPrice}`);
+ * console.log(`Stop loss percentage: ${result.stopLossPercentage}%`);
+ * console.log(`Leverage: ${result.leverage}x`);
+ * console.log(`Estimated margin: ${result.estimatedMargin} lamports`);
+ * console.log(`Insert position indices: ${result.close_insert_indices}`);
  *
  * @example
- * // 完整使用流程: 模拟后执行做空交易
+ * // Full workflow: simulate then execute a short trade
  * async function openShortPosition(sdk, mint, sellTokenAmount, stopLossPrice) {
- *   // 1. 模拟止损计算
+ *   // 1. Simulate stop loss calculation
  *   const simulation = await sdk.simulator.simulateShortStopLoss(
  *     mint,
  *     sellTokenAmount,
  *     stopLossPrice
  *   );
  *
- *   // 2. 检查止损价格是否被大幅调整
+ *   // 2. Check whether the stop loss price was significantly adjusted
  *   const priceDiff = Number((simulation.executableStopLossPrice - simulation.originalStopLossPrice) * 10000n / simulation.originalStopLossPrice) / 100;
  *   if (priceDiff > 1.0) {
- *     console.warn(`止损价格被调整了 ${priceDiff}%, 当前订单较密集`);
+ *     console.warn(`Stop loss price was adjusted by ${priceDiff}%, existing orders are dense`);
  *   }
  *
- *   // 3. 准备交易参数
- *   const minSolOutput = simulation.tradeAmount * 80n / 100n; // 至少获得80%
- *   const marginSolMax = simulation.estimatedMargin * 115n / 100n; // 增加15%余量
+ *   // 3. Prepare transaction parameters
+ *   const minSolOutput = simulation.tradeAmount * 80n / 100n; // obtain at least 80%
+ *   const marginSolMax = simulation.estimatedMargin * 115n / 100n; // add 15% buffer
  *
- *   // 4. 执行做空交易
+ *   // 4. Execute the short trade
  *   const tx = await sdk.trading.short({
  *     mint: mint,
  *     borrowSellTokenAmount: sellTokenAmount,
  *     minSolOutput: minSolOutput,
  *     marginSolMax: marginSolMax,
  *     closePrice: simulation.executableStopLossPrice,
- *     closeInsertIndices: simulation.close_insert_indices  // ⭐ 使用新的索引数组
+ *     closeInsertIndices: simulation.close_insert_indices  // ⭐ use the new index array
  *   });
  *
  *   return tx;
  * }
  *
- * @see {@link simulateLongStopLoss} 做多仓位的止损计算
- * @see {@link simulateShortSolStopLoss} 基于SOL金额的做空止损计算
+ * @see {@link simulateLongStopLoss} Stop loss calculation for long positions
+ * @see {@link simulateShortSolStopLoss} SOL-amount-based stop loss calculation for short positions
  * @since 2.0.0
- * @version 2.0.0 - 从返回 prev_order_pda/next_order_pda 改为返回 close_insert_indices
+ * @version 2.0.0 - Changed from returning prev_order_pda/next_order_pda to returning close_insert_indices
  */
 async function simulateShortStopLoss$1(mint, sellTokenAmount, stopLossPrice, lastPrice = null, ordersData = null, borrowFee = null, initialVirtualSol = null, initialVirtualToken = null) {
     try {
@@ -45567,12 +48148,12 @@ async function simulateShortStopLoss$1(mint, sellTokenAmount, stopLossPrice, las
             throw new Error('Missing required parameters');
         }
 
-        // 如果没有传入 borrowFee 或池子参数，从链上一次性获取
+        // If borrowFee or pool parameters are not provided, fetch them from the chain in a single call
         if (borrowFee === null || initialVirtualSol === null || initialVirtualToken === null) {
             const curveAccount = await this.sdk.chain.getCurveAccount(mint, { skipBalances: true });
             if (borrowFee === null) borrowFee = curveAccount.borrowFee;
-            // 链上返回的是 u64 原始单位（lamports/最小单位），需要除以 10^9 转为人类可读单位
-            // 与 calcLiq.js 中的转换方式一致
+            // The chain returns u64 raw units (lamports/smallest unit), which need to be divided by 10^9 to convert to human-readable units
+            // Consistent with the conversion method in calcLiq.js
             if (initialVirtualSol === null) initialVirtualSol = new Decimal$1(curveAccount.initialVirtualSol.toString()).div(CurveAMM$6.SOL_PRECISION_FACTOR_DECIMAL).toString();
             if (initialVirtualToken === null) initialVirtualToken = new Decimal$1(curveAccount.initialVirtualToken.toString()).div(CurveAMM$6.TOKEN_PRECISION_FACTOR_DECIMAL).toString();
         }
@@ -45623,7 +48204,7 @@ async function simulateShortStopLoss$1(mint, sellTokenAmount, stopLossPrice, las
         let finalOverlapResult = null; // Record final overlap result
         let finalTradeAmount = 0n; // Record final trade amount
 
-        // 检查并调整止损价格以满足最小距离要求 (做空: 止损价必须高于当前价至少 MIN_STOP_LOSS_PERCENT)
+        // Check and adjust the stop loss price to meet the minimum distance requirement (short: stop loss price must be above current price by at least MIN_STOP_LOSS_PERCENT)
         // Check and adjust stop loss price to meet minimum distance requirement (short: stop loss must be above current price by at least MIN_STOP_LOSS_PERCENT)
         const minAllowedStopLoss = currentPrice + (currentPrice * BigInt(MIN_STOP_LOSS_PERCENT)) / 1000n;
         if (stopLossStartPrice < minAllowedStopLoss) {
@@ -45658,33 +48239,33 @@ async function simulateShortStopLoss$1(mint, sellTokenAmount, stopLossPrice, las
             }
 
             stopLossEndPrice = tradeResult[0]; // Price after trade completion
-            const tradeAmount = tradeResult[1]; // SOL输入量 / SOL input amount
+            const tradeAmount = tradeResult[1]; // SOL input amount
 
             // console.log(`  - stopLossEndPrice: ${stopLossEndPrice.toString()}`);
             // console.log(`  - tradeAmount: ${tradeAmount.toString()}`);
 
-            //console.log(`迭代 ${iteration}: 起始价格=${stopLossStartPrice}, 结束价格=${stopLossEndPrice}, SOL输入量=${tradeAmount} / Iteration ${iteration}: Start=${stopLossStartPrice}, End=${stopLossEndPrice}, SOL input=${tradeAmount}`);
+            //console.log(`Iteration ${iteration}: startPrice=${stopLossStartPrice}, endPrice=${stopLossEndPrice}, SOL input=${tradeAmount} / Iteration ${iteration}: Start=${stopLossStartPrice}, End=${stopLossEndPrice}, SOL input=${tradeAmount}`);
 
-            // 检查价格区间重叠 / Check price range overlap
+            // Check price range overlap
             const overlapResult = checkPriceRangeOverlap('up_orders', upOrders, stopLossStartPrice, stopLossEndPrice);
-            
+
             if (overlapResult.no_overlap) {
                 //console.log(' / No price range overlap, can execute');
-                finalOverlapResult = overlapResult; // 记录最终的overlap结果 / Record final overlap result
-                finalTradeAmount = tradeAmount; // 记录最终的交易金额 / Record final trade amount
+                finalOverlapResult = overlapResult; // Record final overlap result
+                finalTradeAmount = tradeAmount; // Record final trade amount
                 break;
             }
 
-            //console.log(`发现重叠: ${overlapResult.overlap_reason} / Found overlap: ${overlapResult.overlap_reason}`);
+            //console.log(`Found overlap: ${overlapResult.overlap_reason} / Found overlap: ${overlapResult.overlap_reason}`);
 
-            // 调整起始价格（增加0.5%）/ Adjust start price (increase by 0.5%)
-            // 使用方案2：直接计算 0.5% = 5/1000
+            // Adjust start price (increase by 0.5%)
+            // Using approach 2: directly compute 0.5% = 5/1000
             const adjustmentAmount = (stopLossStartPrice * BigInt(PRICE_ADJUSTMENT_PERCENTAGE)) / 1000n;
             stopLossStartPrice = stopLossStartPrice + adjustmentAmount;
 
-            //console.log(`调整后起始价格: ${stopLossStartPrice} / Adjusted start price: ${stopLossStartPrice}`);
+            //console.log(`Adjusted start price: ${stopLossStartPrice} / Adjusted start price: ${stopLossStartPrice}`);
 
-            // 安全检查：确保价格不会超过最大值 / Safety check: ensure price doesn't exceed maximum
+            // Safety check: ensure the price does not exceed the maximum
             if (stopLossStartPrice >= CurveAMM$6.MAX_U128_PRICE) {
                 throw new Error(`Stop loss price exceeded maximum after adjustment: ${stopLossStartPrice} >= ${CurveAMM$6.MAX_U128_PRICE}`);
             }
@@ -45694,34 +48275,34 @@ async function simulateShortStopLoss$1(mint, sellTokenAmount, stopLossPrice, las
             throw new Error('达到最大迭代次数，无法找到合适的止损价格 / Reached maximum iterations, cannot find suitable stop loss price');
         }
 
-        // 计算最终返回值 / Calculate final return values
+        // Calculate final return values
         const executableStopLossPrice = stopLossStartPrice;
-        
-        // 计算止损百分比 / Calculate stop loss percentage
+
+        // Calculate stop loss percentage
         // For short position, stop loss price is higher than current price, so it's a positive percentage
         const stopLossPercentage = Number((BigInt(10000) * (executableStopLossPrice - currentPrice)) / currentPrice) / 100;
-        
-        // 计算杠杆比例 / Calculate leverage ratio
+
+        // Calculate leverage ratio
         // For short position, leverage = current price / (stop loss price - current price)
         const leverage = Number((BigInt(10000) * currentPrice) / (executableStopLossPrice - currentPrice)) / 10000;
 
-        // 计算保证金 / Calculate margin requirement
-        // 与合约公式一致 (long_short.rs 第890-894行):
+        // Calculate margin requirement
+        // Consistent with the contract formula (long_short.rs lines 890-894):
         //   real_margin_sol = close_buy_sol_with_fee - output_sol - fee_sol
-        //   其中 output_sol 是扣费后净SOL, fee_sol 是开仓手续费
-        //   展开: real_margin_sol = close_buy_sol_with_fee - raw_sell_sol
+        //   where output_sol is the net SOL after fees, and fee_sol is the open fee
+        //   expanded: real_margin_sol = close_buy_sol_with_fee - raw_sell_sol
         let estimatedMargin = 0n;
-        let rawSellSol = 0n; // 卖出 token 获得的原始 SOL（未扣费），供调用方计算 minSolOutput
+        let rawSellSol = 0n; // Raw SOL obtained from selling tokens (before fees), for the caller to compute minSolOutput
         try {
-            // 1. 计算从当前价格卖出代币获得的原始SOL（未扣费）
+            // 1. Calculate the raw SOL (before fees) obtained from selling tokens at the current price
             const sellResult = CurveAMM$6.sellFromPriceWithTokenInputWithParams(currentPrice, sellTokenAmount, initialVirtualSol, initialVirtualToken);
             if (sellResult) {
-                rawSellSol = sellResult[1]; // 卖出获得的原始SOL（未扣费）
+                rawSellSol = sellResult[1]; // Raw SOL obtained from the sale (before fees)
 
-                // 2. 计算平仓成本（含手续费，使用 ceiling 除法与合约一致）
+                // 2. Calculate the close cost (including fees, using ceiling division to match the contract)
                 const closeCostWithFee = CurveAMM$6.calculateTotalAmountWithFee(finalTradeAmount, borrowFee);
 
-                // 3. 保证金 = 平仓成本（含费） - 原始卖出SOL
+                // 3. Margin = close cost (including fee) - raw sell SOL
                 if (closeCostWithFee !== null && closeCostWithFee > rawSellSol) {
                     estimatedMargin = closeCostWithFee - rawSellSol;
                 }
@@ -45740,7 +48321,7 @@ async function simulateShortStopLoss$1(mint, sellTokenAmount, stopLossPrice, las
 
         return {
             executableStopLossPrice: executableStopLossPrice, // Calculated reasonable stop loss value
-            tradeAmount: finalTradeAmount, // SOL input amount (平仓时买回 token 需要的 SOL)
+            tradeAmount: finalTradeAmount, // SOL input amount (SOL needed to buy back tokens at close)
             stopLossPercentage: stopLossPercentage, // Stop loss percentage relative to current price
             leverage: leverage, // Leverage ratio
             currentPrice: currentPrice, // Current price
@@ -45748,7 +48329,7 @@ async function simulateShortStopLoss$1(mint, sellTokenAmount, stopLossPrice, las
             originalStopLossPrice: BigInt(stopLossPrice), // Original stop loss price
             close_insert_indices: finalOverlapResult.close_insert_indices, // Candidate insertion indices for closing order
             estimatedMargin: estimatedMargin, // Estimated margin requirement in SOL (lamports)
-            rawSellSol: rawSellSol // 卖出 token 获得的原始 SOL（未扣费），用于调用方计算 minSolOutput
+            rawSellSol: rawSellSol // Raw SOL obtained from selling tokens (before fees), used by the caller to compute minSolOutput
         };
 
     } catch (error) {
@@ -45768,54 +48349,54 @@ async function simulateShortStopLoss$1(mint, sellTokenAmount, stopLossPrice, las
 /**
  * Simulate long position stop loss calculation with SOL amount input
  *
- * 基于 SOL 金额的做多止损计算。该函数会自动计算出对应的代币数量,
- * 使得保证金需求接近用户输入的 SOL 金额。
+ * SOL-amount-based stop loss calculation for a long position. This function automatically computes the corresponding token amount,
+ * so that the margin requirement is close to the SOL amount provided by the user.
  *
- * @param {string} mint - Token address / 代币地址
- * @param {bigint|string|number} buySolAmount - SOL amount to spend for long position (u64 format, lamports) / 做多投入的SOL金额 (u64格式, lamports)
- * @param {bigint|string|number} stopLossPrice - User desired stop loss price (u128 format) / 用户期望的止损价格 (u128格式)
- * @param {Object|null} lastPrice - Token info, default null / 代币当前价格信息,默认null会自动获取
- * @param {Object|null} ordersData - Orders data, default null / 订单数据,默认null会自动获取
- * @param {number} borrowFee - Borrow fee rate, default 2000 (2000/100000 = 0.02%) / 借贷手续费率,默认2000 (2000/100000 = 0.02%)
+ * @param {string} mint - Token address
+ * @param {bigint|string|number} buySolAmount - SOL amount to spend for long position (u64 format, lamports)
+ * @param {bigint|string|number} stopLossPrice - User desired stop loss price (u128 format)
+ * @param {Object|null} lastPrice - Token info, default null (auto-fetched if null)
+ * @param {Object|null} ordersData - Orders data, default null (auto-fetched if null)
+ * @param {number} borrowFee - Borrow fee rate, default 2000 (2000/100000 = 0.02%)
  *
- * @returns {Promise<Object>} Stop loss analysis result / 止损分析结果对象
- * @returns {bigint} returns.executableStopLossPrice - 可执行止损价格 (u128格式) - 同 {@link simulateLongStopLoss}
- * @returns {bigint} returns.tradeAmount - 止损时预计卖出获得的SOL数量 (lamports) - 同 {@link simulateLongStopLoss}
- * @returns {number} returns.stopLossPercentage - 止损百分比 - 同 {@link simulateLongStopLoss}
- * @returns {number} returns.leverage - 杠杆倍数 - 同 {@link simulateLongStopLoss}
- * @returns {bigint} returns.currentPrice - 当前价格 (u128格式) - 同 {@link simulateLongStopLoss}
- * @returns {number} returns.iterations - 价格调整迭代次数 - 同 {@link simulateLongStopLoss}
- * @returns {bigint} returns.originalStopLossPrice - 原始止损价格 (u128格式) - 同 {@link simulateLongStopLoss}
- * @returns {number[]} returns.close_insert_indices - 平仓订单插入位置的候选索引数组 ⭐ - 同 {@link simulateLongStopLoss}
- * @returns {bigint} returns.estimatedMargin - 预估所需保证金 (SOL lamports) - 同 {@link simulateLongStopLoss}
- * @returns {bigint} returns.buyTokenAmount - 计算出的买入代币数量 ⭐ 额外字段
- *   - 这是根据 buySolAmount 反向计算出的代币数量
- *   - 使得 estimatedMargin 接近 buySolAmount
- *   - 可以直接用于 sdk.trading.long() 的 buyTokenAmount 参数
- * @returns {number} returns.adjustmentIterations - 代币数量调整迭代次数 ⭐ 额外字段
- *   - 二分查找算法调整代币数量的迭代次数
- *   - 用于评估计算精度
+ * @returns {Promise<Object>} Stop loss analysis result
+ * @returns {bigint} returns.executableStopLossPrice - Executable stop loss price (u128 format) - same as {@link simulateLongStopLoss}
+ * @returns {bigint} returns.tradeAmount - Estimated SOL amount obtained from selling at stop loss (lamports) - same as {@link simulateLongStopLoss}
+ * @returns {number} returns.stopLossPercentage - Stop loss percentage - same as {@link simulateLongStopLoss}
+ * @returns {number} returns.leverage - Leverage ratio - same as {@link simulateLongStopLoss}
+ * @returns {bigint} returns.currentPrice - Current price (u128 format) - same as {@link simulateLongStopLoss}
+ * @returns {number} returns.iterations - Number of price adjustment iterations - same as {@link simulateLongStopLoss}
+ * @returns {bigint} returns.originalStopLossPrice - Original stop loss price (u128 format) - same as {@link simulateLongStopLoss}
+ * @returns {number[]} returns.close_insert_indices - Candidate index array for the closing order insertion position ⭐ - same as {@link simulateLongStopLoss}
+ * @returns {bigint} returns.estimatedMargin - Estimated required margin (SOL lamports) - same as {@link simulateLongStopLoss}
+ * @returns {bigint} returns.buyTokenAmount - Calculated token amount to buy ⭐ Additional field
+ *   - This is the token amount reverse-calculated from buySolAmount
+ *   - Such that estimatedMargin is close to buySolAmount
+ *   - Can be used directly as the buyTokenAmount parameter of sdk.trading.long()
+ * @returns {number} returns.adjustmentIterations - Number of token amount adjustment iterations ⭐ Additional field
+ *   - The number of iterations the binary search algorithm used to adjust the token amount
+ *   - Used to assess calculation precision
  *
- * @throws {Error} 当缺少必需参数时
- * @throws {Error} 当无法获取价格或订单数据时
- * @throws {Error} 当无法计算代币数量时
+ * @throws {Error} When required parameters are missing
+ * @throws {Error} When price or orders data cannot be fetched
+ * @throws {Error} When the token amount cannot be calculated
  *
  * @example
- * // 基础用法: 投入 0.1 SOL 做多,止损价格为当前价格的97%
+ * // Basic usage: spend 0.1 SOL to go long, stop loss price at 97% of the current price
  * const result = await sdk.simulator.simulateLongSolStopLoss(
  *   '4Kq51Kt48FCwdo5CeKjRVPodH1ticHa7mZ5n5gqMEy1X',  // mint
- *   100000000n,                                        // 0.1 SOL (精度10^9)
- *   BigInt('97000000000000000000')                     // 止损价格
+ *   100000000n,                                        // 0.1 SOL (precision 10^9)
+ *   BigInt('97000000000000000000')                     // stop loss price
  * );
  *
- * console.log(`买入代币数量: ${result.buyTokenAmount}`);
- * console.log(`预估保证金: ${result.estimatedMargin} lamports`);
- * console.log(`插入位置索引: ${result.close_insert_indices}`);
+ * console.log(`Token amount to buy: ${result.buyTokenAmount}`);
+ * console.log(`Estimated margin: ${result.estimatedMargin} lamports`);
+ * console.log(`Insert position indices: ${result.close_insert_indices}`);
  *
- * @see {@link simulateLongStopLoss} 基于代币数量的做多止损计算
- * @see {@link simulateShortSolStopLoss} 基于SOL金额的做空止损计算
+ * @see {@link simulateLongStopLoss} Token-amount-based stop loss calculation for long positions
+ * @see {@link simulateShortSolStopLoss} SOL-amount-based stop loss calculation for short positions
  * @since 2.0.0
- * @version 2.0.0 - 从返回 prev_order_pda/next_order_pda 改为返回 close_insert_indices
+ * @version 2.0.0 - Changed from returning prev_order_pda/next_order_pda to returning close_insert_indices
  */
 async function simulateLongSolStopLoss$1(mint, buySolAmount, stopLossPrice, lastPrice = null, ordersData = null, borrowFee = null, initialVirtualSol = null, initialVirtualToken = null, curveAccount = null) {
     try {
@@ -45824,7 +48405,7 @@ async function simulateLongSolStopLoss$1(mint, buySolAmount, stopLossPrice, last
             throw new Error('Missing required parameters');
         }
 
-        // 如果没有传入 borrowFee 或池子参数，从链上一次性获取（支持外部传入 curveAccount 避免重复 RPC）
+        // If borrowFee or pool parameters are not provided, fetch them from the chain in a single call (supports passing in curveAccount externally to avoid duplicate RPC)
         if (borrowFee === null || initialVirtualSol === null || initialVirtualToken === null) {
             if (!curveAccount) {
                 curveAccount = await this.sdk.chain.getCurveAccount(mint, { skipBalances: true });
@@ -45865,70 +48446,70 @@ async function simulateLongSolStopLoss$1(mint, buySolAmount, stopLossPrice, last
         let iterations = 0;
         const maxIterations = 50;
 
-        // 根据杠杆倍数动态计算二分查找上界
-        // 高杠杆(如20x)时止损距离小，每个代币的保证金贡献小，需要更多代币才能消耗完保证金
+        // Dynamically compute the binary search upper bound based on the leverage ratio
+        // At high leverage (e.g. 20x) the stop loss distance is small, each token contributes little margin, so more tokens are needed to consume the full margin
         // Calculate dynamic binary search upper bound based on leverage
         const stopLossPriceBigInt = BigInt(stopLossPrice);
         const priceDiff = currentPrice - stopLossPriceBigInt;
         const estimatedLeverage = priceDiff > 0n ? Number(currentPrice * 10000n / priceDiff) / 10000 : 10;
-        const safeMultiplier = BigInt(Math.ceil(estimatedLeverage * 3)); // 3倍安全系数
-        const multiplier = safeMultiplier > 10n ? safeMultiplier : 10n; // 最小10倍
+        const safeMultiplier = BigInt(Math.ceil(estimatedLeverage * 3)); // 3x safety factor
+        const multiplier = safeMultiplier > 10n ? safeMultiplier : 10n; // minimum 10x
 
-        // 使用二分查找算法找到 estimatedMargin < buySolAmount 的最大值
+        // Use a binary search algorithm to find the maximum estimatedMargin that is less than buySolAmount
         // Use binary search algorithm to find maximum estimatedMargin that is less than buySolAmount
-        let left = 1n; // 最小值，确保有一个有效的下界
-        let right = buyTokenAmount * multiplier; // 上界：根据杠杆动态计算
+        let left = 1n; // minimum value, ensuring a valid lower bound
+        let right = buyTokenAmount * multiplier; // upper bound: dynamically computed based on leverage
         let bestResult = null;
-        let bestMargin = 0n; // 记录最大的合法 estimatedMargin
+        let bestMargin = 0n; // record the maximum valid estimatedMargin
         let bestTokenAmount = buyTokenAmount;
-        
-        // 二分查找主循环：寻找 estimatedMargin < buySolAmount 的最大值
+
+        // Binary search main loop: find the maximum estimatedMargin that is less than buySolAmount
         while (iterations < maxIterations && left <= right) {
             const mid = (left + right) / 2n;
-            
-            // 计算当前 token 数量的结果
+
+            // Calculate the result for the current token amount
             const currentResult = await simulateLongStopLoss$1.call(this, mint, mid, stopLossPrice, lastPrice, ordersData, borrowFee, initialVirtualSol, initialVirtualToken);
             const currentMargin = currentResult.estimatedMargin;
-            
+
             //console.log(`Binary search iteration ${iterations}: tokenAmount=${mid}, estimatedMargin=${currentMargin}, target=${buySolAmount}`);
-            
-            // 只考虑 estimatedMargin < buySolAmount 的情况
+
+            // Only consider the case where estimatedMargin < buySolAmount
             if (currentMargin < BigInt(buySolAmount)) {
-                // 这是一个合法的解，检查是否比当前最佳解更好
+                // This is a valid solution, check whether it is better than the current best solution
                 if (currentMargin > bestMargin) {
                     bestMargin = currentMargin;
                     bestResult = currentResult;
                     bestTokenAmount = mid;
                     //console.log(`Found better solution: estimatedMargin=${currentMargin}, tokenAmount=${mid}`);
                 }
-                
-                // 如果差距已经很小（距离目标值小于10000000 lamports），可以提前退出
+
+                // If the gap is already very small (within 10000000 lamports of the target), we can exit early
                 if (BigInt(buySolAmount) - currentMargin <= 10000000n) {
                     //console.log(`Found optimal solution: estimatedMargin=${currentMargin}, diff=${BigInt(buySolAmount) - currentMargin} (< 10000000 lamports tolerance)`);
                     break;
                 }
-                
-                // 继续向右搜索，寻找更大的合法值
+
+                // Continue searching to the right for a larger valid value
                 left = mid + 1n;
             } else {
-                // estimatedMargin >= buySolAmount，需要减少 tokenAmount
+                // estimatedMargin >= buySolAmount, need to reduce tokenAmount
                 //console.log(`estimatedMargin too large (${currentMargin} >= ${buySolAmount}), searching left`);
                 right = mid - 1n;
             }
-            
+
             iterations++;
         }
-        
-        // 确保找到的结果满足要求
+
+        // Ensure the found result meets the requirement
         if (bestResult && bestMargin < BigInt(buySolAmount)) {
             stopLossResult = bestResult;
             buyTokenAmount = bestTokenAmount;
             //console.log(`Binary search completed: best tokenAmount=${bestTokenAmount}, estimatedMargin=${bestMargin}, target=${buySolAmount}`);
         } else {
-            // 如果没有找到合法解，使用一个很小的 tokenAmount 作为安全回退
+            // If no valid solution is found, use a very small tokenAmount as a safe fallback
             //console.log(`No valid solution found (estimatedMargin < buySolAmount), using minimal tokenAmount`);
-            buyTokenAmount = buyTokenAmount / 10n; // 使用更小的值
-            if (buyTokenAmount <= 0n) buyTokenAmount = 1000000000n; // 最小值保护 (0.001 token with 9 decimals)
+            buyTokenAmount = buyTokenAmount / 10n; // use a smaller value
+            if (buyTokenAmount <= 0n) buyTokenAmount = 1000000000n; // minimum value protection (0.001 token with 9 decimals)
             stopLossResult = await simulateLongStopLoss$1.call(this, mint, buyTokenAmount, stopLossPrice, lastPrice, ordersData, borrowFee, initialVirtualSol, initialVirtualToken);
         }
 
@@ -45952,54 +48533,54 @@ async function simulateLongSolStopLoss$1(mint, buySolAmount, stopLossPrice, last
 /**
  * Simulate short position stop loss calculation with SOL amount input
  *
- * 基于 SOL 金额的做空止损计算。该函数会自动计算出对应的代币数量,
- * 使得保证金需求接近用户输入的 SOL 金额。
+ * SOL-amount-based stop loss calculation for a short position. This function automatically computes the corresponding token amount,
+ * so that the margin requirement is close to the SOL amount provided by the user.
  *
- * @param {string} mint - Token address / 代币地址
- * @param {bigint|string|number} sellSolAmount - SOL amount needed for short position stop loss (u64 format, lamports) / 做空投入的SOL金额 (u64格式, lamports)
- * @param {bigint|string|number} stopLossPrice - User desired stop loss price (u128 format) / 用户期望的止损价格 (u128格式)
- * @param {Object|null} lastPrice - Token info, default null / 代币当前价格信息,默认null会自动获取
- * @param {Object|null} ordersData - Orders data, default null / 订单数据,默认null会自动获取
- * @param {number} borrowFee - Borrow fee rate, default 2000 (2000/100000 = 0.02%) / 借贷手续费率,默认2000 (2000/100000 = 0.02%)
+ * @param {string} mint - Token address
+ * @param {bigint|string|number} sellSolAmount - SOL amount needed for short position stop loss (u64 format, lamports)
+ * @param {bigint|string|number} stopLossPrice - User desired stop loss price (u128 format)
+ * @param {Object|null} lastPrice - Token info, default null (auto-fetched if null)
+ * @param {Object|null} ordersData - Orders data, default null (auto-fetched if null)
+ * @param {number} borrowFee - Borrow fee rate, default 2000 (2000/100000 = 0.02%)
  *
- * @returns {Promise<Object>} Stop loss analysis result / 止损分析结果对象
- * @returns {bigint} returns.executableStopLossPrice - 可执行止损价格 (u128格式) - 同 {@link simulateShortStopLoss}
- * @returns {bigint} returns.tradeAmount - 止损时预计买入需要的SOL数量 (lamports) - 同 {@link simulateShortStopLoss}
- * @returns {number} returns.stopLossPercentage - 止损百分比 - 同 {@link simulateShortStopLoss}
- * @returns {number} returns.leverage - 杠杆倍数 - 同 {@link simulateShortStopLoss}
- * @returns {bigint} returns.currentPrice - 当前价格 (u128格式) - 同 {@link simulateShortStopLoss}
- * @returns {number} returns.iterations - 价格调整迭代次数 - 同 {@link simulateShortStopLoss}
- * @returns {bigint} returns.originalStopLossPrice - 原始止损价格 (u128格式) - 同 {@link simulateShortStopLoss}
- * @returns {number[]} returns.close_insert_indices - 平仓订单插入位置的候选索引数组 ⭐ - 同 {@link simulateShortStopLoss}
- * @returns {bigint} returns.estimatedMargin - 预估所需保证金 (SOL lamports) - 同 {@link simulateShortStopLoss}
- * @returns {bigint} returns.sellTokenAmount - 计算出的卖出代币数量 ⭐ 额外字段
- *   - 这是根据 sellSolAmount 反向计算出的代币数量
- *   - 使得 estimatedMargin 接近 sellSolAmount
- *   - 可以直接用于 sdk.trading.short() 的 borrowSellTokenAmount 参数
- * @returns {number} returns.adjustmentIterations - 代币数量调整迭代次数 ⭐ 额外字段
- *   - 二分查找算法调整代币数量的迭代次数
- *   - 用于评估计算精度
+ * @returns {Promise<Object>} Stop loss analysis result
+ * @returns {bigint} returns.executableStopLossPrice - Executable stop loss price (u128 format) - same as {@link simulateShortStopLoss}
+ * @returns {bigint} returns.tradeAmount - Estimated SOL amount needed to buy at stop loss (lamports) - same as {@link simulateShortStopLoss}
+ * @returns {number} returns.stopLossPercentage - Stop loss percentage - same as {@link simulateShortStopLoss}
+ * @returns {number} returns.leverage - Leverage ratio - same as {@link simulateShortStopLoss}
+ * @returns {bigint} returns.currentPrice - Current price (u128 format) - same as {@link simulateShortStopLoss}
+ * @returns {number} returns.iterations - Number of price adjustment iterations - same as {@link simulateShortStopLoss}
+ * @returns {bigint} returns.originalStopLossPrice - Original stop loss price (u128 format) - same as {@link simulateShortStopLoss}
+ * @returns {number[]} returns.close_insert_indices - Candidate index array for the closing order insertion position ⭐ - same as {@link simulateShortStopLoss}
+ * @returns {bigint} returns.estimatedMargin - Estimated required margin (SOL lamports) - same as {@link simulateShortStopLoss}
+ * @returns {bigint} returns.sellTokenAmount - Calculated token amount to sell ⭐ Additional field
+ *   - This is the token amount reverse-calculated from sellSolAmount
+ *   - Such that estimatedMargin is close to sellSolAmount
+ *   - Can be used directly as the borrowSellTokenAmount parameter of sdk.trading.short()
+ * @returns {number} returns.adjustmentIterations - Number of token amount adjustment iterations ⭐ Additional field
+ *   - The number of iterations the binary search algorithm used to adjust the token amount
+ *   - Used to assess calculation precision
  *
- * @throws {Error} 当缺少必需参数时
- * @throws {Error} 当无法获取价格或订单数据时
- * @throws {Error} 当无法计算代币数量时
+ * @throws {Error} When required parameters are missing
+ * @throws {Error} When price or orders data cannot be fetched
+ * @throws {Error} When the token amount cannot be calculated
  *
  * @example
- * // 基础用法: 投入 0.1 SOL 做空,止损价格为当前价格的103%
+ * // Basic usage: spend 0.1 SOL to go short, stop loss price at 103% of the current price
  * const result = await sdk.simulator.simulateShortSolStopLoss(
  *   '4Kq51Kt48FCwdo5CeKjRVPodH1ticHa7mZ5n5gqMEy1X',  // mint
- *   100000000n,                                        // 0.1 SOL (精度10^9)
- *   BigInt('103000000000000000000')                    // 止损价格
+ *   100000000n,                                        // 0.1 SOL (precision 10^9)
+ *   BigInt('103000000000000000000')                    // stop loss price
  * );
  *
- * console.log(`卖出代币数量: ${result.sellTokenAmount}`);
- * console.log(`预估保证金: ${result.estimatedMargin} lamports`);
- * console.log(`插入位置索引: ${result.close_insert_indices}`);
+ * console.log(`Token amount to sell: ${result.sellTokenAmount}`);
+ * console.log(`Estimated margin: ${result.estimatedMargin} lamports`);
+ * console.log(`Insert position indices: ${result.close_insert_indices}`);
  *
- * @see {@link simulateShortStopLoss} 基于代币数量的做空止损计算
- * @see {@link simulateLongSolStopLoss} 基于SOL金额的做多止损计算
+ * @see {@link simulateShortStopLoss} Token-amount-based stop loss calculation for short positions
+ * @see {@link simulateLongSolStopLoss} SOL-amount-based stop loss calculation for long positions
  * @since 2.0.0
- * @version 2.0.0 - 从返回 prev_order_pda/next_order_pda 改为返回 close_insert_indices
+ * @version 2.0.0 - Changed from returning prev_order_pda/next_order_pda to returning close_insert_indices
  */
 async function simulateShortSolStopLoss$1(mint, sellSolAmount, stopLossPrice, lastPrice = null, ordersData = null, borrowFee = null, initialVirtualSol = null, initialVirtualToken = null, curveAccount = null) {
     try {
@@ -46008,7 +48589,7 @@ async function simulateShortSolStopLoss$1(mint, sellSolAmount, stopLossPrice, la
             throw new Error('Missing required parameters');
         }
 
-        // 如果没有传入 borrowFee 或池子参数，从链上一次性获取（支持外部传入 curveAccount 避免重复 RPC）
+        // If borrowFee or pool parameters are not provided, fetch them from the chain in a single call (supports passing in curveAccount externally to avoid duplicate RPC)
         if (borrowFee === null || initialVirtualSol === null || initialVirtualToken === null) {
             if (!curveAccount) {
                 curveAccount = await this.sdk.chain.getCurveAccount(mint, { skipBalances: true });
@@ -46051,70 +48632,70 @@ async function simulateShortSolStopLoss$1(mint, sellSolAmount, stopLossPrice, la
         let iterations = 0;
         const maxIterations = 50;
 
-        // 根据杠杆倍数动态计算二分查找上界
-        // 高杠杆(如20x)时止损距离小，每个代币的保证金贡献小，需要更多代币才能消耗完保证金
+        // Dynamically compute the binary search upper bound based on the leverage ratio
+        // At high leverage (e.g. 20x) the stop loss distance is small, each token contributes little margin, so more tokens are needed to consume the full margin
         // Calculate dynamic binary search upper bound based on leverage
         const stopLossPriceBigInt = BigInt(stopLossPrice);
         const priceDiff = stopLossPriceBigInt - currentPrice;
         const estimatedLeverage = priceDiff > 0n ? Number(currentPrice * 10000n / priceDiff) / 10000 : 10;
-        const safeMultiplier = BigInt(Math.ceil(estimatedLeverage * 3)); // 3倍安全系数
-        const multiplier = safeMultiplier > 10n ? safeMultiplier : 10n; // 最小10倍
+        const safeMultiplier = BigInt(Math.ceil(estimatedLeverage * 3)); // 3x safety factor
+        const multiplier = safeMultiplier > 10n ? safeMultiplier : 10n; // minimum 10x
 
-        // 使用二分查找算法找到 estimatedMargin < sellSolAmount 的最大值
+        // Use a binary search algorithm to find the maximum estimatedMargin that is less than sellSolAmount
         // Use binary search algorithm to find maximum estimatedMargin that is less than sellSolAmount
-        let left = 1n; // 最小值，确保有一个有效的下界
-        let right = sellTokenAmount * multiplier; // 上界：根据杠杆动态计算
+        let left = 1n; // minimum value, ensuring a valid lower bound
+        let right = sellTokenAmount * multiplier; // upper bound: dynamically computed based on leverage
         let bestResult = null;
-        let bestMargin = 0n; // 记录最大的合法 estimatedMargin
+        let bestMargin = 0n; // record the maximum valid estimatedMargin
         let bestTokenAmount = sellTokenAmount;
-        
-        // 二分查找主循环：寻找 estimatedMargin < sellSolAmount 的最大值
+
+        // Binary search main loop: find the maximum estimatedMargin that is less than sellSolAmount
         while (iterations < maxIterations && left <= right) {
             const mid = (left + right) / 2n;
-            
-            // 计算当前 token 数量的结果
+
+            // Calculate the result for the current token amount
             const currentResult = await simulateShortStopLoss$1.call(this, mint, mid, stopLossPrice, lastPrice, ordersData, borrowFee, initialVirtualSol, initialVirtualToken);
             const currentMargin = currentResult.estimatedMargin;
-            
+
             //console.log(`Binary search iteration ${iterations}: tokenAmount=${mid}, estimatedMargin=${currentMargin}, target=${sellSolAmount}`);
-            
-            // 只考虑 estimatedMargin < sellSolAmount 的情况
+
+            // Only consider the case where estimatedMargin < sellSolAmount
             if (currentMargin < BigInt(sellSolAmount)) {
-                // 这是一个合法的解，检查是否比当前最佳解更好
+                // This is a valid solution, check whether it is better than the current best solution
                 if (currentMargin > bestMargin) {
                     bestMargin = currentMargin;
                     bestResult = currentResult;
                     bestTokenAmount = mid;
                     //console.log(`Found better solution: estimatedMargin=${currentMargin}, tokenAmount=${mid}`);
                 }
-                
-                // 如果差距已经很小（距离目标值小于10000000 lamports），可以提前退出
+
+                // If the gap is already very small (within 10000000 lamports of the target), we can exit early
                 if (BigInt(sellSolAmount) - currentMargin <= 10000000n) {
                     //console.log(`Found optimal solution: estimatedMargin=${currentMargin}, diff=${BigInt(sellSolAmount) - currentMargin} (< 10000000 lamports tolerance)`);
                     break;
                 }
-                
-                // 继续向右搜索，寻找更大的合法值
+
+                // Continue searching to the right for a larger valid value
                 left = mid + 1n;
             } else {
-                // estimatedMargin >= sellSolAmount，需要减少 tokenAmount
+                // estimatedMargin >= sellSolAmount, need to reduce tokenAmount
                 //console.log(`estimatedMargin too large (${currentMargin} >= ${sellSolAmount}), searching left`);
                 right = mid - 1n;
             }
-            
+
             iterations++;
         }
-        
-        // 确保找到的结果满足要求
+
+        // Ensure the found result meets the requirement
         if (bestResult && bestMargin < BigInt(sellSolAmount)) {
             stopLossResult = bestResult;
             sellTokenAmount = bestTokenAmount;
             //console.log(`Binary search completed: best tokenAmount=${bestTokenAmount}, estimatedMargin=${bestMargin}, target=${sellSolAmount}`);
         } else {
-            // 如果没有找到合法解，使用一个很小的 tokenAmount 作为安全回退
+            // If no valid solution is found, use a very small tokenAmount as a safe fallback
             //console.log(`No valid solution found (estimatedMargin < sellSolAmount), using minimal tokenAmount`);
-            sellTokenAmount = sellTokenAmount / 10n; // 使用更小的值
-            if (sellTokenAmount <= 0n) sellTokenAmount = 1000000000n; // 最小值保护 (0.001 token with 9 decimals)
+            sellTokenAmount = sellTokenAmount / 10n; // use a smaller value
+            if (sellTokenAmount <= 0n) sellTokenAmount = 1000000000n; // minimum value protection (0.001 token with 9 decimals)
             stopLossResult = await simulateShortStopLoss$1.call(this, mint, sellTokenAmount, stopLossPrice, lastPrice, ordersData, borrowFee, initialVirtualSol, initialVirtualToken);
         }
 
@@ -46147,74 +48728,63 @@ const Decimal = decimalExports;
 
 
 /**
- * 计算代币买入时的流动性影响 Calculate liquidity impact for token buy operations
- * 
- * 此函数分析买入操作对价格区间内流动性的影响，计算可用的自由流动性、锁定流动性，
- * 并支持跳过指定订单（将其流动性视为可用）。适用于做多订单（up_orders）场景。
+ * Calculate liquidity impact for token buy operations
+ *
  * This function analyzes the liquidity impact of buy operations within price ranges,
  * calculates available free liquidity, locked liquidity, and supports skipping specific
  * orders (treating their liquidity as available). Applicable for long orders (up_orders) scenarios.
- * 
- * @param {bigint|string|number} price - 当前代币价格，作为计算起始价格 Current token price, used as calculation start price
- * @param {bigint|string|number} buyTokenAmount - 购买的代币数量，目标买入数量 Amount of tokens to buy, target purchase amount
- * @param {Array<Object>} orders - 订单数组，按 lock_lp_start_price 从小到大排序 Array of orders sorted by lock_lp_start_price (ascending):
- *   - order_type: {number} 订单类型(1=做多,2=做空) Order type (1=long, 2=short)
- *   - mint: {string} 代币地址 Token mint address
- *   - user: {string} 用户地址 User address
- *   - lock_lp_start_price: {string} LP锁定开始价格 LP lock start price (required)
- *   - lock_lp_end_price: {string} LP锁定结束价格 LP lock end price (required)
- *   - lock_lp_sol_amount: {number} 锁定的SOL数量 Locked SOL amount (required)
- *   - lock_lp_token_amount: {number} 锁定的代币数量 Locked token amount (required)
- *   - start_time: {number} 开始时间戳 Start timestamp
- *   - end_time: {number} 结束时间戳 End timestamp
- *   - margin_sol_amount: {number} 保证金SOL数量 Margin SOL amount
- *   - borrow_amount: {number} 借贷数量 Borrow amount
- *   - position_asset_amount: {number} 持仓资产数量 Position asset amount
- *   - borrow_fee: {number} 借贷费用 Borrow fee
- *   - order_pda: {string} 订单PDA地址 Order PDA address (required for passOrder matching)
- * @param {number} onceMaxOrder - 一次处理的最大订单数，限制遍历范围 Maximum orders to process at once, limits traversal range
- * @param {string|null} passOrder - 需要跳过的订单PDA地址字符串，当该值与订单的order_pda匹配时，跳过该订单并将其流动性计入自由流动性 Order PDA address string to skip, when this value matches an order's order_pda, skip that order and count its liquidity as free liquidity
- * 
- * @returns {Object} 流动性计算结果对象，包含详细的流动性分析数据 Liquidity calculation result object with detailed liquidity analysis data:
- * 
- *   **自由流动性 Free Liquidity:**
- *   - free_lp_sol_amount_sum: {bigint} 可用自由流动性SOL总量，包含以下来源：1)价格间隙流动性 2)跳过订单的流动性 3)无限流动性（如有）
- *                                       Total available free liquidity SOL amount, includes: 1) price gap liquidity 2) skipped order liquidity 3) infinite liquidity (if any)
- *   - free_lp_token_amount_sum: {bigint} 可用自由流动性Token总量，与SOL对应，表示在不强平任何订单情况下可买到的最大代币数量
- *                                         Total available free liquidity token amount, corresponds to SOL, represents max tokens buyable without force closing any orders
- * 
- *   **锁定流动性 Locked Liquidity:**
- *   - lock_lp_sol_amount_sum: {bigint} 被锁定的流动性SOL总量，不包括跳过的订单，这部分流动性不可直接使用
- *                                       Total locked liquidity SOL amount, excludes skipped orders, this liquidity is not directly usable
- *   - lock_lp_token_amount_sum: {bigint} 被锁定的流动性Token总量，不包括跳过的订单，对应于锁定的SOL流动性
- *                                         Total locked liquidity token amount, excludes skipped orders, corresponds to locked SOL liquidity
- * 
- *   **流动性状态标识 Liquidity Status Indicators:**
- *   - has_infinite_lp: {boolean} 是否包含无限流动性，true表示订单链表已结束且计算了到最大价格(MAX_U128_PRICE)的流动性
- *                                  Whether includes infinite liquidity, true means order chain ended and liquidity to max price (MAX_U128_PRICE) was calculated
- *   - pass_order_id: {number} 被跳过的订单在数组中的索引位置，-1表示没有跳过任何订单，>=0表示跳过了对应索引的订单
- *                               Index of skipped order in array, -1 means no order skipped, >=0 means order at that index was skipped
- * 
- *   **买入执行信息 Buy Execution Info:**
- *   - force_close_num: {number} 需要强平的订单数量，表示为了买到目标数量需要强制平仓多少个订单，0表示无需强平
- *                                 Number of orders that need to be force closed, indicates how many orders need force closure to buy target amount, 0 means no force closure needed
- *   - ideal_lp_sol_amount: {bigint} 理想SOL使用量，基于当前价格使用CurveAMM直接计算的理论最小SOL需求，不考虑流动性分布
- *                                     Ideal SOL usage, theoretical minimum SOL requirement calculated directly from current price using CurveAMM, ignores liquidity distribution
- *   - real_lp_sol_amount: {bigint} 实际SOL使用量，考虑真实流动性分布的精确SOL需求。0表示当前自由流动性不足以满足买入需求，需要强平更多订单
- *                                    Actual SOL usage, precise SOL requirement considering real liquidity distribution. 0 means current free liquidity insufficient for buy requirement, need to force close more orders
- * 
- * @throws {Error} 参数验证错误：price、buyTokenAmount、orders、onceMaxOrder 参数无效 Parameter validation error: invalid price, buyTokenAmount, orders, or onceMaxOrder
- * @throws {Error} 价格转换错误：无法将价格参数转换为 BigInt Price conversion error: cannot convert price parameters to BigInt
- * @throws {Error} 流动性计算错误：CurveAMM 计算失败或数值转换错误 Liquidity calculation error: CurveAMM calculation failure or value conversion error
- * @throws {Error} 间隙流动性计算失败：价格间隙流动性计算异常 Gap liquidity calculation failure: price gap liquidity calculation exception
- * @throws {Error} 无限流动性计算失败：最大价格流动性计算异常 Infinite liquidity calculation failure: max price liquidity calculation exception
- * @throws {Error} 订单数据格式错误：订单对象缺少必需字段 Order data format error: order object missing required fields
+ *
+ * @param {bigint|string|number} price - Current token price, used as calculation start price
+ * @param {bigint|string|number} buyTokenAmount - Amount of tokens to buy, target purchase amount
+ * @param {Array<Object>} orders - Array of orders sorted by lock_lp_start_price (ascending):
+ *   - order_type: {number} Order type (1=long, 2=short)
+ *   - mint: {string} Token mint address
+ *   - user: {string} User address
+ *   - lock_lp_start_price: {string} LP lock start price (required)
+ *   - lock_lp_end_price: {string} LP lock end price (required)
+ *   - lock_lp_sol_amount: {number} Locked SOL amount (required)
+ *   - lock_lp_token_amount: {number} Locked token amount (required)
+ *   - start_time: {number} Start timestamp
+ *   - end_time: {number} End timestamp
+ *   - margin_sol_amount: {number} Margin SOL amount
+ *   - borrow_amount: {number} Borrow amount
+ *   - position_asset_amount: {number} Position asset amount
+ *   - borrow_fee: {number} Borrow fee
+ *   - order_pda: {string} Order PDA address (required for passOrder matching)
+ * @param {number} onceMaxOrder - Maximum orders to process at once, limits traversal range
+ * @param {string|null} passOrder - Order PDA address string to skip, when this value matches an order's order_pda, skip that order and count its liquidity as free liquidity
+ *
+ * @returns {Object} Liquidity calculation result object with detailed liquidity analysis data:
+ *
+ *   **Free Liquidity:**
+ *   - free_lp_sol_amount_sum: {bigint} Total available free liquidity SOL amount, includes: 1) price gap liquidity 2) skipped order liquidity 3) infinite liquidity (if any)
+ *   - free_lp_token_amount_sum: {bigint} Total available free liquidity token amount, corresponds to SOL, represents max tokens buyable without force closing any orders
+ *
+ *   **Locked Liquidity:**
+ *   - lock_lp_sol_amount_sum: {bigint} Total locked liquidity SOL amount, excludes skipped orders, this liquidity is not directly usable
+ *   - lock_lp_token_amount_sum: {bigint} Total locked liquidity token amount, excludes skipped orders, corresponds to locked SOL liquidity
+ *
+ *   **Liquidity Status Indicators:**
+ *   - has_infinite_lp: {boolean} Whether includes infinite liquidity, true means order chain ended and liquidity to max price (MAX_U128_PRICE) was calculated
+ *   - pass_order_id: {number} Index of skipped order in array, -1 means no order skipped, >=0 means order at that index was skipped
+ *
+ *   **Buy Execution Info:**
+ *   - force_close_num: {number} Number of orders that need to be force closed, indicates how many orders need force closure to buy target amount, 0 means no force closure needed
+ *   - ideal_lp_sol_amount: {bigint} Ideal SOL usage, theoretical minimum SOL requirement calculated directly from current price using CurveAMM, ignores liquidity distribution
+ *   - real_lp_sol_amount: {bigint} Actual SOL usage, precise SOL requirement considering real liquidity distribution. 0 means current free liquidity insufficient for buy requirement, need to force close more orders
+ *
+ * @throws {Error} Parameter validation error: invalid price, buyTokenAmount, orders, or onceMaxOrder
+ * @throws {Error} Price conversion error: cannot convert price parameters to BigInt
+ * @throws {Error} Liquidity calculation error: CurveAMM calculation failure or value conversion error
+ * @throws {Error} Gap liquidity calculation failure: price gap liquidity calculation exception
+ * @throws {Error} Infinite liquidity calculation failure: max price liquidity calculation exception
+ * @throws {Error} Order data format error: order object missing required fields
  */
 function calcLiqTokenBuy$1(price, buyTokenAmount, orders, onceMaxOrder, passOrder = null, initialVirtualSol = null, initialVirtualToken = null) {
-  // 由于是买入操作 肯定拿的是 up_orders 方向的 订单  lock_lp_start_price <  lock_lp_end_price
-  // 并且 lock_lp_start_price 在 orders 中是从小到大排序的
+  // Since this is a buy operation, the orders are definitely in the up_orders direction  lock_lp_start_price <  lock_lp_end_price
+  // And lock_lp_start_price is sorted in ascending order in orders
 
-  // 参数验证
+  // Parameter validation
   if (!price && price !== 0) {
     throw new Error('参数验证错误：price 参数不能为空 Parameter validation error: price cannot be null');
   }
@@ -46232,15 +48802,15 @@ function calcLiqTokenBuy$1(price, buyTokenAmount, orders, onceMaxOrder, passOrde
   }
 
   const result = {
-    free_lp_sol_amount_sum: 0n,  // 间隙中可使用的sol流动性数量
-    free_lp_token_amount_sum: 0n, // 间隙中可使用的token流动性数量
+    free_lp_sol_amount_sum: 0n,  // Amount of SOL liquidity usable in the gaps
+    free_lp_token_amount_sum: 0n, // Amount of token liquidity usable in the gaps
     lock_lp_sol_amount_sum: 0n,
     lock_lp_token_amount_sum: 0n,
-    has_infinite_lp: false, // 是否包含无限流动性
-    pass_order_id: -1, // 跳过的订单索引
-    force_close_num: 0, // 强平订单数量
-    ideal_lp_sol_amount: 0n, // 理想情况下买到buyTokenAmount的数量, 理想情况下使用的SOL数量
-    real_lp_sol_amount: 0n, // 要买到buyTokenAmount的数量, 实际使用的SOL数量
+    has_infinite_lp: false, // Whether includes infinite liquidity
+    pass_order_id: -1, // Index of skipped order
+    force_close_num: 0, // Number of force closed orders
+    ideal_lp_sol_amount: 0n, // Amount of SOL used to buy buyTokenAmount under ideal conditions
+    real_lp_sol_amount: 0n, // Amount of SOL actually used to buy buyTokenAmount
   };
 
 
@@ -46253,7 +48823,7 @@ function calcLiqTokenBuy$1(price, buyTokenAmount, orders, onceMaxOrder, passOrde
     throw new Error(`价格转换错误：无法将 buyTokenAmount 转换为 BigInt Price conversion error: Cannot convert buyTokenAmount to BigInt - ${error.message}`);
   }
 
-  // 声明用于跟踪前一次自由流动性总量的变量
+  // Declare variable for tracking the previous free liquidity total
   let prev_free_lp_sol_amount_sum;
 
   //result.ideal_lp_token_amount_sum = buyTokenAmountBigInt;
@@ -46269,13 +48839,13 @@ function calcLiqTokenBuy$1(price, buyTokenAmount, orders, onceMaxOrder, passOrde
       initialVirtualSolDecimal,
       initialVirtualTokenDecimal
     );
-    // console.log(`理想计算: 当前价格=${priceBigInt}, 目标代币=${buyTokenAmountBigInt}, 理想SOL=${result.ideal_lp_sol_amount}`);
+    // console.log(`ideal calculation: current price=${priceBigInt}, target token=${buyTokenAmountBigInt}, ideal SOL=${result.ideal_lp_sol_amount}`);
   } catch (error) {
     throw new Error(`buy流动性计算错误：理想流动性计算失败 Liquidity calculation error: Ideal liquidity calculation failed - ${error.message}`);
   }
 
 
-  // orders 长度为0 时要单独计算
+  // orders length of 0 requires separate calculation
   if (orders.length === 0) {
     
 
@@ -46297,14 +48867,14 @@ function calcLiqTokenBuy$1(price, buyTokenAmount, orders, onceMaxOrder, passOrde
 
 
 
-  // 选择较小值进行遍历
+  // Choose the smaller value for traversal
   const loopCount = Math.min(orders.length, onceMaxOrder);
 
   let counti = 0;
   for (let i = 0; i < loopCount; i++) {
     const order = orders[i];
 
-    // 验证订单数据格式
+    // Validate order data format
     if (!order) {
       throw new Error(`订单数据格式错误：订单 ${i} 为空 Order data format error: Order ${i} is null`);
     }
@@ -46316,15 +48886,15 @@ function calcLiqTokenBuy$1(price, buyTokenAmount, orders, onceMaxOrder, passOrde
     }
 
 
-    // 计算间隙流动性
+    // Calculate gap liquidity
     let startPrice, endPrice;
     try {
       if (i === 0) {
-        // 第一个订单：使用当前价格到订单开始价格的间隙
+        // First order: use the gap from current price to order start price
         startPrice = BigInt(price);
         endPrice = BigInt(order.lock_lp_start_price);
       } else {
-        // 后续订单：使用前一个订单结束价格到当前订单开始价格的间隙
+        // Subsequent orders: use the gap from previous order end price to current order start price
         startPrice = BigInt(orders[i - 1].lock_lp_end_price);
         endPrice = BigInt(order.lock_lp_start_price);
       }
@@ -46333,7 +48903,7 @@ function calcLiqTokenBuy$1(price, buyTokenAmount, orders, onceMaxOrder, passOrde
     }
 
 
-    // 如果存在价格间隙，计算自由流动性
+    // If a price gap exists, calculate free liquidity
     if (endPrice > startPrice) {
       try {
         const initialVirtualSolDecimal = new Decimal(initialVirtualSol).div(CurveAMM$5.SOL_PRECISION_FACTOR_DECIMAL);
@@ -46348,30 +48918,30 @@ function calcLiqTokenBuy$1(price, buyTokenAmount, orders, onceMaxOrder, passOrde
           const [solAmount, tokenAmount] = gapLiquidity;
 
           try {
-            prev_free_lp_sol_amount_sum = result.free_lp_sol_amount_sum; // 上次的值
+            prev_free_lp_sol_amount_sum = result.free_lp_sol_amount_sum; // Previous value
             result.free_lp_sol_amount_sum += BigInt(solAmount);
             result.free_lp_token_amount_sum += BigInt(tokenAmount);
-            // console.log(`间隙[${i}]: ${startPrice}→${endPrice}, 间隙SOL=${solAmount}, 间隙Token=${tokenAmount}, 累计自由Token=${result.free_lp_token_amount_sum}`);
+            // console.log(`gap[${i}]: ${startPrice}→${endPrice}, gap SOL=${solAmount}, gap Token=${tokenAmount}, cumulative free Token=${result.free_lp_token_amount_sum}`);
           } catch (error) {
             throw new Error(`流动性计算错误：无法转换间隙流动性数值 Liquidity calculation error: Cannot convert gap liquidity values - ${error.message}`);
           }
 
 
-          // 计算实际使用的SOL数量 到能买到为止
+          // Calculate the actual amount of SOL used, until enough can be bought
           if (result.real_lp_sol_amount === 0n) {
             if (result.free_lp_token_amount_sum > buyTokenAmountBigInt) {
-              // 这时间隙流动性已经够买入的了
-              // 计算最后精确需要买多少token
+              // At this point the gap liquidity is already enough to buy
+              // Calculate the final precise amount of token to buy
               try {
                 const actualBuyAmount = buyTokenAmountBigInt - (result.free_lp_token_amount_sum - BigInt(tokenAmount));
                 // console.log("actualBuyAmount",actualBuyAmount)
                 const [, preciseSol] = CurveAMM$5.buyFromPriceWithTokenOutput(startPrice, actualBuyAmount);
                 result.real_lp_sol_amount = prev_free_lp_sol_amount_sum + BigInt(preciseSol);
 
-                // console.log(`实际计算[${i}]: 自由流动性已足够, actualBuyAmount=${actualBuyAmount}, preciseSol=${preciseSol}, 实际SOL=${result.real_lp_sol_amount}`);
-                result.force_close_num = counti; // 强平订单数量
+                // console.log(`actual calculation[${i}]: free liquidity sufficient, actualBuyAmount=${actualBuyAmount}, preciseSol=${preciseSol}, actual SOL=${result.real_lp_sol_amount}`);
+                result.force_close_num = counti; // Number of force closed orders
               } catch (error) {
-                // console.log('错误详情:', error);
+                // console.log('error details:', error);
                 throw new Error(`流动性计算错误：精确SOL计算失败 Liquidity calculation error: Precise SOL calculation failed - ${error.message}`);
               }
             }
@@ -46388,13 +48958,13 @@ function calcLiqTokenBuy$1(price, buyTokenAmount, orders, onceMaxOrder, passOrde
       }
     }
 
-    // 检查是否需要跳过该订单（passOrder 逻辑）
+    // Check whether this order needs to be skipped (passOrder logic)
     //const shouldSkipOrder = passOrder && typeof passOrder === 'string' && order.order_pda === passOrder;
 
 
     if (passOrder == order.order_pda) {
 
-      // 将跳过订单的流动性加到自由流动性中
+      // Add the skipped order's liquidity to the free liquidity
       try {
         if (order.lock_lp_sol_amount === undefined || order.lock_lp_sol_amount === null) {
           throw new Error(`订单数据格式错误：跳过订单 ${i} 缺少 lock_lp_sol_amount Order data format error: Skipped order ${i} missing lock_lp_sol_amount`);
@@ -46403,25 +48973,25 @@ function calcLiqTokenBuy$1(price, buyTokenAmount, orders, onceMaxOrder, passOrde
           throw new Error(`订单数据格式错误：跳过订单 ${i} 缺少 lock_lp_token_amount Order data format error: Skipped order ${i} missing lock_lp_token_amount`);
         }
 
-        const prevFreeSolSum = result.free_lp_sol_amount_sum; // 保存之前的值用于计算
+        const prevFreeSolSum = result.free_lp_sol_amount_sum; // Save the previous value for calculation
         result.free_lp_sol_amount_sum += BigInt(order.lock_lp_sol_amount);
         result.free_lp_token_amount_sum += BigInt(order.lock_lp_token_amount);
 
         result.pass_order_id = i;
 
 
-        // 检查跳过订单后的自由流动性是否已满足买入需求
+        // Check whether the free liquidity after skipping the order already meets the buy requirement
         if (result.real_lp_sol_amount === 0n) {
           if (result.free_lp_token_amount_sum >= buyTokenAmountBigInt) {
-            // 自由流动性已经够买入需求了
+            // Free liquidity is already enough for the buy requirement
             try {
               //const remainingToken = result.free_lp_token_amount_sum - buyTokenAmountBigInt;
-              // 从当前价格开始计算需要多少SOL来买到精确的token数量
+              // Calculate from the current price how much SOL is needed to buy the precise token amount
               const targetPrice = i === 0 ? BigInt(price) : BigInt(orders[i - 1].lock_lp_end_price);
               const actualBuyAmount = buyTokenAmountBigInt - (result.free_lp_token_amount_sum - BigInt(order.lock_lp_token_amount));
               const [, preciseSol] = CurveAMM$5.buyFromPriceWithTokenOutput(targetPrice, actualBuyAmount);
               result.real_lp_sol_amount = prevFreeSolSum + BigInt(preciseSol);
-              // console.log(`实际计算[${i}]: 跳过订单后足够, targetPrice=${targetPrice}, preciseSol=${preciseSol}, 实际SOL=${result.real_lp_sol_amount}`);
+              // console.log(`actual calculation[${i}]: sufficient after skipping order, targetPrice=${targetPrice}, preciseSol=${preciseSol}, actual SOL=${result.real_lp_sol_amount}`);
               result.force_close_num = counti;
             } catch (error) {
               throw new Error(`流动性计算错误：跳过订单后精确SOL计算失败 Liquidity calculation error: Precise SOL calculation failed after skipping order - ${error.message}`);
@@ -46436,7 +49006,7 @@ function calcLiqTokenBuy$1(price, buyTokenAmount, orders, onceMaxOrder, passOrde
         throw new Error(`流动性计算错误：无法处理跳过订单 ${i} 的流动性 Liquidity calculation error: Cannot process skipped order ${i} liquidity - ${error.message}`);
       }
     } else {
-      // 累加锁定的流动性（正常情况）
+      // Accumulate locked liquidity (normal case)
       try {
         if (order.lock_lp_sol_amount === undefined || order.lock_lp_sol_amount === null) {
           throw new Error(`订单数据格式错误：订单 ${i} 缺少 lock_lp_sol_amount Order data format error: Order ${i} missing lock_lp_sol_amount`);
@@ -46462,7 +49032,7 @@ function calcLiqTokenBuy$1(price, buyTokenAmount, orders, onceMaxOrder, passOrde
 
   }
 
-  // 如果遍历的订单数小于等于onceMaxOrder，说明链表结束，需要计算无限流动性
+  // If the number of traversed orders is less than or equal to onceMaxOrder, the chain has ended and infinite liquidity needs to be calculated
   if (orders.length <= onceMaxOrder && orders.length > 0) {
 
     const lastOrder = orders[orders.length - 1];
@@ -46500,16 +49070,16 @@ function calcLiqTokenBuy$1(price, buyTokenAmount, orders, onceMaxOrder, passOrde
             throw new Error(`流动性计算错误：无法转换无限流动性数值 Liquidity calculation error: Cannot convert infinite liquidity values - ${error.message}`);
           }
 
-          // 进入无限流动性后 也要 , 计算实际使用的SOL数量 到能买到为止
+          // After entering infinite liquidity, also calculate the actual amount of SOL used, until enough can be bought
           if (result.real_lp_sol_amount === 0n) {
             if (result.free_lp_token_amount_sum > buyTokenAmountBigInt) {
-              // 这时间隙流动性已经够买入的了
-              // 计算最后精确需要买多少token
+              // At this point the gap liquidity is already enough to buy
+              // Calculate the final precise amount of token to buy
               try {
                 const actualBuyAmount = buyTokenAmountBigInt - (result.free_lp_token_amount_sum - BigInt(tokenAmount));
                 const [, preciseSol] = CurveAMM$5.buyFromPriceWithTokenOutput(lastEndPrice, actualBuyAmount);
                 result.real_lp_sol_amount += BigInt(preciseSol);
-                result.force_close_num = counti; // 强平订单数量
+                result.force_close_num = counti; // Number of force closed orders
               } catch (error) {
                 throw new Error(`流动性计算错误：无限流动性精确SOL计算失败 Liquidity calculation error: Infinite liquidity precise SOL calculation failed - ${error.message}`);
               }
@@ -46536,74 +49106,63 @@ function calcLiqTokenBuy$1(price, buyTokenAmount, orders, onceMaxOrder, passOrde
 
 
 /**
- * 计算代币卖出时的流动性影响 Calculate liquidity impact for token sell operations
- * 
- * 此函数分析卖出操作对价格区间内流动性的影响，计算可用的自由流动性、锁定流动性，
- * 并支持跳过指定订单（将其流动性视为可用）。适用于做空订单（down_orders）场景。
+ * Calculate liquidity impact for token sell operations
+ *
  * This function analyzes the liquidity impact of sell operations within price ranges,
  * calculates available free liquidity, locked liquidity, and supports skipping specific
  * orders (treating their liquidity as available). Applicable for short orders (down_orders) scenarios.
- * 
- * @param {bigint|string|number} price - 当前代币价格，作为计算起始价格 Current token price, used as calculation start price
- * @param {bigint|string|number} sellTokenAmount - 卖出的代币数量，目标卖出数量 Amount of tokens to sell, target sell amount
- * @param {Array<Object>} orders - 订单数组，按 lock_lp_start_price 从大到小排序 Array of orders sorted by lock_lp_start_price (descending):
- *   - order_type: {number} 订单类型(1=做多,2=做空) Order type (1=long, 2=short)
- *   - mint: {string} 代币地址 Token mint address
- *   - user: {string} 用户地址 User address
- *   - lock_lp_start_price: {string} LP锁定开始价格（高价） LP lock start price (high price) (required)
- *   - lock_lp_end_price: {string} LP锁定结束价格（低价） LP lock end price (low price) (required)
- *   - lock_lp_sol_amount: {number} 锁定的SOL数量 Locked SOL amount (required)
- *   - lock_lp_token_amount: {number} 锁定的代币数量 Locked token amount (required)
- *   - start_time: {number} 开始时间戳 Start timestamp
- *   - end_time: {number} 结束时间戳 End timestamp
- *   - margin_sol_amount: {number} 保证金SOL数量 Margin SOL amount
- *   - borrow_amount: {number} 借贷数量 Borrow amount
- *   - position_asset_amount: {number} 持仓资产数量 Position asset amount
- *   - borrow_fee: {number} 借贷费用 Borrow fee
- *   - order_pda: {string} 订单PDA地址 Order PDA address (required for passOrder matching)
- * @param {number} onceMaxOrder - 一次处理的最大订单数，限制遍历范围 Maximum orders to process at once, limits traversal range
- * @param {string|null} passOrder - 需要跳过的订单PDA地址字符串，当该值与订单的order_pda匹配时，跳过该订单并将其流动性计入自由流动性 Order PDA address string to skip, when this value matches an order's order_pda, skip that order and count its liquidity as free liquidity
- * 
- * @returns {Object} 流动性计算结果对象，包含详细的流动性分析数据 Liquidity calculation result object with detailed liquidity analysis data:
- * 
- *   **自由流动性 Free Liquidity:**
- *   - free_lp_sol_amount_sum: {bigint} 可用自由流动性SOL总量，表示卖出时能获得的SOL，包含：1)价格间隙流动性 2)跳过订单的流动性 3)无限流动性（如有）
- *                                       Total available free liquidity SOL amount, represents SOL obtainable from selling, includes: 1) price gap liquidity 2) skipped order liquidity 3) infinite liquidity (if any)
- *   - free_lp_token_amount_sum: {bigint} 可用自由流动性Token总量，表示在不强平任何订单情况下可卖出的最大代币数量
- *                                         Total available free liquidity token amount, represents max tokens sellable without force closing any orders
- * 
- *   **锁定流动性 Locked Liquidity:**
- *   - lock_lp_sol_amount_sum: {bigint} 被锁定的流动性SOL总量，不包括跳过的订单，这部分流动性不可直接使用
- *                                       Total locked liquidity SOL amount, excludes skipped orders, this liquidity is not directly usable
- *   - lock_lp_token_amount_sum: {bigint} 被锁定的流动性Token总量，不包括跳过的订单，对应于锁定的SOL流动性
- *                                         Total locked liquidity token amount, excludes skipped orders, corresponds to locked SOL liquidity
- * 
- *   **流动性状态标识 Liquidity Status Indicators:**
- *   - has_infinite_lp: {boolean} 是否包含无限流动性，true表示订单链表已结束且计算了到最小价格(MIN_U128_PRICE)的流动性
- *                                  Whether includes infinite liquidity, true means order chain ended and liquidity to min price (MIN_U128_PRICE) was calculated
- *   - pass_order_id: {number} 被跳过的订单在数组中的索引位置，-1表示没有跳过任何订单，>=0表示跳过了对应索引的订单
- *                               Index of skipped order in array, -1 means no order skipped, >=0 means order at that index was skipped
- * 
- *   **卖出执行信息 Sell Execution Info:**
- *   - force_close_num: {number} 需要强平的订单数量，表示为了卖出目标数量需要强制平仓多少个订单，0表示无需强平
- *                                 Number of orders that need to be force closed, indicates how many orders need force closure to sell target amount, 0 means no force closure needed
- *   - ideal_lp_sol_amount: {bigint} 理想SOL获得量，基于当前价格使用CurveAMM直接计算的理论最大SOL收益，不考虑流动性分布
- *                                     Ideal SOL amount obtainable, theoretical maximum SOL revenue calculated directly from current price using CurveAMM, ignores liquidity distribution
- *   - real_lp_sol_amount: {bigint} 实际SOL获得量，考虑真实流动性分布的精确SOL收益。0表示当前自由流动性不足以满足卖出需求，需要强平更多订单
- *                                    Actual SOL amount obtainable, precise SOL revenue considering real liquidity distribution. 0 means current free liquidity insufficient for sell requirement, need to force close more orders
- * 
- * @throws {Error} 参数验证错误：price、sellTokenAmount、orders、onceMaxOrder 参数无效 Parameter validation error: invalid price, sellTokenAmount, orders, or onceMaxOrder
- * @throws {Error} 价格转换错误：无法将价格参数转换为 BigInt Price conversion error: cannot convert price parameters to BigInt
- * @throws {Error} 流动性计算错误：CurveAMM 计算失败或数值转换错误 Liquidity calculation error: CurveAMM calculation failure or value conversion error
- * @throws {Error} 间隙流动性计算失败：价格间隙流动性计算异常 Gap liquidity calculation failure: price gap liquidity calculation exception
- * @throws {Error} 无限流动性计算失败：最小价格流动性计算异常 Infinite liquidity calculation failure: min price liquidity calculation exception
- * @throws {Error} 订单数据格式错误：订单对象缺少必需字段 Order data format error: order object missing required fields
+ *
+ * @param {bigint|string|number} price - Current token price, used as calculation start price
+ * @param {bigint|string|number} sellTokenAmount - Amount of tokens to sell, target sell amount
+ * @param {Array<Object>} orders - Array of orders sorted by lock_lp_start_price (descending):
+ *   - order_type: {number} Order type (1=long, 2=short)
+ *   - mint: {string} Token mint address
+ *   - user: {string} User address
+ *   - lock_lp_start_price: {string} LP lock start price (high price) (required)
+ *   - lock_lp_end_price: {string} LP lock end price (low price) (required)
+ *   - lock_lp_sol_amount: {number} Locked SOL amount (required)
+ *   - lock_lp_token_amount: {number} Locked token amount (required)
+ *   - start_time: {number} Start timestamp
+ *   - end_time: {number} End timestamp
+ *   - margin_sol_amount: {number} Margin SOL amount
+ *   - borrow_amount: {number} Borrow amount
+ *   - position_asset_amount: {number} Position asset amount
+ *   - borrow_fee: {number} Borrow fee
+ *   - order_pda: {string} Order PDA address (required for passOrder matching)
+ * @param {number} onceMaxOrder - Maximum orders to process at once, limits traversal range
+ * @param {string|null} passOrder - Order PDA address string to skip, when this value matches an order's order_pda, skip that order and count its liquidity as free liquidity
+ *
+ * @returns {Object} Liquidity calculation result object with detailed liquidity analysis data:
+ *
+ *   **Free Liquidity:**
+ *   - free_lp_sol_amount_sum: {bigint} Total available free liquidity SOL amount, represents SOL obtainable from selling, includes: 1) price gap liquidity 2) skipped order liquidity 3) infinite liquidity (if any)
+ *   - free_lp_token_amount_sum: {bigint} Total available free liquidity token amount, represents max tokens sellable without force closing any orders
+ *
+ *   **Locked Liquidity:**
+ *   - lock_lp_sol_amount_sum: {bigint} Total locked liquidity SOL amount, excludes skipped orders, this liquidity is not directly usable
+ *   - lock_lp_token_amount_sum: {bigint} Total locked liquidity token amount, excludes skipped orders, corresponds to locked SOL liquidity
+ *
+ *   **Liquidity Status Indicators:**
+ *   - has_infinite_lp: {boolean} Whether includes infinite liquidity, true means order chain ended and liquidity to min price (MIN_U128_PRICE) was calculated
+ *   - pass_order_id: {number} Index of skipped order in array, -1 means no order skipped, >=0 means order at that index was skipped
+ *
+ *   **Sell Execution Info:**
+ *   - force_close_num: {number} Number of orders that need to be force closed, indicates how many orders need force closure to sell target amount, 0 means no force closure needed
+ *   - ideal_lp_sol_amount: {bigint} Ideal SOL amount obtainable, theoretical maximum SOL revenue calculated directly from current price using CurveAMM, ignores liquidity distribution
+ *   - real_lp_sol_amount: {bigint} Actual SOL amount obtainable, precise SOL revenue considering real liquidity distribution. 0 means current free liquidity insufficient for sell requirement, need to force close more orders
+ *
+ * @throws {Error} Parameter validation error: invalid price, sellTokenAmount, orders, or onceMaxOrder
+ * @throws {Error} Price conversion error: cannot convert price parameters to BigInt
+ * @throws {Error} Liquidity calculation error: CurveAMM calculation failure or value conversion error
+ * @throws {Error} Gap liquidity calculation failure: price gap liquidity calculation exception
+ * @throws {Error} Infinite liquidity calculation failure: min price liquidity calculation exception
+ * @throws {Error} Order data format error: order object missing required fields
  */
 function calcLiqTokenSell$1(price, sellTokenAmount, orders, onceMaxOrder, passOrder = null, initialVirtualSol = null, initialVirtualToken = null) {
-  // 由于是卖出操作 肯定拿的是 down_orders 方向的 订单  lock_lp_start_price >  lock_lp_end_price
-  // 并且 lock_lp_start_price 在 orders 中是从大到小排序的
+  // Since this is a sell operation, the orders are definitely in the down_orders direction  lock_lp_start_price >  lock_lp_end_price
+  // And lock_lp_start_price is sorted in descending order in orders
 
-  // 参数验证
+  // Parameter validation
   if (!price && price !== 0) {
     throw new Error('参数验证错误：price 参数不能为空 Parameter validation error: price cannot be null');
   }
@@ -46621,15 +49180,15 @@ function calcLiqTokenSell$1(price, sellTokenAmount, orders, onceMaxOrder, passOr
   }
 
   const result = {
-    free_lp_sol_amount_sum: 0n,  // 间隙中可使用的sol流动性数量
-    free_lp_token_amount_sum: 0n, // 间隙中可使用的token流动性数量
+    free_lp_sol_amount_sum: 0n,  // Amount of SOL liquidity usable in the gaps
+    free_lp_token_amount_sum: 0n, // Amount of token liquidity usable in the gaps
     lock_lp_sol_amount_sum: 0n,
     lock_lp_token_amount_sum: 0n,
-    has_infinite_lp: false, // 是否包含无限流动性
-    pass_order_id: -1, // 跳过的订单索引
-    force_close_num: 0, // 强平订单数量
-    ideal_lp_sol_amount: 0n, // 理想情况下卖出sellTokenAmount能获得的SOL数量
-    real_lp_sol_amount: 0n, // 实际卖出sellTokenAmount能获得的SOL数量
+    has_infinite_lp: false, // Whether includes infinite liquidity
+    pass_order_id: -1, // Index of skipped order
+    force_close_num: 0, // Number of force closed orders
+    ideal_lp_sol_amount: 0n, // Amount of SOL obtainable from selling sellTokenAmount under ideal conditions
+    real_lp_sol_amount: 0n, // Amount of SOL actually obtainable from selling sellTokenAmount
   };
 
   let sellTokenAmountBigInt;
@@ -46639,10 +49198,10 @@ function calcLiqTokenSell$1(price, sellTokenAmount, orders, onceMaxOrder, passOr
     throw new Error(`价格转换错误：无法将 sellTokenAmount 转换为 BigInt Price conversion error: Cannot convert sellTokenAmount to BigInt - ${error.message}`);
   }
 
-  // 声明用于跟踪前一次自由流动性总量的变量
+  // Declare variable for tracking the previous free liquidity total
   let prev_free_lp_sol_amount_sum;
 
-  // 计算理想情况下卖出能获得的SOL数量
+  // Calculate the amount of SOL obtainable from selling under ideal conditions
   try {
     const priceBigInt = BigInt(price);
     const initialVirtualSolDecimal = new Decimal(initialVirtualSol).div(CurveAMM$5.SOL_PRECISION_FACTOR_DECIMAL);
@@ -46655,12 +49214,12 @@ function calcLiqTokenSell$1(price, sellTokenAmount, orders, onceMaxOrder, passOr
       initialVirtualSolDecimal,
       initialVirtualTokenDecimal
     );
-    // console.log(`理想计算: 当前价格=${priceBigInt}, 卖出代币=${sellTokenAmountBigInt}, 理想SOL=${result.ideal_lp_sol_amount}`);
+    // console.log(`ideal calculation: current price=${priceBigInt}, sell token=${sellTokenAmountBigInt}, ideal SOL=${result.ideal_lp_sol_amount}`);
   } catch (error) {
     throw new Error(`sell流动性计算错误：理想流动性计算失败 Liquidity calculation error: Ideal liquidity calculation failed - ${error.message}`);
   }
 
-  // orders 长度为0 时要单独计算
+  // orders length of 0 requires separate calculation
   if (orders.length === 0) {
     const initialVirtualSolDecimal = new Decimal(initialVirtualSol).div(CurveAMM$5.SOL_PRECISION_FACTOR_DECIMAL);
     const initialVirtualTokenDecimal = new Decimal(initialVirtualToken).div(CurveAMM$5.TOKEN_PRECISION_FACTOR_DECIMAL);
@@ -46673,7 +49232,7 @@ function calcLiqTokenSell$1(price, sellTokenAmount, orders, onceMaxOrder, passOr
     if (sellResult) {
       [result.free_lp_token_amount_sum, result.free_lp_sol_amount_sum] = sellResult;
     } else {
-      // 如果当前价格已经低于最小价格，无法再卖出
+      // If the current price is already below the minimum price, no more can be sold
       result.free_lp_token_amount_sum = 0n;
       result.free_lp_sol_amount_sum = 0n;
     }
@@ -46685,15 +49244,15 @@ function calcLiqTokenSell$1(price, sellTokenAmount, orders, onceMaxOrder, passOr
 
 
 
-  // 选择较小值进行遍历
+  // Choose the smaller value for traversal
   const loopCount = Math.min(orders.length, onceMaxOrder);
 
   let counti = 0;
   for (let i = 0; i < loopCount; i++) {
     const order = orders[i];
-    // console.log(`处理卖出订单[${i}]: 累计自由Token=${result.free_lp_token_amount_sum}, 目标=${sellTokenAmountBigInt}, 需要=${sellTokenAmountBigInt > result.free_lp_token_amount_sum}`);
+    // console.log(`processing sell order[${i}]: cumulative free Token=${result.free_lp_token_amount_sum}, target=${sellTokenAmountBigInt}, needed=${sellTokenAmountBigInt > result.free_lp_token_amount_sum}`);
 
-    // 验证订单数据格式
+    // Validate order data format
     if (!order) {
       throw new Error(`订单数据格式错误：订单 ${i} 为空 Order data format error: Order ${i} is null`);
     }
@@ -46705,15 +49264,15 @@ function calcLiqTokenSell$1(price, sellTokenAmount, orders, onceMaxOrder, passOr
     }
 
 
-    // 计算间隙流动性（卖出方向：从高价到低价）
+    // Calculate gap liquidity (sell direction: from high price to low price)
     let startPrice, endPrice;
     try {
       if (i === 0) {
-        // 第一个订单：从当前价格（高）到订单开始价格（低）的间隙
+        // First order: gap from current price (high) to order start price (low)
         startPrice = BigInt(price);
         endPrice = BigInt(order.lock_lp_start_price);
       } else {
-        // 后续订单：从前一个订单结束价格（高）到当前订单开始价格（低）的间隙
+        // Subsequent orders: gap from previous order end price (high) to current order start price (low)
         startPrice = BigInt(orders[i - 1].lock_lp_end_price);
         endPrice = BigInt(order.lock_lp_start_price);
       }
@@ -46722,7 +49281,7 @@ function calcLiqTokenSell$1(price, sellTokenAmount, orders, onceMaxOrder, passOr
     }
 
 
-    // 如果存在价格间隙（卖出时startPrice应该大于endPrice）
+    // If a price gap exists (when selling, startPrice should be greater than endPrice)
     if (startPrice > endPrice) {
       try {
         const initialVirtualSolDecimal = new Decimal(initialVirtualSol).div(CurveAMM$5.SOL_PRECISION_FACTOR_DECIMAL);
@@ -46737,25 +49296,25 @@ function calcLiqTokenSell$1(price, sellTokenAmount, orders, onceMaxOrder, passOr
           const [tokenAmount, solAmount] = gapLiquidity;
 
           try {
-            prev_free_lp_sol_amount_sum = result.free_lp_sol_amount_sum; // 上次的值
+            prev_free_lp_sol_amount_sum = result.free_lp_sol_amount_sum; // Previous value
             result.free_lp_sol_amount_sum += BigInt(solAmount);
             result.free_lp_token_amount_sum += BigInt(tokenAmount);
-            // console.log(`卖出间隙[${i}]: ${startPrice}→${endPrice}, 间隙Token=${tokenAmount}, 间隙SOL=${solAmount}, 累计自由Token=${result.free_lp_token_amount_sum}`);
+            // console.log(`sell gap[${i}]: ${startPrice}→${endPrice}, gap Token=${tokenAmount}, gap SOL=${solAmount}, cumulative free Token=${result.free_lp_token_amount_sum}`);
           } catch (error) {
             throw new Error(`流动性计算错误：无法转换间隙流动性数值 Liquidity calculation error: Cannot convert gap liquidity values - ${error.message}`);
           }
 
-          // 计算实际获得的SOL数量 到能卖出为止
+          // Calculate the actual amount of SOL obtained, until enough can be sold
           if (result.real_lp_sol_amount === 0n) {
             if (result.free_lp_token_amount_sum >= sellTokenAmountBigInt) {
-              // 这时间隙流动性已经够卖出的了
-              // 计算精确能获得多少SOL
+              // At this point the gap liquidity is already enough to sell
+              // Calculate the precise amount of SOL obtainable
               try {
                 const actualSellAmount = sellTokenAmountBigInt - (result.free_lp_token_amount_sum - BigInt(tokenAmount));
                 const [, preciseSol] = CurveAMM$5.sellFromPriceWithTokenInput(startPrice, actualSellAmount);
                 result.real_lp_sol_amount = prev_free_lp_sol_amount_sum + preciseSol;
-                // console.log(`卖出实际计算[${i}]: 自由流动性已足够, actualSellAmount=${actualSellAmount}, preciseSol=${preciseSol}, 实际SOL=${result.real_lp_sol_amount}`);
-                result.force_close_num = counti; // 强平订单数量
+                // console.log(`sell actual calculation[${i}]: free liquidity sufficient, actualSellAmount=${actualSellAmount}, preciseSol=${preciseSol}, actual SOL=${result.real_lp_sol_amount}`);
+                result.force_close_num = counti; // Number of force closed orders
               } catch (error) {
                 throw new Error(`流动性计算错误：精确SOL计算失败 Liquidity calculation error: Precise SOL calculation failed - ${error.message}`);
               }
@@ -46773,11 +49332,11 @@ function calcLiqTokenSell$1(price, sellTokenAmount, orders, onceMaxOrder, passOr
       }
     }
 
-    // 检查是否需要跳过该订单（passOrder 逻辑）
+    // Check whether this order needs to be skipped (passOrder logic)
 
     if (passOrder == order.order_pda) {
 
-      // 将跳过订单的流动性加到自由流动性中
+      // Add the skipped order's liquidity to the free liquidity
       try {
         if (order.lock_lp_sol_amount === undefined || order.lock_lp_sol_amount === null) {
           throw new Error(`订单数据格式错误：跳过订单 ${i} 缺少 lock_lp_sol_amount Order data format error: Skipped order ${i} missing lock_lp_sol_amount`);
@@ -46786,19 +49345,19 @@ function calcLiqTokenSell$1(price, sellTokenAmount, orders, onceMaxOrder, passOr
           throw new Error(`订单数据格式错误：跳过订单 ${i} 缺少 lock_lp_token_amount Order data format error: Skipped order ${i} missing lock_lp_token_amount`);
         }
 
-        const prevFreeSolSum = result.free_lp_sol_amount_sum; // 保存之前的值用于计算
+        const prevFreeSolSum = result.free_lp_sol_amount_sum; // Save the previous value for calculation
         result.free_lp_sol_amount_sum += BigInt(order.lock_lp_sol_amount);
         result.free_lp_token_amount_sum += BigInt(order.lock_lp_token_amount);
 
         result.pass_order_id = i;
 
 
-        // 检查跳过订单后的自由流动性是否已满足卖出需求
+        // Check whether the free liquidity after skipping the order already meets the sell requirement
         if (result.real_lp_sol_amount === 0n) {
           if (result.free_lp_token_amount_sum >= sellTokenAmountBigInt) {
-            // 自由流动性已经够卖出需求了
+            // Free liquidity is already enough for the sell requirement
             try {
-              // 计算精确能获得多少SOL
+              // Calculate the precise amount of SOL obtainable
               const targetPrice = i === 0 ? BigInt(price) : BigInt(orders[i - 1].lock_lp_end_price);
               const actualSellAmount = sellTokenAmountBigInt - (result.free_lp_token_amount_sum - BigInt(order.lock_lp_token_amount));
               const [, preciseSol] = CurveAMM$5.sellFromPriceWithTokenInput(targetPrice, actualSellAmount);
@@ -46817,7 +49376,7 @@ function calcLiqTokenSell$1(price, sellTokenAmount, orders, onceMaxOrder, passOr
         throw new Error(`流动性计算错误：无法处理跳过订单 ${i} 的流动性 Liquidity calculation error: Cannot process skipped order ${i} liquidity - ${error.message}`);
       }
     } else {
-      // 累加锁定的流动性（正常情况）
+      // Accumulate locked liquidity (normal case)
       try {
         if (order.lock_lp_sol_amount === undefined || order.lock_lp_sol_amount === null) {
           throw new Error(`订单数据格式错误：订单 ${i} 缺少 lock_lp_sol_amount Order data format error: Order ${i} missing lock_lp_sol_amount`);
@@ -46840,7 +49399,7 @@ function calcLiqTokenSell$1(price, sellTokenAmount, orders, onceMaxOrder, passOr
 
   }
 
-  // 如果遍历的订单数小于等于onceMaxOrder，说明链表结束，需要计算无限流动性
+  // If the number of traversed orders is less than or equal to onceMaxOrder, the chain has ended and infinite liquidity needs to be calculated
   if (orders.length <= onceMaxOrder && orders.length > 0) {
 
     const lastOrder = orders[orders.length - 1];
@@ -46881,15 +49440,15 @@ function calcLiqTokenSell$1(price, sellTokenAmount, orders, onceMaxOrder, passOr
             throw new Error(`流动性计算错误：无法转换无限流动性数值 Liquidity calculation error: Cannot convert infinite liquidity values - ${error.message}`);
           }
 
-          // 进入无限流动性后，计算实际获得的SOL数量
+          // After entering infinite liquidity, calculate the actual amount of SOL obtained
           if (result.real_lp_sol_amount === 0n) {
             if (result.free_lp_token_amount_sum >= sellTokenAmountBigInt) {
-              // 无限流动性够卖出需求了
+              // Infinite liquidity is enough for the sell requirement
               try {
                 const actualSellAmount = sellTokenAmountBigInt - (result.free_lp_token_amount_sum - BigInt(tokenAmount));
                 const [, preciseSol] = CurveAMM$5.sellFromPriceWithTokenInput(lastEndPrice, actualSellAmount);
                 result.real_lp_sol_amount = prevFreeSolSum + preciseSol;
-                result.force_close_num = counti; // 强平订单数量
+                result.force_close_num = counti; // Number of force closed orders
               } catch (error) {
                 throw new Error(`流动性计算错误：无限流动性精确SOL计算失败 Liquidity calculation error: Infinite liquidity precise SOL calculation failed - ${error.message}`);
               }
@@ -46920,10 +49479,9 @@ const { calcLiqTokenBuy, calcLiqTokenSell } = calcLiq;
 
 /**
  * Simulate token buy transaction - calculate if target token amount can be purchased
- * 模拟以 Token 数量为目标的买入交易 - 计算是否能买到指定数量的 Token
- * @param {string} mint - Token address 代币地址
- * @param {bigint|string|number} buyTokenAmount - Target token amount to buy 目标购买的 Token 数量
- * @param {string} passOrder - Optional order address to skip (won't be liquidated) 可选的跳过订单地址
+ * @param {string} mint - Token address
+ * @param {bigint|string|number} buyTokenAmount - Target token amount to buy
+ * @param {string} passOrder - Optional order address to skip (won't be liquidated)
  * @param {Object|null} lastPrice - Token price info, default null
  * @param {Object|null} ordersData - Orders response object, default null
  * @returns {Promise<Object>} Token buy simulation result with the following structure:
@@ -46943,7 +49501,7 @@ const { calcLiqTokenBuy, calcLiqTokenSell } = calcLiq;
  *   - suggestedSolAmount: {string} Required SOL amount for suggested token purchase
  */
 async function simulateTokenBuy$1(mint, buyTokenAmount, passOrder = null, lastPrice = null, ordersData = null, curveData = null) {
-  // 获取价格和订单数据
+  // Get price and orders data
 
   //console.log('simulateTokenBuy', mint, buyTokenAmount, passOrder, lastPrice, ordersData);
 
@@ -46958,14 +49516,14 @@ async function simulateTokenBuy$1(mint, buyTokenAmount, passOrder = null, lastPr
       type: 'up_orders',
       limit: this.sdk.MAX_ORDERS_COUNT + 1
     });
-    // 提取实际的订单数组
+    // Extract the actual orders array
     orders = ordersResponse.data.orders;
   } else {
-    // 如果传入了 ordersData，从响应对象中提取订单数组并限制长度
+    // If ordersData is provided, extract the orders array from the response object and limit its length
     orders = ordersData.data.orders.slice(0, this.sdk.MAX_ORDERS_COUNT + 1);
   }
 
-  // 获取动态流动池参数（支持外部传入，避免重复请求）
+  // Get dynamic liquidity pool parameters (supports external input to avoid duplicate requests)
   if (!curveData) {
     try {
       curveData = await this.sdk.chain.getCurveAccount(mint, { skipBalances: true });
@@ -46974,7 +49532,7 @@ async function simulateTokenBuy$1(mint, buyTokenAmount, passOrder = null, lastPr
     }
   }
 
-  // 调用 calcLiqTokenBuy 进行流动性计算（传入动态流动池参数）
+  // Call calcLiqTokenBuy to perform liquidity calculation (passing dynamic liquidity pool parameters)
   try {
     const liqResult = calcLiqTokenBuy(
       price,
@@ -46989,16 +49547,16 @@ async function simulateTokenBuy$1(mint, buyTokenAmount, passOrder = null, lastPr
     // console.log("liqResult:",liqResult);
 
 
-    // console.log('\n=== calcLiqTokenBuy 返回结果 ===');
-    // console.log('自由流动性 SOL 总量:', liqResult.free_lp_sol_amount_sum.toString());
-    // console.log('自由流动性 Token 总量:', liqResult.free_lp_token_amount_sum.toString());
-    // console.log('锁定流动性 SOL 总量:', liqResult.lock_lp_sol_amount_sum.toString());
-    // console.log('锁定流动性 Token 总量:', liqResult.lock_lp_token_amount_sum.toString());
-    // console.log('是否包含无限流动性:', liqResult.has_infinite_lp);
-    // console.log('跳过的订单索引:', liqResult.pass_order_id);
-    // console.log('需要强平的订单数量:', liqResult.force_close_num);
-    // console.log('理想 SOL 使用量:', liqResult.ideal_lp_sol_amount.toString());
-    // console.log('实际 SOL 使用量:', liqResult.real_lp_sol_amount.toString());
+    // console.log('\n=== calcLiqTokenBuy return result ===');
+    // console.log('Free liquidity SOL total:', liqResult.free_lp_sol_amount_sum.toString());
+    // console.log('Free liquidity Token total:', liqResult.free_lp_token_amount_sum.toString());
+    // console.log('Locked liquidity SOL total:', liqResult.lock_lp_sol_amount_sum.toString());
+    // console.log('Locked liquidity Token total:', liqResult.lock_lp_token_amount_sum.toString());
+    // console.log('Whether includes infinite liquidity:', liqResult.has_infinite_lp);
+    // console.log('Skipped order index:', liqResult.pass_order_id);
+    // console.log('Number of orders needing force close:', liqResult.force_close_num);
+    // console.log('Ideal SOL usage:', liqResult.ideal_lp_sol_amount.toString());
+    // console.log('Actual SOL usage:', liqResult.real_lp_sol_amount.toString());
     // console.log('===============================\n');
 
     // Convert to BigInt for calculations
@@ -47080,7 +49638,7 @@ async function simulateTokenBuy$1(mint, buyTokenAmount, passOrder = null, lastPr
  * Simulate token sell transaction analysis
  * @param {string} mint - Token address
  * @param {bigint|string|number} sellTokenAmount - Token amount to sell (u64 format, precision 10^9)
- * @param {string} passOrder - Optional order address to skip (won't be liquidated) 可选的跳过订单地址
+ * @param {string} passOrder - Optional order address to skip (won't be liquidated)
  * @param {Object|null} lastPrice - Token price info, default null
  * @param {Object|null} ordersData - Orders response object, default null
  * @returns {Promise<Object>} Token sell simulation result with the following structure:
@@ -47100,7 +49658,7 @@ async function simulateTokenBuy$1(mint, buyTokenAmount, passOrder = null, lastPr
  *   - suggestedSolAmount: {string} Expected SOL amount from suggested token sale
  */
 async function simulateTokenSell$1(mint, sellTokenAmount, passOrder = null, lastPrice = null, ordersData = null, curveData = null) {
-  // 获取价格和订单数据
+  // Get price and orders data
   let price = lastPrice;
   if (!price) {
     price = await this.sdk.data.price(mint);
@@ -47114,14 +49672,14 @@ async function simulateTokenSell$1(mint, sellTokenAmount, passOrder = null, last
       type: 'down_orders',
       limit: this.sdk.MAX_ORDERS_COUNT + 1
     });
-    // 提取实际的订单数组
+    // Extract the actual orders array
     orders = ordersResponse.data.orders;
   } else {
-    // 如果传入了 ordersData，从响应对象中提取订单数组并限制长度
+    // If ordersData is provided, extract the orders array from the response object and limit its length
     orders = ordersData.data.orders.slice(0, this.sdk.MAX_ORDERS_COUNT + 1);
   }
 
-  // 获取动态流动池参数（支持外部传入，避免重复请求）
+  // Get dynamic liquidity pool parameters (supports external input to avoid duplicate requests)
   if (!curveData) {
     try {
       curveData = await this.sdk.chain.getCurveAccount(mint, { skipBalances: true });
@@ -47130,12 +49688,12 @@ async function simulateTokenSell$1(mint, sellTokenAmount, passOrder = null, last
     }
   }
 
-  // console.log('simulateTokenSell 获取的数据:');
-  // console.log('价格:', price);
-  // console.log('订单数量:', orders.length);
-  // orders.forEach((order, i) => console.log(`订单${i}: start=${order.lock_lp_start_price}, end=${order.lock_lp_end_price}, sol=${order.lock_lp_sol_amount}, token=${order.lock_lp_token_amount}`));
+  // console.log('Data obtained by simulateTokenSell:');
+  // console.log('Price:', price);
+  // console.log('Number of orders:', orders.length);
+  // orders.forEach((order, i) => console.log(`Order ${i}: start=${order.lock_lp_start_price}, end=${order.lock_lp_end_price}, sol=${order.lock_lp_sol_amount}, token=${order.lock_lp_token_amount}`));
 
-  // 调用 calcLiqTokenSell 进行流动性计算（传入动态流动池参数）
+  // Call calcLiqTokenSell to perform liquidity calculation (passing dynamic liquidity pool parameters)
   try {
     const liqResult = calcLiqTokenSell(
       price,
@@ -47147,16 +49705,16 @@ async function simulateTokenSell$1(mint, sellTokenAmount, passOrder = null, last
       curveData.initialVirtualToken
     );
 
-    // console.log('\n=== calcLiqTokenSell 返回结果 ===');
-    // console.log('自由流动性 SOL 总量:', liqResult.free_lp_sol_amount_sum.toString());
-    // console.log('自由流动性 Token 总量:', liqResult.free_lp_token_amount_sum.toString());
-    // console.log('锁定流动性 SOL 总量:', liqResult.lock_lp_sol_amount_sum.toString());
-    // console.log('锁定流动性 Token 总量:', liqResult.lock_lp_token_amount_sum.toString());
-    // console.log('是否包含无限流动性:', liqResult.has_infinite_lp);
-    // console.log('跳过的订单索引:', liqResult.pass_order_id);
-    // console.log('需要强平的订单数量:', liqResult.force_close_num);
-    // console.log('理想 SOL 获得量:', liqResult.ideal_lp_sol_amount.toString());
-    // console.log('实际 SOL 获得量:', liqResult.real_lp_sol_amount.toString());
+    // console.log('\n=== calcLiqTokenSell return result ===');
+    // console.log('Free liquidity SOL total:', liqResult.free_lp_sol_amount_sum.toString());
+    // console.log('Free liquidity Token total:', liqResult.free_lp_token_amount_sum.toString());
+    // console.log('Locked liquidity SOL total:', liqResult.lock_lp_sol_amount_sum.toString());
+    // console.log('Locked liquidity Token total:', liqResult.lock_lp_token_amount_sum.toString());
+    // console.log('Whether includes infinite liquidity:', liqResult.has_infinite_lp);
+    // console.log('Skipped order index:', liqResult.pass_order_id);
+    // console.log('Number of orders needing force close:', liqResult.force_close_num);
+    // console.log('Ideal SOL obtained:', liqResult.ideal_lp_sol_amount.toString());
+    // console.log('Actual SOL obtained:', liqResult.real_lp_sol_amount.toString());
     // console.log('===============================\n');
 
     // Convert to BigInt for calculations
@@ -47249,12 +49807,11 @@ const CANDIDATE_NODES_EACH_SIDE = Math.floor((MAX_CANDIDATE_INDICES - 1) / 2);
 const NO_ORDER = 65535;
 
 /**
- * 根据 index 在订单数组中查找订单
  * Find order in array by its index field
  *
- * @param {Array} orders - 订单数组 / Orders array
- * @param {number} index - 订单的 index 字段值 / Order's index field value
- * @returns {Object|null} 找到的订单对象，找不到返回 null / Found order object or null
+ * @param {Array} orders - Orders array
+ * @param {number} index - Order's index field value
+ * @returns {Object|null} Found order object or null
  */
 function findOrderByIndex(orders, index) {
   for (let i = 0; i < orders.length; i++) {
@@ -47266,28 +49823,27 @@ function findOrderByIndex(orders, index) {
 }
 
 /**
- * 为做多平仓生成候选插入索引
  * Generate candidate insertion indices for closing long position
  *
- * @param {string} mint - 代币地址 / Token address
- * @param {number|string|anchor.BN} closeOrderId - 要平仓的订单ID (order_id, 不是 index) / Order ID to close (order_id, not index)
- * @param {Object|null} ordersData - 订单数据（可选，如果不提供会自动获取）/ Orders data (optional, will fetch if not provided)
- * @returns {Promise<Object>} 返回包含候选索引数组的对象 / Returns object containing candidate indices array
- *   - closeOrderIndices: {number[]} 候选插入位置索引数组 / Candidate insertion position indices array
+ * @param {string} mint - Token address
+ * @param {number|string|anchor.BN} closeOrderId - Order ID to close (order_id, not index)
+ * @param {Object|null} ordersData - Orders data (optional, will fetch if not provided)
+ * @returns {Promise<Object>} Returns object containing candidate indices array
+ *   - closeOrderIndices: {number[]} Candidate insertion position indices array
  *
- * @throws {Error} 如果找不到对应的 closeOrderId / If closeOrderId is not found
+ * @throws {Error} If closeOrderId is not found
  *
  * @example
- * // 平仓做多订单
+ * // Close a long position order
  * const result = await sdk.simulator.simulateLongClose(
  *   'HG9R8CE9N18U8zYqo6cqS4bFaCAzHbAhaAe1zq8Hq7PF',
  *   1090  // order_id
  * );
- * console.log('候选索引:', result.closeOrderIndices);
- * // 输出: { closeOrderIndices: [25, 15, 35, 5, 45, ...] }
+ * console.log('Candidate indices:', result.closeOrderIndices);
+ * // Output: { closeOrderIndices: [25, 15, 35, 5, 45, ...] }
  */
 async function simulateLongClose$1(mint, closeOrderId, ordersData = null) {
-  // 1. 获取 down_orders 数据（做多订单在 down_orders 中）
+  // 1. Fetch down_orders data (long orders are in down_orders)
   if (!ordersData) {
     ordersData = await this.sdk.data.orders(mint, { type: 'down_orders' });
   }
@@ -47298,10 +49854,10 @@ async function simulateLongClose$1(mint, closeOrderId, ordersData = null) {
 
   const orders = ordersData.data.orders;
 
-  // 2. 将 closeOrderId 转换为字符串（因为 API 返回的 order_id 是字符串）
+  // 2. Convert closeOrderId to string (since order_id returned by the API is a string)
   const targetOrderId = closeOrderId.toString();
 
-  // 3. 在订单列表中查找匹配的订单
+  // 3. Find the matching order in the order list
   let targetOrderIndex = -1;
   for (let i = 0; i < orders.length; i++) {
     if (orders[i].order_id === targetOrderId) {
@@ -47310,78 +49866,77 @@ async function simulateLongClose$1(mint, closeOrderId, ordersData = null) {
     }
   }
 
-  // 4. 如果找不到订单，抛出错误
+  // 4. If the order is not found, throw an error
   if (targetOrderIndex === -1) {
     throw new Error(`Order with order_id ${targetOrderId} not found in down_orders`);
   }
 
-  // 5. 获取目标订单的 OrderBook index
+  // 5. Get the OrderBook index of the target order
   const targetOrder = orders[targetOrderIndex];
   const mainIndex = targetOrder.index;
 
-  // 6. 生成候选索引数组（通过链表结构遍历前后节点）
+  // 6. Generate the candidate indices array (traverse prev/next nodes via the linked list structure)
   const indices = [];
 
-  // 添加主位置
+  // Add the main position
   indices.push(mainIndex);
 
-  // 通过链表结构添加前后节点的索引
+  // Add indices of prev/next nodes via the linked list structure
   let prevNode = targetOrder;
   let nextNode = targetOrder;
 
   for (let offset = 1; offset <= CANDIDATE_NODES_EACH_SIDE; offset++) {
-    // 添加前面第 offset 个节点（通过 prev_order 链表指针）
+    // Add the offset-th preceding node (via the prev_order linked list pointer)
     if (prevNode.prev_order !== NO_ORDER) {
       const prevOrder = findOrderByIndex(orders, prevNode.prev_order);
       if (prevOrder && prevOrder.index !== undefined) {
         indices.push(prevOrder.index);
-        prevNode = prevOrder; // 继续向前遍历
+        prevNode = prevOrder; // Continue traversing backward
       } else {
-        prevNode = { prev_order: NO_ORDER }; // 找不到则停止
+        prevNode = { prev_order: NO_ORDER }; // Stop if not found
       }
     }
 
-    // 添加后面第 offset 个节点（通过 next_order 链表指针）
+    // Add the offset-th following node (via the next_order linked list pointer)
     if (nextNode.next_order !== NO_ORDER) {
       const nextOrder = findOrderByIndex(orders, nextNode.next_order);
       if (nextOrder && nextOrder.index !== undefined) {
         indices.push(nextOrder.index);
-        nextNode = nextOrder; // 继续向后遍历
+        nextNode = nextOrder; // Continue traversing forward
       } else {
-        nextNode = { next_order: NO_ORDER }; // 找不到则停止
+        nextNode = { next_order: NO_ORDER }; // Stop if not found
       }
     }
   }
 
-  // 7. 返回结果
+  // 7. Return the result
   return {
     closeOrderIndices: indices
   };
 }
 
 /**
- * 为做空平仓生成候选插入索引
  * Generate candidate insertion indices for closing short position
  *
- * @param {string} mint - 代币地址 / Token address
- * @param {number|string|anchor.BN} closeOrderId - 要平仓的订单ID (order_id, 不是 index) / Order ID to close (order_id, not index)
- * @param {Object|null} ordersData - 订单数据（可选，如果不提供会自动获取）/ Orders data (optional, will fetch if not provided)
- * @returns {Promise<Object>} 返回包含候选索引数组的对象 / Returns object containing candidate indices array
- *   - closeOrderIndices: {number[]} 候选插入位置索引数组 / Candidate insertion position indices array
+ * @param {string} mint - Token address
+ * @param {number|string|anchor.BN} closeOrderId - Order ID to close (order_id, not index)
+ * @param {Object|null} ordersData - Orders data (optional, will fetch if not provided)
+ * @returns {Promise<Object>} Returns object containing candidate indices array
+ *   - closeOrderIndices: {number[]} Candidate insertion position indices array
  *
- * @throws {Error} 如果找不到对应的 closeOrderId / If closeOrderId is not found
+ * @throws {Error} If closeOrderId is not found
  *
  * @example
- * // 平仓做空订单
+ * // Close a short position order
  * const result = await sdk.simulator.simulateShortClose(
  *   'HG9R8CE9N18U8zYqo6cqS4bFaCAzHbAhaAe1zq8Hq7PF',
  *   1090  // order_id
  * );
- * console.log('候选索引:', result.closeOrderIndices);
- * // 输出: { closeOrderIndices: [25, 15, 35, 5, 45, ...] }
+ * console.log('Candidate indices:', result.closeOrderIndices);
+ * // Output: { closeOrderIndices: [25, 15, 35, 5, 45, ...] }
  */
 async function simulateShortClose$1(mint, closeOrderId, ordersData = null) {
-  // 1. 获取 up_orders 数据（做空订单在 up_orders 中）
+  // 1. Fetch up_orders data (short orders are in up_orders)
   if (!ordersData) {
     ordersData = await this.sdk.data.orders(mint, { type: 'up_orders' });
   }
@@ -47392,10 +49947,10 @@ async function simulateShortClose$1(mint, closeOrderId, ordersData = null) {
 
   const orders = ordersData.data.orders;
 
-  // 2. 将 closeOrderId 转换为字符串（因为 API 返回的 order_id 是字符串）
+  // 2. Convert closeOrderId to string (since order_id returned by the API is a string)
   const targetOrderId = closeOrderId.toString();
 
-  // 3. 在订单列表中查找匹配的订单
+  // 3. Find the matching order in the order list
   let targetOrderIndex = -1;
   for (let i = 0; i < orders.length; i++) {
     if (orders[i].order_id === targetOrderId) {
@@ -47404,50 +49959,50 @@ async function simulateShortClose$1(mint, closeOrderId, ordersData = null) {
     }
   }
 
-  // 4. 如果找不到订单，抛出错误
+  // 4. If the order is not found, throw an error
   if (targetOrderIndex === -1) {
     throw new Error(`Order with order_id ${targetOrderId} not found in up_orders`);
   }
 
-  // 5. 获取目标订单的 OrderBook index
+  // 5. Get the OrderBook index of the target order
   const targetOrder = orders[targetOrderIndex];
   const mainIndex = targetOrder.index;
 
-  // 6. 生成候选索引数组（通过链表结构遍历前后节点）
+  // 6. Generate the candidate indices array (traverse prev/next nodes via the linked list structure)
   const indices = [];
 
-  // 添加主位置
+  // Add the main position
   indices.push(mainIndex);
 
-  // 通过链表结构添加前后节点的索引
+  // Add indices of prev/next nodes via the linked list structure
   let prevNode = targetOrder;
   let nextNode = targetOrder;
 
   for (let offset = 1; offset <= CANDIDATE_NODES_EACH_SIDE; offset++) {
-    // 添加前面第 offset 个节点（通过 prev_order 链表指针）
+    // Add the offset-th preceding node (via the prev_order linked list pointer)
     if (prevNode.prev_order !== NO_ORDER) {
       const prevOrder = findOrderByIndex(orders, prevNode.prev_order);
       if (prevOrder && prevOrder.index !== undefined) {
         indices.push(prevOrder.index);
-        prevNode = prevOrder; // 继续向前遍历
+        prevNode = prevOrder; // Continue traversing backward
       } else {
-        prevNode = { prev_order: NO_ORDER }; // 找不到则停止
+        prevNode = { prev_order: NO_ORDER }; // Stop if not found
       }
     }
 
-    // 添加后面第 offset 个节点（通过 next_order 链表指针）
+    // Add the offset-th following node (via the next_order linked list pointer)
     if (nextNode.next_order !== NO_ORDER) {
       const nextOrder = findOrderByIndex(orders, nextNode.next_order);
       if (nextOrder && nextOrder.index !== undefined) {
         indices.push(nextOrder.index);
-        nextNode = nextOrder; // 继续向后遍历
+        nextNode = nextOrder; // Continue traversing forward
       } else {
-        nextNode = { next_order: NO_ORDER }; // 找不到则停止
+        nextNode = { next_order: NO_ORDER }; // Stop if not found
       }
     }
   }
 
-  // 7. 返回结果
+  // 7. Return the result
   return {
     closeOrderIndices: indices
   };
@@ -47461,14 +50016,14 @@ var close_indices = {
 const CurveAMM$4 = curve_amm;
 
 /**
- * 计算使用指定SOL数量买入时能获得的Token数量
- * @param {bigint|string} price - 当前交易价格 (u128格式)
- * @param {bigint|string|number} buySolAmount - 需要花费的SOL数量 (lamports, 9位精度)
- * @param {Array} orders - 锁定流动性的订单数组
- * @param {number} onceMaxOrder - 单次循环最大订单数
- * @param {string|number|null} passOrderID - 需要跳过的订单ID（与order_id字段比较）
- * @param {string|number|null} initialVirtualSol - 流动池SOL数量
- * @param {string|number|null} initialVirtualToken - 流动池Token数量
+ * Calculate the amount of Token obtainable when buying with a specified amount of SOL
+ * @param {bigint|string} price - Current trade price (u128 format)
+ * @param {bigint|string|number} buySolAmount - Amount of SOL to spend (lamports, 9-digit precision)
+ * @param {Array} orders - Array of orders locking liquidity
+ * @param {number} onceMaxOrder - Maximum number of orders per loop iteration
+ * @param {string|number|null} passOrderID - Order ID to skip (compared against the order_id field)
+ * @param {string|number|null} initialVirtualSol - Liquidity pool SOL amount
+ * @param {string|number|null} initialVirtualToken - Liquidity pool Token amount
  * @returns {Object} { tokenAmount: bigint, msg: string, closedOrdersCount: number }
  */
 function calcLiqSolBuy$1(price, buySolAmount, orders, onceMaxOrder, passOrderID = null, initialVirtualSol = null, initialVirtualToken = null){
@@ -47476,8 +50031,8 @@ function calcLiqSolBuy$1(price, buySolAmount, orders, onceMaxOrder, passOrderID 
 
     //console.log("calcLiqSolBuy: , price, buySolAmount, orders, onceMaxOrder, passOrderID , initialVirtualSol, initialVirtualToken=", price, buySolAmount, orders, onceMaxOrder, passOrderID , initialVirtualSol , initialVirtualToken);
 
-    // 1. 参数验证
-    // 转换为 bigint 以便比较
+    // 1. Parameter validation
+    // Convert to bigint for comparison
     let priceBigInt;
     let buySolAmountBigInt;
 
@@ -47492,7 +50047,7 @@ function calcLiqSolBuy$1(price, buySolAmount, orders, onceMaxOrder, passOrderID 
         };
     }
 
-    // 检查价格和金额是否有效
+    // Check whether price and amount are valid
     if (priceBigInt <= 0n) {
         return {
             tokenAmount: 0n,
@@ -47509,7 +50064,7 @@ function calcLiqSolBuy$1(price, buySolAmount, orders, onceMaxOrder, passOrderID 
         };
     }
 
-    // 2. 设置默认流动池参数
+    // 2. Set default liquidity pool parameters
     const Decimal = decimalExports;
     const virtualSol = initialVirtualSol !== null
         ? new Decimal(initialVirtualSol.toString()).div(CurveAMM$4.SOL_PRECISION_FACTOR_DECIMAL)
@@ -47521,9 +50076,9 @@ function calcLiqSolBuy$1(price, buySolAmount, orders, onceMaxOrder, passOrderID 
     //console.log("calcLiqSolBuy: virtualSol,virtualToken=",virtualSol,virtualToken)
 
 
-    // 3. 处理空订单情况（第一阶段）
+    // 3. Handle the empty orders case (first stage)
     if (!orders || orders.length === 0) {
-        // 直接计算完整流动性下的买入
+        // Directly calculate the buy under full liquidity
         const result = CurveAMM$4.buyFromPriceWithSolInputWithParams(
             price,
             buySolAmount,
@@ -47547,16 +50102,16 @@ function calcLiqSolBuy$1(price, buySolAmount, orders, onceMaxOrder, passOrderID 
         };
     }
 
-    // 4. 处理有订单的情况（第二阶段：分段流动性计算）
+    // 4. Handle the case with orders (second stage: segmented liquidity calculation)
 
-    // 初始化变量
-    let currentPrice = priceBigInt;           // 当前价格指针
-    let remainingSol = buySolAmountBigInt;    // 剩余可用 SOL
-    let totalTokenAmount = 0n;                // 累计获得的 token
-    let closedOrdersCount = 0;                // 平仓订单数量
-    let processedOrders = 0;                  // 已处理订单数
+    // Initialize variables
+    let currentPrice = priceBigInt;           // Current price pointer
+    let remainingSol = buySolAmountBigInt;    // Remaining available SOL
+    let totalTokenAmount = 0n;                // Accumulated tokens obtained
+    let closedOrdersCount = 0;                // Number of closed orders
+    let processedOrders = 0;                  // Number of processed orders
 
-    // 检查当前价格是否高于第一个订单的结束价格
+    // Check whether the current price is higher than the first order's end price
     if (orders.length > 0) {
         const firstOrderEndPrice = typeof orders[0].lock_lp_end_price === 'bigint'
             ? orders[0].lock_lp_end_price
@@ -47571,23 +50126,23 @@ function calcLiqSolBuy$1(price, buySolAmount, orders, onceMaxOrder, passOrderID 
         }
     }
 
-    // 遍历订单（最多 onceMaxOrder 个）
+    // Iterate over orders (up to onceMaxOrder)
     for (let i = 0; i < orders.length && processedOrders < onceMaxOrder; i++) {
         const order = orders[i];
 
-        // 检查是否需要跳过此订单
+        // Check whether this order needs to be skipped
         if (passOrderID !== null && order.order_id !== undefined) {
-            // 将两者都转换为字符串进行比较
+            // Convert both to strings for comparison
             const orderIdStr = String(order.order_id);
             const passOrderIdStr = String(passOrderID);
 
             if (orderIdStr === passOrderIdStr) {
-                // 跳过此订单，不处理其锁定区间，继续下一个订单
+                // Skip this order, do not process its lock range, continue to the next order
                 continue;
             }
         }
 
-        // 转换订单价格为 bigint
+        // Convert order prices to bigint
         let lockStartPrice, lockEndPrice;
         try {
             lockStartPrice = typeof order.lock_lp_start_price === 'bigint'
@@ -47604,9 +50159,9 @@ function calcLiqSolBuy$1(price, buySolAmount, orders, onceMaxOrder, passOrderID 
             };
         }
 
-        // 步骤1：计算可用区间（currentPrice → lockStartPrice）
+        // Step 1: Calculate the available range (currentPrice → lockStartPrice)
         if (currentPrice < lockStartPrice) {
-            // 1.1 计算这段区间需要多少 SOL 和能获得多少 token
+            // 1.1 Calculate how much SOL this range needs and how many tokens can be obtained
             const result = CurveAMM$4.buyFromPriceToPriceWithParams(
                 currentPrice,
                 lockStartPrice,
@@ -47614,7 +50169,7 @@ function calcLiqSolBuy$1(price, buySolAmount, orders, onceMaxOrder, passOrderID 
                 virtualToken
             );
 
-            // 检查计算是否成功
+            // Check whether the calculation succeeded
             if (result === null) {
                 return {
                     tokenAmount: 0n,
@@ -47625,14 +50180,14 @@ function calcLiqSolBuy$1(price, buySolAmount, orders, onceMaxOrder, passOrderID 
 
             const [solNeeded, tokenGained] = result;
 
-            // 1.2 判断剩余 SOL 是否足够
+            // 1.2 Determine whether the remaining SOL is sufficient
             if (remainingSol >= solNeeded) {
-                // 足够：买完这段区间，继续下一段
+                // Sufficient: buy through this range and continue to the next segment
                 remainingSol -= solNeeded;
                 totalTokenAmount += tokenGained;
                 currentPrice = lockStartPrice;
             } else {
-                // 不够：用完剩余 SOL，计算能买多少，然后返回
+                // Insufficient: use up the remaining SOL, calculate how much can be bought, then return
                 const finalResult = CurveAMM$4.buyFromPriceWithSolInputWithParams(
                     currentPrice,
                     remainingSol,
@@ -47659,15 +50214,15 @@ function calcLiqSolBuy$1(price, buySolAmount, orders, onceMaxOrder, passOrderID 
             }
         }
 
-        // 步骤2：跳过锁定区间（lockStartPrice → lockEndPrice）
+        // Step 2: Skip the lock range (lockStartPrice → lockEndPrice)
         currentPrice = lockEndPrice;
         processedOrders++;
 
-        // 步骤3：判断是否平仓
-        // 如果价格到达 lockEndPrice，说明这个订单被平仓
+        // Step 3: Determine whether the order is closed
+        // If the price reaches lockEndPrice, this order is closed
         closedOrdersCount++;
 
-        // 检查 SOL 是否已用完
+        // Check whether SOL has been used up
         if (remainingSol === 0n) {
             return {
                 tokenAmount: totalTokenAmount,
@@ -47677,8 +50232,8 @@ function calcLiqSolBuy$1(price, buySolAmount, orders, onceMaxOrder, passOrderID 
         }
     }
 
-    // 步骤4：处理最后的无限流动性区间
-    // 所有订单处理完后，用剩余 SOL 继续买入
+    // Step 4: Handle the final infinite liquidity range
+    // After all orders are processed, continue buying with the remaining SOL
     if (remainingSol > 0n) {
         const finalResult = CurveAMM$4.buyFromPriceWithSolInputWithParams(
             currentPrice,
@@ -47705,7 +50260,7 @@ function calcLiqSolBuy$1(price, buySolAmount, orders, onceMaxOrder, passOrderID 
         };
     }
 
-    // 步骤5：SOL 刚好用完
+    // Step 5: SOL is exactly used up
     return {
         tokenAmount: totalTokenAmount,
         msg: `SOL刚好用完，最终价格: ${currentPrice.toString()}`,
@@ -47749,10 +50304,9 @@ class SimulatorModule$1 {
 
     /**
      * Simulate token buy transaction - calculate if target token amount can be purchased
-     * 模拟以 Token 数量为目标的买入交易 - 计算是否能买到指定数量的 Token
-     * @param {string} mint - Token address 代币地址
-     * @param {bigint|string|number} buyTokenAmount - Target token amount to buy 目标购买的 Token 数量
-     * @param {string} passOrder - Optional order address to skip (won't be liquidated) 可选的跳过订单地址
+     * @param {string} mint - Token address
+     * @param {bigint|string|number} buyTokenAmount - Target token amount to buy
+     * @param {string} passOrder - Optional order address to skip (won't be liquidated)
      * @param {Object|null} lastPrice - Token price info, default null
      * @param {Object|null} ordersData - Orders response object, default null
      * @returns {Promise<Object>} Token buy simulation result with the following structure:
@@ -47779,7 +50333,7 @@ class SimulatorModule$1 {
      * Simulate token sell transaction analysis
      * @param {string} mint - Token address
      * @param {bigint|string|number} sellTokenAmount - Token amount to sell (u64 format, precision 10^9)
-     * @param {string} passOrder - Optional order address to skip (won't be liquidated) 可选的跳过订单地址
+     * @param {string} passOrder - Optional order address to skip (won't be liquidated)
      * @param {Object|null} lastPrice - Token price info, default null
      * @param {Object|null} ordersData - Orders response object, default null
      * @returns {Promise<Object>} Token sell simulation result with the following structure:
@@ -47858,11 +50412,10 @@ class SimulatorModule$1 {
 
     /**
      * Generate candidate insertion indices for closing long position
-     * 为做多平仓生成候选插入索引
-     * @param {string} mint - Token address 代币地址
-     * @param {number|string|anchor.BN} closeOrderId - Order ID to close (order_id, not index) 要平仓的订单ID
-     * @param {Object|null} ordersData - Orders data (optional) 订单数据（可选）
-     * @returns {Promise<Object>} Result containing closeOrderIndices array 包含候选索引数组的结果
+     * @param {string} mint - Token address
+     * @param {number|string|anchor.BN} closeOrderId - Order ID to close (order_id, not index)
+     * @param {Object|null} ordersData - Orders data (optional)
+     * @returns {Promise<Object>} Result containing closeOrderIndices array
      */
     async simulateLongClose(mint, closeOrderId, ordersData = null) {
         return simulateLongClose.call(this, mint, closeOrderId, ordersData);
@@ -47870,11 +50423,10 @@ class SimulatorModule$1 {
 
     /**
      * Generate candidate insertion indices for closing short position
-     * 为做空平仓生成候选插入索引
-     * @param {string} mint - Token address 代币地址
-     * @param {number|string|anchor.BN} closeOrderId - Order ID to close (order_id, not index) 要平仓的订单ID
-     * @param {Object|null} ordersData - Orders data (optional) 订单数据（可选）
-     * @returns {Promise<Object>} Result containing closeOrderIndices array 包含候选索引数组的结果
+     * @param {string} mint - Token address
+     * @param {number|string|anchor.BN} closeOrderId - Order ID to close (order_id, not index)
+     * @param {Object|null} ordersData - Orders data (optional)
+     * @returns {Promise<Object>} Result containing closeOrderIndices array
      */
     async simulateShortClose(mint, closeOrderId, ordersData = null) {
         return simulateShortClose.call(this, mint, closeOrderId, ordersData);
@@ -47882,8 +50434,7 @@ class SimulatorModule$1 {
 
     /**
      * Simulate buy transaction with SOL amount input
-     * 模拟以 SOL 金额为输入的买入交易
-     * @param {string} mint - Token address 代币地址
+     * @param {string} mint - Token address
      * @param {bigint|string|number} buySolAmount - SOL amount to spend (u64 format, lamports)
      * @returns {Promise<Object>} Buy simulation result with the following structure:
      *   - success: {boolean} Whether the simulation was successful
@@ -48000,8 +50551,7 @@ class SimulatorModule$1 {
 
     /**
      * Simulate sell transaction with token amount input
-     * 模拟以 Token 数量为输入的卖出交易
-     * @param {string} mint - Token address 代币地址
+     * @param {string} mint - Token address
      * @param {bigint|string|number} sellTokenAmount - Token amount to sell (u64 format, lamports)
      * @returns {Promise<Object>} Sell simulation result with the following structure:
      *   - success: {boolean} Whether the simulation was successful
@@ -48116,7 +50666,7 @@ var simulator = SimulatorModule$1;
 const { PublicKey: PublicKey$3 } = require$$0__default["default"];
 const anchor$2 = require$$0__default$3["default"];
 const CurveAMM$2 = curve_amm;
-// 统一使用 buffer 包，所有平台一致
+// Use the buffer package uniformly, consistent across all platforms
 const { Buffer: Buffer$3 } = require$$3__default["default"];
 
 /**
@@ -48128,14 +50678,14 @@ const { Buffer: Buffer$3 } = require$$3__default["default"];
 class ChainModule$1 {
   constructor(sdk) {
     this.sdk = sdk;
-    // getCurveAccount 缓存：key = mint string, value = { data, timestamp }
+    // getCurveAccount cache: key = mint string, value = { data, timestamp }
     this._curveAccountCache = new Map();
-    this._CACHE_TTL = 10000; // 10 秒 TTL
+    this._CACHE_TTL = 10000; // 10 second TTL
   }
 
   /**
-   * 清除指定 mint 的 curveAccount 缓存（交易后调用）
-   * @param {string} [mint] - 指定 mint 地址，不传则清除全部
+   * Clear the curveAccount cache for a specified mint (called after a transaction)
+   * @param {string} [mint] - Specified mint address; clears all if not provided
    */
   invalidateCurveCache(mint) {
     if (mint) {
@@ -48292,12 +50842,12 @@ class ChainModule$1 {
       const mintPubkey = typeof mint === 'string' ? new PublicKey$3(mint) : mint;
       const mintKey = mintPubkey.toString();
 
-      // 检查缓存
+      // Check cache
       const cached = this._curveAccountCache.get(mintKey);
       if (cached && (Date.now() - cached.timestamp < this._CACHE_TTL)) {
-        // 缓存命中：如果请求包含余额但缓存没有，需要重新获取余额部分
+        // Cache hit: if the request includes balances but the cache doesn't, re-fetch the balance part
         if (!skipBalances && cached.skipBalances) {
-          // 缓存是 skipBalances 的，但现在需要余额，需要补充查询
+          // The cache is from skipBalances, but balances are now needed, so a supplementary query is required
         } else {
           return cached.data;
         }
@@ -48351,7 +50901,7 @@ class ChainModule$1 {
         this.sdk.programId
       );
 
-      // 借贷池专用 token 账户 PDA（合约新增，seed = "pool_borrow_token"）
+      // Dedicated token account PDA for the borrow pool (added in the contract, seed = "pool_borrow_token")
       const [poolBorrowTokenAccountPDA] = PublicKey$3.findProgramAddressSync(
         [
           Buffer$3.from("pool_borrow_token"),
@@ -48423,22 +50973,22 @@ class ChainModule$1 {
         // Creator address
         creator: decodedData.creator.toString(),
 
-        // === 第一阶段新增字段：动态流动池参数 ===
+        // === Phase 1 new fields: dynamic liquidity pool parameters ===
         initialVirtualSol: BigInt(decodedData.initialVirtualSol.toString()),        // u64, lamports
-        initialVirtualToken: BigInt(decodedData.initialVirtualToken.toString()),    // u64, 最小单位
+        initialVirtualToken: BigInt(decodedData.initialVirtualToken.toString()),    // u64, smallest unit
 
-        // 借贷池初始资金（合约新增），创建后永不变
-        // 已借出量 = initialBorrowTokenReserve - borrowTokenReserve
-        initialBorrowTokenReserve: BigInt(decodedData.initialBorrowTokenReserve.toString()), // u64, 最小单位
+        // Borrow pool initial funding (added in the contract), never changes after creation
+        // Borrowed out amount = initialBorrowTokenReserve - borrowTokenReserve
+        initialBorrowTokenReserve: BigInt(decodedData.initialBorrowTokenReserve.toString()), // u64, smallest unit
 
-        // === 第二阶段新增字段：高级版池子参数 ===
-        poolType: decodedData.poolType,                           // u8, 0=普通版, 1=高级版
-        borrowPoolRatio: decodedData.borrowPoolRatio,            // u8, 5-30表示5%-30%
+        // === Phase 2 new fields: advanced version pool parameters ===
+        poolType: decodedData.poolType,                           // u8, 0=basic version, 1=advanced version
+        borrowPoolRatio: decodedData.borrowPoolRatio,            // u8, 5-30 means 5%-30%
 
-        // Token Supply 信息
+        // Token Supply information
         totalSupply: BigInt(tokenSupply.value.amount),
         decimals: tokenSupply.value.decimals,
-        // 借贷池初始总量，直接取链上字段（旧公式 totalSupply - initialVirtualToken 已废弃）
+        // Borrow pool initial total, taken directly from the on-chain field (old formula totalSupply - initialVirtualToken is deprecated)
         initialBorrowPool: BigInt(decodedData.initialBorrowTokenReserve.toString()),
         circulatingSupply: BigInt(decodedData.initialVirtualToken.toString())
           + (BigInt(tokenSupply.value.amount) - BigInt(decodedData.initialVirtualToken.toString()) - BigInt(decodedData.borrowTokenReserve.toString())),
@@ -48449,10 +50999,10 @@ class ChainModule$1 {
 
         // Pool account information
         poolTokenAccount: poolTokenAccountPDA.toString(),                 // Pool token account address
-        poolBorrowTokenAccount: poolBorrowTokenAccountPDA.toString(),     // Pool borrow token account address (新增)
+        poolBorrowTokenAccount: poolBorrowTokenAccountPDA.toString(),     // Pool borrow token account address (added)
         poolSolAccount: poolSolAccountPDA.toString(),                     // Pool SOL account address
         poolTokenBalance: BigInt(poolTokenBalance.value.amount),          // Pool token balance
-        poolBorrowTokenBalance: BigInt(poolBorrowTokenBalance.value.amount), // Pool borrow token balance (= borrowTokenReserve, 新增)
+        poolBorrowTokenBalance: BigInt(poolBorrowTokenBalance.value.amount), // Pool borrow token balance (= borrowTokenReserve, added)
         poolSolBalance: poolSolBalance,                                   // Pool SOL balance (lamports)
 
         // Additional metadata
@@ -48462,7 +51012,7 @@ class ChainModule$1 {
         }
       };
 
-      // 写入缓存
+      // Write to cache
       this._curveAccountCache.set(mintKey, {
         data: convertedData,
         timestamp: Date.now(),
@@ -48525,7 +51075,7 @@ class ChainModule$1 {
     }
 
     try {
-      // 复用 getCurveAccount 缓存，避免重复 fetch 同一个账户
+      // Reuse the getCurveAccount cache to avoid re-fetching the same account
       const curveData = await this.getCurveAccount(mint, { skipBalances: true });
       const price = curveData.price;
 
@@ -48629,7 +51179,7 @@ class ChainModule$1 {
       // "down_orders" = long orders = downOrderbook (orderType=1)
       const seed = orderType === 'up_orders' ? 'up_orderbook' : 'down_orderbook';
 
-      // 本地计算 orderbook PDA，避免调用 getCurveAccount（省 5 个 RPC）
+      // Compute the orderbook PDA locally to avoid calling getCurveAccount (saves 5 RPCs)
       const mintPubkey = new PublicKey$3(mint);
       const [orderbookPubkey] = PublicKey$3.findProgramAddressSync(
         [Buffer$3.from(seed), mintPubkey.toBuffer()],
@@ -49087,7 +51637,7 @@ class ChainModule$1 {
         throw new Error('debug_orders: order type must be "up_orders" or "down_orders"');
       }
 
-      // 本地计算 orderbook PDA，避免调用 getCurveAccount（省 5 个 RPC）
+      // Compute the orderbook PDA locally to avoid calling getCurveAccount (saves 5 RPCs)
       const seed = orderType === 'up_orders' ? 'up_orderbook' : 'down_orderbook';
       const mintPubkey = new PublicKey$3(mint);
       const [orderbookPubkey] = PublicKey$3.findProgramAddressSync(
@@ -49298,7 +51848,7 @@ class ChainModule$1 {
       const page = 1; // Always return page 1
       const orderBy = options.order_by || 'start_time_desc';
 
-      // 本地计算 orderbook PDA，避免调用 getCurveAccount（省 5 个 RPC）
+      // Compute the orderbook PDA locally to avoid calling getCurveAccount (saves 5 RPCs)
       const mintPubkey = new PublicKey$3(mint);
       const [upOrderbookPubkey] = PublicKey$3.findProgramAddressSync(
         [Buffer$3.from('up_orderbook'), mintPubkey.toBuffer()],
@@ -49453,7 +52003,7 @@ var chain = ChainModule$1;
 const anchor$1 = require$$0__default$3["default"];
 const { PublicKey: PublicKey$2, SystemProgram, SYSVAR_RENT_PUBKEY, Transaction } = require$$0__default["default"];
 const { getAssociatedTokenAddress, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } = cjs$3;
-// 统一使用 buffer 包，所有平台一致
+// Uniformly use the buffer package, consistent across all platforms
 const { Buffer: Buffer$2 } = require$$3__default["default"];
 
 /**
@@ -49822,10 +52372,8 @@ class ToolsModule$1 {
 var tools = ToolsModule$1;
 
 /**
- * 订单数据处理工具模块
  * Order Data Processing Utilities Module
- * 
- * 提供订单数据格式转换和处理的纯函数工具方法
+ *
  * Provides pure function utilities for order data format conversion and processing
  */
 class OrderUtils$2 {
@@ -57867,13 +60415,13 @@ var require$$2 = {
 
 const anchor = require$$0__default$3["default"];
 const { PublicKey: PublicKey$1 } = require$$0__default["default"];
-// 统一使用 buffer 包，所有平台一致
+// Use the buffer package consistently across all platforms
 const { Buffer: Buffer$1 } = require$$3__default["default"];
 
-// 环境检测和条件加载
+// Environment detection and conditional loading
 typeof process !== 'undefined' && process.versions && process.versions.node;
 
-// 确保全局可用（兼容现有代码）
+// Ensure global availability (compatible with existing code)
 if (typeof commonjsGlobal !== 'undefined' && !commonjsGlobal.Buffer) {
   commonjsGlobal.Buffer = Buffer$1;
 }
@@ -57940,7 +60488,7 @@ class Fun100xSdk$1 {
     // Maximum number of orders to fetch during queries
     this.FIND_MAX_ORDERS_COUNT = 1000;
 
-    // 在流动性不足时, 建议实际使用流动性的比例, 分每 (1000=100%)
+    // When liquidity is insufficient, the suggested ratio of liquidity to actually use, per-mille (1000=100%)
     this.SUGGEST_LIQ_RATIO = 975; // 97.5% (1000=100%)
 
     // Initialize Anchor program
@@ -57959,20 +60507,19 @@ class Fun100xSdk$1 {
     this.curve = CurveAMM$1;
 
     /**
-     * 统一数据接口 - 根据 defaultDataSource 配置自动路由到 fast 或 chain 模块
      * Unified data interface - automatically routes to fast or chain module based on defaultDataSource config
      *
      * @example
-     * // 使用默认数据源获取订单
+     * // Fetch orders using the default data source
      * const ordersData = await sdk.data.orders(mint, { type: 'down_orders' });
      *
-     * // 临时指定数据源
+     * // Temporarily specify a data source
      * const ordersData = await sdk.data.orders(mint, {
      *   type: 'down_orders',
-     *   dataSource: 'chain'  // 临时使用链上数据源
+     *   dataSource: 'chain'  // Temporarily use the on-chain data source
      * });
      *
-     * // 获取用户订单
+     * // Fetch user orders
      * const userOrders = await sdk.data.user_orders(user, mint, {
      *   page: 1,
      *   limit: 200,
@@ -57981,27 +60528,27 @@ class Fun100xSdk$1 {
      */
     this.data = {
       /**
-       * 获取代币订单数据
-       * @param {string} mint - 代币地址
-       * @param {Object} options - 查询参数，支持 dataSource 字段临时指定数据源
-       * @returns {Promise<Object>} 订单数据
+       * Get token orders data
+       * @param {string} mint - Token address
+       * @param {Object} options - Query parameters; supports the dataSource field to temporarily specify a data source
+       * @returns {Promise<Object>} Orders data
        */
       orders: (mint, options = {}) => this._getDataWithSource('orders', [mint, options]),
 
       /**
-       * 获取代币价格数据
-       * @param {string} mint - 代币地址
-       * @param {Object} options - 查询参数，支持 dataSource 字段临时指定数据源
-       * @returns {Promise<string>} 价格字符串
+       * Get token price data
+       * @param {string} mint - Token address
+       * @param {Object} options - Query parameters; supports the dataSource field to temporarily specify a data source
+       * @returns {Promise<string>} Price string
        */
       price: (mint, options = {}) => this._getDataWithSource('price', [mint, options]),
 
       /**
-       * 获取用户订单数据
-       * @param {string} user - 用户地址
-       * @param {string} mint - 代币地址
-       * @param {Object} options - 查询参数，支持 dataSource 字段临时指定数据源
-       * @returns {Promise<Object>} 用户订单数据
+       * Get user orders data
+       * @param {string} user - User address
+       * @param {string} mint - Token address
+       * @param {Object} options - Query parameters; supports the dataSource field to temporarily specify a data source
+       * @returns {Promise<Object>} User orders data
        */
       user_orders: (user, mint, options = {}) => this._getDataWithSource('user_orders', [user, mint, options])
     };
@@ -58066,7 +60613,7 @@ class Fun100xSdk$1 {
 
 }
 
-// 将工具类作为静态属性添加到 Fun100xSdk 类
+// Add utility classes as static properties on the Fun100xSdk class
 Fun100xSdk$1.CurveAMM = CurveAMM$1;
 Fun100xSdk$1.OrderUtils = OrderUtils$1;
 
@@ -58103,7 +60650,7 @@ const DEFAULT_NETWORKS = {
   LOCALNET: {
     name: 'localnet',
     network: 'localnet',
-    programId: 'sGecRTjTZmnqJBmLK4ZMNCzsaMrgkFfNqEcYk1GhRde',
+    programId: 'EVNaaiyg9z876PUmLCVQcdc5L5eJukT4pni5GtVJ8P37',
     defaultDataSource: 'fast', // 'fast' or 'chain'
     solanaEndpoint: 'http://127.0.0.1:8899',
     fastApiUrl: 'http://127.0.0.1:3000',
@@ -58111,7 +60658,7 @@ const DEFAULT_NETWORKS = {
     // fastApiUrl: 'http://216.158.231.58:3000',
     feeRecipient: 'GesAj2dTn2wdNcxj4x8qsqS9aNRVPBPkE76aaqg7skxu',
     baseFeeRecipient: '5YHi1HsxobLiTD6NQfHJQpoPoRjMuNyXp4RroTvR6dKi',
-    paramsAccount: 'FqQM2qikNcQDbzufTjURq4Eg9Wc6rLjJQYgyFdHdks1P'
+    paramsAccount: 'HPuvtLLcgSMPSyRmULPiFe9oAvm1o8mR4weqXZrUhzRM'
   }
 };
 
