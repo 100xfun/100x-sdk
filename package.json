@@ -1,6 +1,6 @@
 {
   "name": "100x-sdk",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Solana 100x.fun SDK",
   "main": "dist/100x-sdk.cjs.js",
   "module": "dist/100x-sdk.esm.js",
