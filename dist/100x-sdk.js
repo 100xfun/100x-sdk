@@ -40798,7 +40798,7 @@
 
 	var orderUtils = OrderUtils$2;
 
-	var address$1 = "sGecRTjTZmnqJBmLK4ZMNCzsaMrgkFfNqEcYk1GhRde";
+	var address$1 = "EVNaaiyg9z876PUmLCVQcdc5L5eJukT4pni5GtVJ8P37";
 	var metadata$1 = {
 		name: "fun100x",
 		version: "0.1.0",
@@ -43815,271 +43815,281 @@
 		},
 		{
 			code: 6062,
+			name: "InsufficientLongPayerBalance",
+			msg: "Payer wallet balance insufficient for long margin and fees"
+		},
+		{
+			code: 6063,
+			name: "InsufficientShortPayerBalance",
+			msg: "Payer wallet balance insufficient for short margin and fees"
+		},
+		{
+			code: 6064,
 			name: "InvalidAccountOwner",
 			msg: "Invalid account owner"
 		},
 		{
-			code: 6063,
+			code: 6065,
 			name: "SellAmountExceedsOrderAmount",
 			msg: "Sell amount exceeds order's token holdings"
 		},
 		{
-			code: 6064,
+			code: 6066,
 			name: "OrderNotExpiredMustCloseByOwner",
 			msg: "Non-expired order must be closed by owner"
 		},
 		{
-			code: 6065,
+			code: 6067,
 			name: "SettlementAddressMustBeOwnerAddress",
 			msg: "Settlement address must be owner address"
 		},
 		{
-			code: 6066,
+			code: 6068,
 			name: "BuyAmountExceedsOrderAmount",
 			msg: "Buy amount exceeds order's token holdings"
 		},
 		{
-			code: 6067,
+			code: 6069,
 			name: "InsufficientTradeAmount",
 			msg: "Trade amount below minimum requirement"
 		},
 		{
-			code: 6068,
+			code: 6070,
 			name: "SolAmountTooLarge",
 			msg: "SOL amount exceeds maximum limit (10000000 SOL per transaction)"
 		},
 		{
-			code: 6069,
+			code: 6071,
 			name: "RemainingTokenAmountTooSmall",
 			msg: "Remaining token amount below minimum trade requirement"
 		},
 		{
-			code: 6070,
+			code: 6072,
 			name: "TradeCooldownNotExpired",
 			msg: "Trade cooldown period not expired, please try again later"
 		},
 		{
-			code: 6071,
+			code: 6073,
 			name: "ExceedApprovalAmount",
 			msg: "Sell amount exceeds approved amount, please call approval function first"
 		},
 		{
-			code: 6072,
+			code: 6074,
 			name: "CooldownNotInitialized",
 			msg: "Sell trade requires calling approval or buy function first to initialize cooldown PDA"
 		},
 		{
-			code: 6073,
+			code: 6075,
 			name: "CannotCloseCooldownWithBalance",
 			msg: "Cannot close cooldown PDA with non-zero token balance"
 		},
 		{
-			code: 6074,
+			code: 6076,
 			name: "PriceCalculationError",
 			msg: "Price calculation error"
 		},
 		{
-			code: 6075,
+			code: 6077,
 			name: "InvalidPartnerFeeRecipientAccount",
 			msg: "Invalid partner fee recipient account"
 		},
 		{
-			code: 6076,
+			code: 6078,
 			name: "InvalidBaseFeeRecipientAccount",
 			msg: "Invalid base fee recipient account"
 		},
 		{
-			code: 6077,
+			code: 6079,
 			name: "InvalidOrderbookAddress",
 			msg: "Orderbook address does not match curve account orderbook"
 		},
 		{
-			code: 6078,
+			code: 6080,
 			name: "InvalidFeePercentage",
 			msg: "Fee percentage must be between 0-100"
 		},
 		{
-			code: 6079,
+			code: 6081,
 			name: "InvalidFeeRate",
 			msg: "Fee rate exceeds maximum limit (10%)"
 		},
 		{
-			code: 6080,
+			code: 6082,
 			name: "InvalidCustomFeeRate",
 			msg: "Custom fee rate must be between 1000 (1%) and 5000 (5%)"
 		},
 		{
-			code: 6081,
+			code: 6083,
 			name: "InvalidBorrowDuration",
 			msg: "Borrow duration out of valid range (3-30 days)"
 		},
 		{
-			code: 6082,
+			code: 6084,
 			name: "InvalidStopLossPrice",
 			msg: "Stop loss price does not meet minimum interval requirement"
 		},
 		{
-			code: 6083,
+			code: 6085,
 			name: "NoProfitableFunds",
 			msg: "No profitable funds to transfer"
 		},
 		{
-			code: 6084,
+			code: 6086,
 			name: "InsufficientPoolFunds",
 			msg: "Insufficient pool funds"
 		},
 		{
-			code: 6085,
+			code: 6087,
 			name: "InsufficientPoolBalance",
 			msg: "Pool SOL account balance would fall below minimum required balance"
 		},
 		{
-			code: 6086,
+			code: 6088,
 			name: "OrderBookManagerOverflow",
 			msg: "Math operation overflow"
 		},
 		{
-			code: 6087,
+			code: 6089,
 			name: "OrderBookManagerInvalidSlotIndex",
 			msg: "Invalid slot index"
 		},
 		{
-			code: 6088,
+			code: 6090,
 			name: "OrderBookManagerInvalidAccountData",
 			msg: "Invalid account data"
 		},
 		{
-			code: 6089,
+			code: 6091,
 			name: "OrderBookManagerExceedsMaxCapacity",
 			msg: "New capacity exceeds maximum limit"
 		},
 		{
-			code: 6090,
+			code: 6092,
 			name: "OrderBookManagerExceedsAccountSizeLimit",
 			msg: "Account size exceeds 10MB limit"
 		},
 		{
-			code: 6091,
+			code: 6093,
 			name: "OrderBookManagerOrderIdMismatch",
 			msg: "Order ID mismatch"
 		},
 		{
-			code: 6092,
+			code: 6094,
 			name: "OrderBookManagerEmptyOrderBook",
 			msg: "Order book is empty"
 		},
 		{
-			code: 6093,
+			code: 6095,
 			name: "OrderBookManagerAccountNotWritable",
 			msg: "Account is not writable"
 		},
 		{
-			code: 6094,
+			code: 6096,
 			name: "OrderBookManagerNotRentExempt",
 			msg: "Account not rent-exempt"
 		},
 		{
-			code: 6095,
+			code: 6097,
 			name: "OrderBookManagerInvalidRentBalance",
 			msg: "Invalid rent balance"
 		},
 		{
-			code: 6096,
+			code: 6098,
 			name: "OrderBookManagerInsufficientFunds",
 			msg: "Insufficient funds"
 		},
 		{
-			code: 6097,
+			code: 6099,
 			name: "OrderBookManagerInvalidAccountOwner",
 			msg: "OrderBook account owner mismatch"
 		},
 		{
-			code: 6098,
+			code: 6100,
 			name: "OrderBookManagerDataOutOfBounds",
 			msg: "Data access out of bounds"
 		},
 		{
-			code: 6099,
+			code: 6101,
 			name: "NoValidInsertPosition",
 			msg: "Cannot find valid insert position, all candidates failed due to price range overlap"
 		},
 		{
-			code: 6100,
+			code: 6102,
 			name: "EmptyCloseInsertIndices",
 			msg: "close_insert_indices array cannot be empty"
 		},
 		{
-			code: 6101,
+			code: 6103,
 			name: "TooManyCloseInsertIndices",
 			msg: "close_insert_indices array cannot exceed 20 elements"
 		},
 		{
-			code: 6102,
+			code: 6104,
 			name: "CloseOrderNotFound",
 			msg: "Specified close order not found"
 		},
 		{
-			code: 6103,
+			code: 6105,
 			name: "LinkedListDeleteCountMismatch",
 			msg: "Linked list delete count mismatch: count inconsistent before/after deletion"
 		},
 		{
-			code: 6104,
+			code: 6106,
 			name: "NameTooLong",
 			msg: "Token name too long, max 32 bytes"
 		},
 		{
-			code: 6105,
+			code: 6107,
 			name: "NameEmpty",
 			msg: "Token name cannot be empty"
 		},
 		{
-			code: 6106,
+			code: 6108,
 			name: "SymbolTooLong",
 			msg: "Token symbol too long, max 10 bytes"
 		},
 		{
-			code: 6107,
+			code: 6109,
 			name: "SymbolEmpty",
 			msg: "Token symbol cannot be empty"
 		},
 		{
-			code: 6108,
+			code: 6110,
 			name: "UriTooLong",
 			msg: "URI too long, max 200 bytes"
 		},
 		{
-			code: 6109,
+			code: 6111,
 			name: "UriEmpty",
 			msg: "URI cannot be empty"
 		},
 		{
-			code: 6110,
+			code: 6112,
 			name: "IncompleteAdvancedPoolParams",
 			msg: "Incomplete advanced pool parameters: custom_lp_sol, custom_lp_token, custom_borrow_ratio, custom_borrow_duration must be provided together"
 		},
 		{
-			code: 6111,
+			code: 6113,
 			name: "InvalidInitialVirtualSol",
 			msg: "Initial virtual SOL out of valid range"
 		},
 		{
-			code: 6112,
+			code: 6114,
 			name: "InvalidInitialVirtualToken",
 			msg: "Initial virtual Token out of valid range"
 		},
 		{
-			code: 6113,
+			code: 6115,
 			name: "InvalidBorrowPoolRatio",
 			msg: "Borrow pool ratio out of valid range"
 		},
 		{
-			code: 6114,
+			code: 6116,
 			name: "BorrowTokenCalculationOverflow",
 			msg: "Borrow pool token amount calculation overflow"
 		},
 		{
-			code: 6115,
+			code: 6117,
 			name: "BorrowTokenAmountZero",
 			msg: "Borrow pool token amount cannot be zero"
 		}
@@ -44226,8 +44236,10 @@
 						name: "pool_type",
 						docs: [
 							"Pool type",
-							"0 = Basic version (uses default parameters, supports fee halving)",
-							"1 = Advanced version (custom parameters, fees never halved)"
+							"0 = Basic version (uses default parameters)",
+							"1 = Advanced version (custom parameters)",
+							"Note: BOTH pool types participate in fee halving milestones",
+							"(dynamic thresholds at 100x/1000x/10000x of the pool's own initial price)"
 						],
 						type: "u8"
 					},
@@ -44235,8 +44247,8 @@
 						name: "borrow_pool_ratio",
 						docs: [
 							"Borrow pool token ratio (recorded only for information display)",
-							"Actual value range: 5-30 (represents 5%-30%)",
-							"Basic version fixed at 20"
+							"Actual value range: 2-8 (represents 2%-8%, deducted from total supply)",
+							"Basic version fixed at 4"
 						],
 						type: "u8"
 					}
@@ -44812,7 +44824,7 @@
 		types: types$1
 	};
 
-	var address = "sGecRTjTZmnqJBmLK4ZMNCzsaMrgkFfNqEcYk1GhRde";
+	var address = "EVNaaiyg9z876PUmLCVQcdc5L5eJukT4pni5GtVJ8P37";
 	var metadata = {
 		name: "fun100x",
 		version: "0.1.0",
@@ -47829,271 +47841,281 @@
 		},
 		{
 			code: 6062,
+			name: "InsufficientLongPayerBalance",
+			msg: "Payer wallet balance insufficient for long margin and fees"
+		},
+		{
+			code: 6063,
+			name: "InsufficientShortPayerBalance",
+			msg: "Payer wallet balance insufficient for short margin and fees"
+		},
+		{
+			code: 6064,
 			name: "InvalidAccountOwner",
 			msg: "Invalid account owner"
 		},
 		{
-			code: 6063,
+			code: 6065,
 			name: "SellAmountExceedsOrderAmount",
 			msg: "Sell amount exceeds order's token holdings"
 		},
 		{
-			code: 6064,
+			code: 6066,
 			name: "OrderNotExpiredMustCloseByOwner",
 			msg: "Non-expired order must be closed by owner"
 		},
 		{
-			code: 6065,
+			code: 6067,
 			name: "SettlementAddressMustBeOwnerAddress",
 			msg: "Settlement address must be owner address"
 		},
 		{
-			code: 6066,
+			code: 6068,
 			name: "BuyAmountExceedsOrderAmount",
 			msg: "Buy amount exceeds order's token holdings"
 		},
 		{
-			code: 6067,
+			code: 6069,
 			name: "InsufficientTradeAmount",
 			msg: "Trade amount below minimum requirement"
 		},
 		{
-			code: 6068,
+			code: 6070,
 			name: "SolAmountTooLarge",
 			msg: "SOL amount exceeds maximum limit (10000000 SOL per transaction)"
 		},
 		{
-			code: 6069,
+			code: 6071,
 			name: "RemainingTokenAmountTooSmall",
 			msg: "Remaining token amount below minimum trade requirement"
 		},
 		{
-			code: 6070,
+			code: 6072,
 			name: "TradeCooldownNotExpired",
 			msg: "Trade cooldown period not expired, please try again later"
 		},
 		{
-			code: 6071,
+			code: 6073,
 			name: "ExceedApprovalAmount",
 			msg: "Sell amount exceeds approved amount, please call approval function first"
 		},
 		{
-			code: 6072,
+			code: 6074,
 			name: "CooldownNotInitialized",
 			msg: "Sell trade requires calling approval or buy function first to initialize cooldown PDA"
 		},
 		{
-			code: 6073,
+			code: 6075,
 			name: "CannotCloseCooldownWithBalance",
 			msg: "Cannot close cooldown PDA with non-zero token balance"
 		},
 		{
-			code: 6074,
+			code: 6076,
 			name: "PriceCalculationError",
 			msg: "Price calculation error"
 		},
 		{
-			code: 6075,
+			code: 6077,
 			name: "InvalidPartnerFeeRecipientAccount",
 			msg: "Invalid partner fee recipient account"
 		},
 		{
-			code: 6076,
+			code: 6078,
 			name: "InvalidBaseFeeRecipientAccount",
 			msg: "Invalid base fee recipient account"
 		},
 		{
-			code: 6077,
+			code: 6079,
 			name: "InvalidOrderbookAddress",
 			msg: "Orderbook address does not match curve account orderbook"
 		},
 		{
-			code: 6078,
+			code: 6080,
 			name: "InvalidFeePercentage",
 			msg: "Fee percentage must be between 0-100"
 		},
 		{
-			code: 6079,
+			code: 6081,
 			name: "InvalidFeeRate",
 			msg: "Fee rate exceeds maximum limit (10%)"
 		},
 		{
-			code: 6080,
+			code: 6082,
 			name: "InvalidCustomFeeRate",
 			msg: "Custom fee rate must be between 1000 (1%) and 5000 (5%)"
 		},
 		{
-			code: 6081,
+			code: 6083,
 			name: "InvalidBorrowDuration",
 			msg: "Borrow duration out of valid range (3-30 days)"
 		},
 		{
-			code: 6082,
+			code: 6084,
 			name: "InvalidStopLossPrice",
 			msg: "Stop loss price does not meet minimum interval requirement"
 		},
 		{
-			code: 6083,
+			code: 6085,
 			name: "NoProfitableFunds",
 			msg: "No profitable funds to transfer"
 		},
 		{
-			code: 6084,
+			code: 6086,
 			name: "InsufficientPoolFunds",
 			msg: "Insufficient pool funds"
 		},
 		{
-			code: 6085,
+			code: 6087,
 			name: "InsufficientPoolBalance",
 			msg: "Pool SOL account balance would fall below minimum required balance"
 		},
 		{
-			code: 6086,
+			code: 6088,
 			name: "OrderBookManagerOverflow",
 			msg: "Math operation overflow"
 		},
 		{
-			code: 6087,
+			code: 6089,
 			name: "OrderBookManagerInvalidSlotIndex",
 			msg: "Invalid slot index"
 		},
 		{
-			code: 6088,
+			code: 6090,
 			name: "OrderBookManagerInvalidAccountData",
 			msg: "Invalid account data"
 		},
 		{
-			code: 6089,
+			code: 6091,
 			name: "OrderBookManagerExceedsMaxCapacity",
 			msg: "New capacity exceeds maximum limit"
 		},
 		{
-			code: 6090,
+			code: 6092,
 			name: "OrderBookManagerExceedsAccountSizeLimit",
 			msg: "Account size exceeds 10MB limit"
 		},
 		{
-			code: 6091,
+			code: 6093,
 			name: "OrderBookManagerOrderIdMismatch",
 			msg: "Order ID mismatch"
 		},
 		{
-			code: 6092,
+			code: 6094,
 			name: "OrderBookManagerEmptyOrderBook",
 			msg: "Order book is empty"
 		},
 		{
-			code: 6093,
+			code: 6095,
 			name: "OrderBookManagerAccountNotWritable",
 			msg: "Account is not writable"
 		},
 		{
-			code: 6094,
+			code: 6096,
 			name: "OrderBookManagerNotRentExempt",
 			msg: "Account not rent-exempt"
 		},
 		{
-			code: 6095,
+			code: 6097,
 			name: "OrderBookManagerInvalidRentBalance",
 			msg: "Invalid rent balance"
 		},
 		{
-			code: 6096,
+			code: 6098,
 			name: "OrderBookManagerInsufficientFunds",
 			msg: "Insufficient funds"
 		},
 		{
-			code: 6097,
+			code: 6099,
 			name: "OrderBookManagerInvalidAccountOwner",
 			msg: "OrderBook account owner mismatch"
 		},
 		{
-			code: 6098,
+			code: 6100,
 			name: "OrderBookManagerDataOutOfBounds",
 			msg: "Data access out of bounds"
 		},
 		{
-			code: 6099,
+			code: 6101,
 			name: "NoValidInsertPosition",
 			msg: "Cannot find valid insert position, all candidates failed due to price range overlap"
 		},
 		{
-			code: 6100,
+			code: 6102,
 			name: "EmptyCloseInsertIndices",
 			msg: "close_insert_indices array cannot be empty"
 		},
 		{
-			code: 6101,
+			code: 6103,
 			name: "TooManyCloseInsertIndices",
 			msg: "close_insert_indices array cannot exceed 20 elements"
 		},
 		{
-			code: 6102,
+			code: 6104,
 			name: "CloseOrderNotFound",
 			msg: "Specified close order not found"
 		},
 		{
-			code: 6103,
+			code: 6105,
 			name: "LinkedListDeleteCountMismatch",
 			msg: "Linked list delete count mismatch: count inconsistent before/after deletion"
 		},
 		{
-			code: 6104,
+			code: 6106,
 			name: "NameTooLong",
 			msg: "Token name too long, max 32 bytes"
 		},
 		{
-			code: 6105,
+			code: 6107,
 			name: "NameEmpty",
 			msg: "Token name cannot be empty"
 		},
 		{
-			code: 6106,
+			code: 6108,
 			name: "SymbolTooLong",
 			msg: "Token symbol too long, max 10 bytes"
 		},
 		{
-			code: 6107,
+			code: 6109,
 			name: "SymbolEmpty",
 			msg: "Token symbol cannot be empty"
 		},
 		{
-			code: 6108,
+			code: 6110,
 			name: "UriTooLong",
 			msg: "URI too long, max 200 bytes"
 		},
 		{
-			code: 6109,
+			code: 6111,
 			name: "UriEmpty",
 			msg: "URI cannot be empty"
 		},
 		{
-			code: 6110,
+			code: 6112,
 			name: "IncompleteAdvancedPoolParams",
 			msg: "Incomplete advanced pool parameters: custom_lp_sol, custom_lp_token, custom_borrow_ratio, custom_borrow_duration must be provided together"
 		},
 		{
-			code: 6111,
+			code: 6113,
 			name: "InvalidInitialVirtualSol",
 			msg: "Initial virtual SOL out of valid range"
 		},
 		{
-			code: 6112,
+			code: 6114,
 			name: "InvalidInitialVirtualToken",
 			msg: "Initial virtual Token out of valid range"
 		},
 		{
-			code: 6113,
+			code: 6115,
 			name: "InvalidBorrowPoolRatio",
 			msg: "Borrow pool ratio out of valid range"
 		},
 		{
-			code: 6114,
+			code: 6116,
 			name: "BorrowTokenCalculationOverflow",
 			msg: "Borrow pool token amount calculation overflow"
 		},
 		{
-			code: 6115,
+			code: 6117,
 			name: "BorrowTokenAmountZero",
 			msg: "Borrow pool token amount cannot be zero"
 		}
@@ -48240,8 +48262,10 @@
 						name: "pool_type",
 						docs: [
 							"Pool type",
-							"0 = Basic version (uses default parameters, supports fee halving)",
-							"1 = Advanced version (custom parameters, fees never halved)"
+							"0 = Basic version (uses default parameters)",
+							"1 = Advanced version (custom parameters)",
+							"Note: BOTH pool types participate in fee halving milestones",
+							"(dynamic thresholds at 100x/1000x/10000x of the pool's own initial price)"
 						],
 						type: "u8"
 					},
@@ -48249,8 +48273,8 @@
 						name: "borrow_pool_ratio",
 						docs: [
 							"Borrow pool token ratio (recorded only for information display)",
-							"Actual value range: 5-30 (represents 5%-30%)",
-							"Basic version fixed at 20"
+							"Actual value range: 2-8 (represents 2%-8%, deducted from total supply)",
+							"Basic version fixed at 4"
 						],
 						type: "u8"
 					}
