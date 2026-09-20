@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>100x SDK Browser Test</title>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>100x SDK Browser Compatibility Test</h1>
+
+        <div id="status">
+            <div class="status info">Loading 100x SDK...</div>
+        </div>
+
+        <div id="results"></div>
+
+        <div>
+            <button onclick="testSDKInitialization()">Test SDK Initialization</button>
+            <button onclick="testEnvironmentDetection()">Test Environment Detection</button>
+            <button onclick="testModuleAccess()">Test Module Access</button>
+        </div>
+    </div>
+
+    <!-- 加载依赖包 -->
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <script src="https://unpkg.com/@coral-xyz/anchor@latest/dist/browser/index.js"></script>
+
+    <!-- 加载我们的 SDK -->
+    <script src="dist/100x-sdk.js"></script>
+
+    <script>
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        function addResult(title, content, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const resultHtml = `
+                <div class="status ${type}">
+                    <h3>${title}</h3>
+                    <pre>${content}</pre>
+                </div>
+            `;
+            resultsDiv.innerHTML += resultHtml;
+        }
+
+        function testSDKInitialization() {
+            try {
+                updateStatus('Testing SDK initialization...', 'info');
+
+                // 检查 SDK 是否可用
+                if (typeof Fun100xSDK === 'undefined') {
+                    throw new Error('Fun100xSDK is not defined');
+                }
+
+                // 检查主要类是否存在
+                if (!Fun100xSDK.Fun100xSdk) {
+                    throw new Error('Fun100xSdk class not found');
+                }
+
+                // 模拟 Solana 连接
+                const connection = new solanaWeb3.Connection('https://api.devnet.solana.com');
+
+                const options = {
+                    defaultDataSource: 'fast',
+                    fastApiUrl: 'https://devtestapi.pinpet.fun',
+                    fee_recipient: 'GesAj2dTn2wdNcxj4x8qsqS9aNRVPBPkE76aaqg7skxu',
+                    base_fee_recipient: '5YHi1HsxobLiTD6NQfHJQpoPoRjMuNyXp4RroTvR6dKi',
+                    params_account: '8VWPLdFVW3Vi2U6uo3ypjRL5mCcYWXKgD4Saj2MEEeHc'
+                };
+
+                // 初始化 SDK
+                const sdk = new Fun100xSDK.Fun100xSdk(connection, 'TestProgramId', options);
+
+                addResult('✅ SDK Initialization Test',
+                    `SDK initialized successfully!\n` +
+                    `Data source: ${sdk.defaultDataSource}\n` +
+                    `Max orders count: ${sdk.MAX_ORDERS_COUNT}`, 'success');
+
+                updateStatus('SDK initialization test completed successfully!', 'success');
+
+                return sdk;
+
+            } catch (error) {
+                addResult('❌ SDK Initialization Test',
+                    `Error: ${error.message}\n` +
+                    `Stack: ${error.stack}`, 'error');
+                updateStatus('SDK initialization test failed!', 'error');
+                throw error;
+            }
+        }
+
+        function testEnvironmentDetection() {
+            try {
+                updateStatus('Testing environment detection...', 'info');
+
+                // 环境检测信息
+                const envInfo = {
+                    'typeof window': typeof window,
+                    'typeof process': typeof process,
+                    'typeof global': typeof global,
+                    'typeof globalThis': typeof globalThis,
+                    'Browser': typeof window !== 'undefined',
+                    'Node.js': typeof process !== 'undefined' && process.versions && process.versions.node
+                };
+
+                addResult('✅ Environment Detection Test',
+                    JSON.stringify(envInfo, null, 2), 'success');
+
+                updateStatus('Environment detection test completed!', 'success');
+
+            } catch (error) {
+                addResult('❌ Environment Detection Test',
+                    `Error: ${error.message}`, 'error');
+                updateStatus('Environment detection test failed!', 'error');
+            }
+        }
+
+        function testModuleAccess() {
+            try {
+                updateStatus('Testing module access...', 'info');
+
+                const sdk = testSDKInitialization();
+
+                // 测试模块访问
+                const moduleTests = {
+                    'trading module': sdk.trading ? '✅ Available' : '❌ Not available',
+                    'fast module': sdk.fast ? '✅ Available' : '❌ Not available',
+                    'chain module': sdk.chain ? '✅ Available' : '❌ Not available',
+                    'token module': sdk.token ? '✅ Available' : '❌ Not available',
+                    'param module': sdk.param ? '✅ Available' : '❌ Not available',
+                    'simulator module': sdk.simulator ? '✅ Available' : '❌ Not available'
+                };
+
+                addResult('✅ Module Access Test',
+                    JSON.stringify(moduleTests, null, 2), 'success');
+
+                updateStatus('Module access test completed!', 'success');
+
+            } catch (error) {
+                addResult('❌ Module Access Test',
+                    `Error: ${error.message}`, 'error');
+                updateStatus('Module access test failed!', 'error');
+            }
+        }
+
+        // 页面加载时自动运行基本测试
+        window.addEventListener('load', function() {
+            setTimeout(() => {
+                try {
+                    testEnvironmentDetection();
+                    updateStatus('Basic tests completed. Click buttons above for more tests.', 'success');
+                } catch (error) {
+                    updateStatus('Basic tests failed: ' + error.message, 'error');
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
