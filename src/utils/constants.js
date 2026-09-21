@@ -33,8 +33,6 @@ const DEFAULT_NETWORKS = {
     defaultDataSource: 'fast', // 'fast' or 'chain'
     solanaEndpoint: 'http://127.0.0.1:8899',
     fastApiUrl: 'http://127.0.0.1:3000',
-    // solanaEndpoint: 'http://216.158.231.58:8899',
-    // fastApiUrl: 'http://216.158.231.58:3000',
     feeRecipient: 'GesAj2dTn2wdNcxj4x8qsqS9aNRVPBPkE76aaqg7skxu',
     baseFeeRecipient: '5YHi1HsxobLiTD6NQfHJQpoPoRjMuNyXp4RroTvR6dKi',
     paramsAccount: 'HPuvtLLcgSMPSyRmULPiFe9oAvm1o8mR4weqXZrUhzRM'
