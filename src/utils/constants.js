@@ -9,7 +9,7 @@ const DEFAULT_NETWORKS = {
     network: 'mainnet',
     programId: 'sGecRTjTZmnqJBmLK4ZMNCzsaMrgkFfNqEcYk1GhRde',
     defaultDataSource: 'fast',
-    solanaEndpoint: 'https://solana-rpc.pinpet.fun',
+    solanaEndpoint: 'https://solana-rpc.100x.fun',
     fastApiUrl: 'https://api.pinpet.fun/',
     feeRecipient: 'CmDe8JRAPJ7QpZNCb4ArVEyzyxYoCNL7WZw5qXLePULn',
     baseFeeRecipient: '2xhAfEfnH8wg7ZGujSijJi4Zt4ge1ZuwMypo7etntgXA',
@@ -21,7 +21,7 @@ const DEFAULT_NETWORKS = {
     programId: 'sGecRTjTZmnqJBmLK4ZMNCzsaMrgkFfNqEcYk1GhRde',
     defaultDataSource: 'fast',
     solanaEndpoint: 'https://lu-ura5lv-fast-devnet.helius-rpc.com',
-    fastApiUrl: 'https://devtestapi.pinpet.fun',
+    fastApiUrl: 'https://devtestapi.100x.fun',
     feeRecipient: 'GesAj2dTn2wdNcxj4x8qsqS9aNRVPBPkE76aaqg7skxu',
     baseFeeRecipient: '5YHi1HsxobLiTD6NQfHJQpoPoRjMuNyXp4RroTvR6dKi',
     paramsAccount: 'Ckz5CmbpyKtKmwgw7NDLzFnVACxekWqrX8i6vhCyLkqY'
