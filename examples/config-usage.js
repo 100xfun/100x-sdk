@@ -2,58 +2,58 @@ const { Connection, PublicKey } = require('@solana/web3.js');
 const Fun100xSdk = require('../src/sdk');
 
 /**
- * 100x SDK 配置使用示例
- * 展示如何优雅地使用默认配置系统
+ * Example of configuring the 100x SDK
+ * Demonstrates how to use the default configuration system
  */
 
-// 示例 1: 最简配置 - 使用所有默认值
+// Example 1: Minimal configuration - use all defaults
 async function basicUsage() {
   console.log('=== 基础使用示例 ===');
 
   const connection = new Connection('https://api.devnet.solana.com');
-  const wallet = /* 你的钱包实例 */;
+  const wallet = /* Your wallet instance */;
   const programId = 'YourProgramIdHere';
 
-  // 只提供必要的账户配置，其他使用默认值
+  // Provide only the required account settings; use defaults for everything else
   const sdk = new Fun100xSdk(connection, wallet, programId, {
     fee_recipient: 'YourFeeRecipientPublicKey',
     base_fee_recipient: 'YourBaseFeeRecipientPublicKey',
     params_account: 'YourParamsAccountPublicKey'
   });
 
-  // 检查配置状态
+  // Check the configuration status
   console.log('配置状态:', sdk.getConfigStatus());
   console.log('是否已配置:', sdk.isConfigured());
 }
 
-// 示例 2: 自定义配置 - 覆盖默认值
+// Example 2: Custom configuration - override defaults
 async function customConfiguration() {
   console.log('=== 自定义配置示例 ===');
 
   const connection = new Connection('https://api.mainnet-beta.solana.com');
-  const wallet = /* 你的钱包实例 */;
+  const wallet = /* Your wallet instance */;
   const programId = 'YourProgramIdHere';
 
-  // 自定义配置，覆盖默认值
+  // Customize the configuration and override defaults
   const sdk = new Fun100xSdk(connection, wallet, programId, {
-    // 必要配置
+    // Required settings
     fee_recipient: 'YourFeeRecipientPublicKey',
     base_fee_recipient: 'YourBaseFeeRecipientPublicKey',
     params_account: 'YourParamsAccountPublicKey',
 
-    // 自定义网络配置
+    // Custom network settings
     commitment: 'finalized',
     preflightCommitment: 'finalized',
 
-    // 自定义超时和重试配置
-    timeout: 120000, // 2分钟
+    // Custom timeout and retry settings
+    timeout: 120000, // 2 minutes
     maxRetries: 5,
-    retryDelay: 2000, // 2秒
+    retryDelay: 2000, // 2 seconds
 
-    // 自定义 API URL
+    // Custom API URL
     fastApiUrl: 'https://custom-api.example.com',
 
-    // 禁用严格验证
+    // Disable strict validation
     strictValidation: false
   });
 
@@ -61,15 +61,15 @@ async function customConfiguration() {
   console.log('网络信息:', sdk.getNetworkInfo());
 }
 
-// 示例 3: 动态配置更新
+// Example 3: Update the configuration dynamically
 async function dynamicConfiguration() {
   console.log('=== 动态配置更新示例 ===');
 
   const connection = new Connection('https://api.devnet.solana.com');
-  const wallet = /* 你的钱包实例 */;
+  const wallet = /* Your wallet instance */;
   const programId = 'YourProgramIdHere';
 
-  // 初始配置
+  // Initial configuration
   const sdk = new Fun100xSdk(connection, wallet, programId, {
     fee_recipient: 'YourFeeRecipientPublicKey',
     base_fee_recipient: 'YourBaseFeeRecipientPublicKey',
@@ -78,7 +78,7 @@ async function dynamicConfiguration() {
 
   console.log('初始配置状态:', sdk.getConfigStatus());
 
-  // 更新配置
+  // Update the configuration
   sdk.updateConfig({
     commitment: 'finalized',
     maxRetries: 10,
@@ -87,18 +87,18 @@ async function dynamicConfiguration() {
 
   console.log('更新后配置:', sdk.getConfig());
 
-  // 重置为默认配置
+  // Reset to the default configuration
   sdk.resetToDefaults();
   console.log('重置后配置状态:', sdk.getConfigStatus());
 }
 
-// 示例 4: 环境特定配置
+// Example 4: Environment-specific configuration
 async function environmentSpecificConfiguration() {
   console.log('=== 环境特定配置示例 ===');
 
   const environment = process.env.NODE_ENV || 'development';
 
-  // 根据环境选择不同的配置
+  // Select a configuration based on the environment
   const envConfigs = {
     development: {
       commitment: 'confirmed',
@@ -126,7 +126,7 @@ async function environmentSpecificConfiguration() {
       : 'https://api.devnet.solana.com'
   );
 
-  const wallet = /* 你的钱包实例 */;
+  const wallet = /* Your wallet instance */;
   const programId = 'YourProgramIdHere';
 
   const sdk = new Fun100xSdk(connection, wallet, programId, {
@@ -139,22 +139,22 @@ async function environmentSpecificConfiguration() {
   console.log(`${environment} 环境配置:`, sdk.getConfig());
 }
 
-// 示例 5: 配置验证和错误处理
+// Example 5: Configuration validation and error handling
 async function configurationValidation() {
   console.log('=== 配置验证示例 ===');
 
   const connection = new Connection('https://api.devnet.solana.com');
-  const wallet = /* 你的钱包实例 */;
+  const wallet = /* Your wallet instance */;
   const programId = 'YourProgramIdHere';
 
   try {
-    // 故意使用不完整的配置来演示验证
+    // Intentionally use an incomplete configuration to demonstrate validation
     const sdk = new Fun100xSdk(connection, wallet, programId, {
-      // 缺少必要的账户配置
-      fastApiUrl: 'invalid-url' // 无效的 URL
+      // Required account settings are missing
+      fastApiUrl: 'invalid-url' // Invalid URL
     });
 
-    // 检查配置状态
+    // Check the configuration status
     const status = sdk.getConfigStatus();
     if (!status.isConfigured) {
       console.log('SDK 未完全配置，缺少以下配置:');
@@ -168,7 +168,7 @@ async function configurationValidation() {
   }
 }
 
-// 导出示例函数
+// Export the example functions
 module.exports = {
   basicUsage,
   customConfiguration,
@@ -177,12 +177,12 @@ module.exports = {
   configurationValidation
 };
 
-// 如果直接运行此文件，执行所有示例
+// Run all examples when this file is executed directly
 if (require.main === module) {
   console.log('100x SDK 配置使用示例\n');
 
-  // 注意: 这些示例需要真实的钱包和程序ID才能运行
-  // 请根据你的实际情况修改配置值
+  // Note: These examples require a real wallet and program ID to run
+  // Update the configuration values to match your setup
 
   console.log('请查看代码中的示例函数，了解如何使用默认配置系统。');
   console.log('要运行示例，请提供真实的钱包实例和程序ID。');
