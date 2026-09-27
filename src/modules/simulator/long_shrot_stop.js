@@ -4,6 +4,7 @@ const CurveAMM = require('../../utils/curve_amm');
 const {transformOrdersData , checkPriceRangeOverlap} = require('./stop_loss_utils')
 const { PRICE_ADJUSTMENT_PERCENTAGE, MIN_STOP_LOSS_PERCENT } = require('./utils');
 const JSONbig = require('json-bigint')({ storeAsString: false });
+const { formatRatio, ceilDiv } = require('./precision');
 
 /**
  * Simulate long position stop loss calculation
@@ -35,10 +36,11 @@ const JSONbig = require('json-bigint')({ storeAsString: false });
  *   - For example: 3.5 means the stop loss price is 3.5% lower than the current price
  *   - For a long position this value should be positive (stop loss price below current price)
  *
- * @returns {number} returns.leverage - Leverage ratio
+ * @returns {number} returns.leverage - Leverage ratio (existing four-decimal downward truncation)
  *   - Formula: currentPrice / (currentPrice - executableStopLossPrice)
  *   - For example: 28.57 means about 28.57x leverage
  *   - The higher the leverage, the higher the risk, but also the higher the potential return
+ * @returns {string} returns.leverageDisplay - Rounded display value derived from the executable stop-loss price; not a maximum leverage limit
  *
  * @returns {bigint} returns.currentPrice - Current price (u128 format)
  *   - The current token price used in the calculation
@@ -272,10 +274,17 @@ async function simulateLongStopLoss(mint, buyTokenAmount, stopLossPrice, lastPri
         // Calculate stop loss percentage
         let stopLossPercentage = 0;
         let leverage = 1;
+        let leverageDisplay = '1';
 
         if (currentPrice !== executableStopLossPrice) {
-            stopLossPercentage = Number((BigInt(10000) * (currentPrice - executableStopLossPrice)) / currentPrice) / 100;
-            leverage = Number((BigInt(10000) * currentPrice) / (currentPrice - executableStopLossPrice)) / 10000;
+            const priceDiff = currentPrice - executableStopLossPrice;
+            stopLossPercentage = priceDiff >= 0n
+                ? Number(formatRatio(priceDiff, currentPrice, 2, 100n))
+                : Number((10000n * priceDiff) / currentPrice) / 100;
+            leverage = Number((10000n * currentPrice) / priceDiff) / 10000;
+            leverageDisplay = priceDiff > 0n
+                ? formatRatio(currentPrice, priceDiff, 2, 1n, 'half-up', true)
+                : String(leverage);
         }
 
         // Calculate margin requirement
@@ -311,6 +320,7 @@ async function simulateLongStopLoss(mint, buyTokenAmount, stopLossPrice, lastPri
             tradeAmount: finalTradeAmount, // SOL output amount
             stopLossPercentage: stopLossPercentage, // Stop loss percentage relative to current price
             leverage: leverage, // Leverage ratio
+            leverageDisplay: leverageDisplay, // Rounded display value; leverage keeps its existing meaning
             currentPrice: currentPrice, // Current price
             iterations: iteration, // Number of adjustments
             originalStopLossPrice: BigInt(stopLossPrice), // Original stop loss price
@@ -355,10 +365,11 @@ async function simulateLongStopLoss(mint, buyTokenAmount, stopLossPrice, lastPri
  *   - For example: 3.5 means the stop loss price is 3.5% higher than the current price
  *   - For a short position this value should be positive (stop loss price above current price)
  *
- * @returns {number} returns.leverage - Leverage ratio
+ * @returns {number} returns.leverage - Leverage ratio (existing four-decimal downward truncation)
  *   - Formula: currentPrice / (executableStopLossPrice - currentPrice)
  *   - For example: 28.57 means about 28.57x leverage
  *   - The higher the leverage, the higher the risk, but also the higher the potential return
+ * @returns {string} returns.leverageDisplay - Rounded display value derived from the executable stop-loss price; not a maximum leverage limit
  *
  * @returns {bigint} returns.currentPrice - Current price (u128 format)
  *   - The current token price used in the calculation
@@ -584,11 +595,17 @@ async function simulateShortStopLoss(mint, sellTokenAmount, stopLossPrice, lastP
 
         // Calculate stop loss percentage
         // For short position, stop loss price is higher than current price, so it's a positive percentage
-        const stopLossPercentage = Number((BigInt(10000) * (executableStopLossPrice - currentPrice)) / currentPrice) / 100;
+        const priceDiff = executableStopLossPrice - currentPrice;
+        const stopLossPercentage = priceDiff >= 0n
+            ? Number(formatRatio(priceDiff, currentPrice, 2, 100n))
+            : Number((10000n * priceDiff) / currentPrice) / 100;
 
         // Calculate leverage ratio
         // For short position, leverage = current price / (stop loss price - current price)
-        const leverage = Number((BigInt(10000) * currentPrice) / (executableStopLossPrice - currentPrice)) / 10000;
+        const leverage = Number((10000n * currentPrice) / priceDiff) / 10000;
+        const leverageDisplay = priceDiff > 0n
+            ? formatRatio(currentPrice, priceDiff, 2, 1n, 'half-up', true)
+            : String(leverage);
 
         // Calculate margin requirement
         // Consistent with the contract formula (long_short.rs lines 890-894):
@@ -628,6 +645,7 @@ async function simulateShortStopLoss(mint, sellTokenAmount, stopLossPrice, lastP
             tradeAmount: finalTradeAmount, // SOL input amount (SOL needed to buy back tokens at close)
             stopLossPercentage: stopLossPercentage, // Stop loss percentage relative to current price
             leverage: leverage, // Leverage ratio
+            leverageDisplay: leverageDisplay, // Rounded display value; leverage keeps its existing meaning
             currentPrice: currentPrice, // Current price
             iterations: iteration, // Number of adjustments
             originalStopLossPrice: BigInt(stopLossPrice), // Original stop loss price
@@ -755,8 +773,9 @@ async function simulateLongSolStopLoss(mint, buySolAmount, stopLossPrice, lastPr
         // Calculate dynamic binary search upper bound based on leverage
         const stopLossPriceBigInt = BigInt(stopLossPrice);
         const priceDiff = currentPrice - stopLossPriceBigInt;
-        const estimatedLeverage = priceDiff > 0n ? Number(currentPrice * 10000n / priceDiff) / 10000 : 10;
-        const safeMultiplier = BigInt(Math.ceil(estimatedLeverage * 3)); // 3x safety factor
+        // Keep the original four-decimal leverage truncation used to size the search range.
+        const scaledLeverage = priceDiff > 0n ? currentPrice * 10000n / priceDiff : 100000n;
+        const safeMultiplier = ceilDiv(scaledLeverage * 3n, 10000n); // 3x safety factor
         const multiplier = safeMultiplier > 10n ? safeMultiplier : 10n; // minimum 10x
 
         // Use a binary search algorithm to find the maximum estimatedMargin that is less than buySolAmount
@@ -941,8 +960,9 @@ async function simulateShortSolStopLoss(mint, sellSolAmount, stopLossPrice, last
         // Calculate dynamic binary search upper bound based on leverage
         const stopLossPriceBigInt = BigInt(stopLossPrice);
         const priceDiff = stopLossPriceBigInt - currentPrice;
-        const estimatedLeverage = priceDiff > 0n ? Number(currentPrice * 10000n / priceDiff) / 10000 : 10;
-        const safeMultiplier = BigInt(Math.ceil(estimatedLeverage * 3)); // 3x safety factor
+        // Keep the original four-decimal leverage truncation used to size the search range.
+        const scaledLeverage = priceDiff > 0n ? currentPrice * 10000n / priceDiff : 100000n;
+        const safeMultiplier = ceilDiv(scaledLeverage * 3n, 10000n); // 3x safety factor
         const multiplier = safeMultiplier > 10n ? safeMultiplier : 10n; // minimum 10x
 
         // Use a binary search algorithm to find the maximum estimatedMargin that is less than sellSolAmount

@@ -21,7 +21,7 @@
     "build": "rollup -c",
     "build:dev": "rollup -c -w",
     "build:types": "cp src/types/index.d.ts dist/index.d.ts",
-    "test": "mocha tests/unit/**/*.test.js",
+    "test": "mocha \"{test,tests/unit}/**/*.test.js\"",
     "test:integration": "mocha tests/integration/**/*.test.js",
     "lint": "eslint src"
   },

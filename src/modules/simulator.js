@@ -339,9 +339,9 @@ class SimulatorModule {
             const tokenSellResult = await this.simulateTokenSell(mint, tokenAmountBigInt, null, priceResult, ordersResult);
 
             // Estimate ideal SOL amount
-            const priceDecimal = CurveAMM.u128ToDecimal(currentPrice);
-            const tokenInDecimal = Number(tokenAmountBigInt) / 1e9; // Convert token lamports to tokens (9-digit precision)
-            const estimatedSolAmount = BigInt(Math.floor((tokenInDecimal * priceDecimal) * 1e9)); // Convert to SOL lamports
+            // Token and SOL both use 9 decimals, so their unit conversions cancel out.
+            const priceScale = BigInt(CurveAMM.PRICE_PRECISION_FACTOR_DECIMAL.toFixed(0));
+            const estimatedSolAmount = tokenAmountBigInt * currentPrice / priceScale;
 
             // Transform result to match simulateSell format
             return {

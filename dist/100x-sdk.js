@@ -36108,11 +36108,46 @@
 
 	var jsonBigintExports = jsonBigint.exports;
 
+	/** Format a non-negative integer ratio without converting its operands to Number. */
+
+	function formatRatio$2(numerator, denominator, decimals, multiplier = 1n, rounding = 'down', trim = false) {
+	  numerator = BigInt(numerator);
+	  denominator = BigInt(denominator);
+	  if (numerator < 0n || denominator <= 0n || !Number.isInteger(decimals) || decimals < 0) {
+	    throw new RangeError('Invalid ratio');
+	  }
+
+	  const factor = 10n ** BigInt(decimals);
+	  const scaledNumerator = numerator * multiplier * factor;
+	  let quotient = scaledNumerator / denominator;
+	  if (rounding === 'half-up') {
+	    if ((scaledNumerator % denominator) * 2n >= denominator) quotient++;
+	  } else if (rounding !== 'down') {
+	    throw new RangeError('Invalid rounding mode');
+	  }
+
+	  if (decimals === 0) return quotient.toString();
+	  const integer = quotient / factor;
+	  const fraction = (quotient % factor).toString().padStart(decimals, '0');
+	  const value = `${integer}.${fraction}`;
+	  return trim ? value.replace(/\.?0+$/, '') : value;
+	}
+
+	function ceilDiv$1(numerator, denominator) {
+	  numerator = BigInt(numerator);
+	  denominator = BigInt(denominator);
+	  if (numerator < 0n || denominator <= 0n) throw new RangeError('Invalid division');
+	  return (numerator + denominator - 1n) / denominator;
+	}
+
+	var precision = { formatRatio: formatRatio$2, ceilDiv: ceilDiv$1 };
+
 	const Decimal$1 = decimalExports;
 	const CurveAMM$6 = curve_amm;
 	const {transformOrdersData , checkPriceRangeOverlap} = stop_loss_utils;
 	const { PRICE_ADJUSTMENT_PERCENTAGE, MIN_STOP_LOSS_PERCENT } = utils$2;
 	jsonBigintExports({ storeAsString: false });
+	const { formatRatio: formatRatio$1, ceilDiv } = precision;
 
 	/**
 	 * Simulate long position stop loss calculation
@@ -36144,10 +36179,11 @@
 	 *   - For example: 3.5 means the stop loss price is 3.5% lower than the current price
 	 *   - For a long position this value should be positive (stop loss price below current price)
 	 *
-	 * @returns {number} returns.leverage - Leverage ratio
+	 * @returns {number} returns.leverage - Leverage ratio (existing four-decimal downward truncation)
 	 *   - Formula: currentPrice / (currentPrice - executableStopLossPrice)
 	 *   - For example: 28.57 means about 28.57x leverage
 	 *   - The higher the leverage, the higher the risk, but also the higher the potential return
+	 * @returns {string} returns.leverageDisplay - Rounded display value derived from the executable stop-loss price; not a maximum leverage limit
 	 *
 	 * @returns {bigint} returns.currentPrice - Current price (u128 format)
 	 *   - The current token price used in the calculation
@@ -36381,10 +36417,17 @@
 	        // Calculate stop loss percentage
 	        let stopLossPercentage = 0;
 	        let leverage = 1;
+	        let leverageDisplay = '1';
 
 	        if (currentPrice !== executableStopLossPrice) {
-	            stopLossPercentage = Number((BigInt(10000) * (currentPrice - executableStopLossPrice)) / currentPrice) / 100;
-	            leverage = Number((BigInt(10000) * currentPrice) / (currentPrice - executableStopLossPrice)) / 10000;
+	            const priceDiff = currentPrice - executableStopLossPrice;
+	            stopLossPercentage = priceDiff >= 0n
+	                ? Number(formatRatio$1(priceDiff, currentPrice, 2, 100n))
+	                : Number((10000n * priceDiff) / currentPrice) / 100;
+	            leverage = Number((10000n * currentPrice) / priceDiff) / 10000;
+	            leverageDisplay = priceDiff > 0n
+	                ? formatRatio$1(currentPrice, priceDiff, 2, 1n, 'half-up', true)
+	                : String(leverage);
 	        }
 
 	        // Calculate margin requirement
@@ -36420,6 +36463,7 @@
 	            tradeAmount: finalTradeAmount, // SOL output amount
 	            stopLossPercentage: stopLossPercentage, // Stop loss percentage relative to current price
 	            leverage: leverage, // Leverage ratio
+	            leverageDisplay: leverageDisplay, // Rounded display value; leverage keeps its existing meaning
 	            currentPrice: currentPrice, // Current price
 	            iterations: iteration, // Number of adjustments
 	            originalStopLossPrice: BigInt(stopLossPrice), // Original stop loss price
@@ -36464,10 +36508,11 @@
 	 *   - For example: 3.5 means the stop loss price is 3.5% higher than the current price
 	 *   - For a short position this value should be positive (stop loss price above current price)
 	 *
-	 * @returns {number} returns.leverage - Leverage ratio
+	 * @returns {number} returns.leverage - Leverage ratio (existing four-decimal downward truncation)
 	 *   - Formula: currentPrice / (executableStopLossPrice - currentPrice)
 	 *   - For example: 28.57 means about 28.57x leverage
 	 *   - The higher the leverage, the higher the risk, but also the higher the potential return
+	 * @returns {string} returns.leverageDisplay - Rounded display value derived from the executable stop-loss price; not a maximum leverage limit
 	 *
 	 * @returns {bigint} returns.currentPrice - Current price (u128 format)
 	 *   - The current token price used in the calculation
@@ -36693,11 +36738,17 @@
 
 	        // Calculate stop loss percentage
 	        // For short position, stop loss price is higher than current price, so it's a positive percentage
-	        const stopLossPercentage = Number((BigInt(10000) * (executableStopLossPrice - currentPrice)) / currentPrice) / 100;
+	        const priceDiff = executableStopLossPrice - currentPrice;
+	        const stopLossPercentage = priceDiff >= 0n
+	            ? Number(formatRatio$1(priceDiff, currentPrice, 2, 100n))
+	            : Number((10000n * priceDiff) / currentPrice) / 100;
 
 	        // Calculate leverage ratio
 	        // For short position, leverage = current price / (stop loss price - current price)
-	        const leverage = Number((BigInt(10000) * currentPrice) / (executableStopLossPrice - currentPrice)) / 10000;
+	        const leverage = Number((10000n * currentPrice) / priceDiff) / 10000;
+	        const leverageDisplay = priceDiff > 0n
+	            ? formatRatio$1(currentPrice, priceDiff, 2, 1n, 'half-up', true)
+	            : String(leverage);
 
 	        // Calculate margin requirement
 	        // Consistent with the contract formula (long_short.rs lines 890-894):
@@ -36737,6 +36788,7 @@
 	            tradeAmount: finalTradeAmount, // SOL input amount (SOL needed to buy back tokens at close)
 	            stopLossPercentage: stopLossPercentage, // Stop loss percentage relative to current price
 	            leverage: leverage, // Leverage ratio
+	            leverageDisplay: leverageDisplay, // Rounded display value; leverage keeps its existing meaning
 	            currentPrice: currentPrice, // Current price
 	            iterations: iteration, // Number of adjustments
 	            originalStopLossPrice: BigInt(stopLossPrice), // Original stop loss price
@@ -36864,8 +36916,9 @@
 	        // Calculate dynamic binary search upper bound based on leverage
 	        const stopLossPriceBigInt = BigInt(stopLossPrice);
 	        const priceDiff = currentPrice - stopLossPriceBigInt;
-	        const estimatedLeverage = priceDiff > 0n ? Number(currentPrice * 10000n / priceDiff) / 10000 : 10;
-	        const safeMultiplier = BigInt(Math.ceil(estimatedLeverage * 3)); // 3x safety factor
+	        // Keep the original four-decimal leverage truncation used to size the search range.
+	        const scaledLeverage = priceDiff > 0n ? currentPrice * 10000n / priceDiff : 100000n;
+	        const safeMultiplier = ceilDiv(scaledLeverage * 3n, 10000n); // 3x safety factor
 	        const multiplier = safeMultiplier > 10n ? safeMultiplier : 10n; // minimum 10x
 
 	        // Use a binary search algorithm to find the maximum estimatedMargin that is less than buySolAmount
@@ -37050,8 +37103,9 @@
 	        // Calculate dynamic binary search upper bound based on leverage
 	        const stopLossPriceBigInt = BigInt(stopLossPrice);
 	        const priceDiff = stopLossPriceBigInt - currentPrice;
-	        const estimatedLeverage = priceDiff > 0n ? Number(currentPrice * 10000n / priceDiff) / 10000 : 10;
-	        const safeMultiplier = BigInt(Math.ceil(estimatedLeverage * 3)); // 3x safety factor
+	        // Keep the original four-decimal leverage truncation used to size the search range.
+	        const scaledLeverage = priceDiff > 0n ? currentPrice * 10000n / priceDiff : 100000n;
+	        const safeMultiplier = ceilDiv(scaledLeverage * 3n, 10000n); // 3x safety factor
 	        const multiplier = safeMultiplier > 10n ? safeMultiplier : 10n; // minimum 10x
 
 	        // Use a binary search algorithm to find the maximum estimatedMargin that is less than sellSolAmount
@@ -37889,6 +37943,7 @@
 	};
 
 	const { calcLiqTokenBuy, calcLiqTokenSell } = calcLiq;
+	const { formatRatio } = precision;
 
 	/**
 	 * Simulate token buy transaction - calculate if target token amount can be purchased
@@ -37983,8 +38038,7 @@
 	    if (freeTokenAmount >= buyTokenAmountBig) {
 	      completionPercentage = "100.0";
 	    } else {
-	      const percentage = Math.floor((Number(freeTokenAmount) / Number(buyTokenAmountBig)) * 1000) / 10;
-	      completionPercentage = percentage.toFixed(1);
+	      completionPercentage = formatRatio(freeTokenAmount, buyTokenAmountBig, 1, 100n);
 	    }
 
 	    // 2. Calculate slippage percentage and get final SOL amount
@@ -37995,8 +38049,7 @@
 	    if (realSolAmount > 0n) {
 	      // Normal case: calculate slippage
 	      const diff = idealSolAmount > realSolAmount ? idealSolAmount - realSolAmount : realSolAmount - idealSolAmount;
-	      const slippage = Math.floor((Number(diff) / Number(idealSolAmount)) * 1000) / 10;
-	      slippagePercentage = slippage.toFixed(1);
+	      slippagePercentage = formatRatio(diff, idealSolAmount, 1, 100n);
 	    } else {
 	      // Special case: real SOL amount is 0, need to recalculate with suggested liquidity
 	      const suggestedAmount = (freeTokenAmount * BigInt(this.sdk.SUGGEST_LIQ_RATIO)) / 1000n;
@@ -38021,8 +38074,7 @@
 	      finalRealSolAmount = recalcRealSol;
 	      
 	      const diff = recalcIdealSol > recalcRealSol ? recalcIdealSol - recalcRealSol : recalcRealSol - recalcIdealSol;
-	      const slippage = Math.floor((Number(diff) / Number(recalcIdealSol)) * 1000) / 10;
-	      slippagePercentage = slippage.toFixed(1);
+	      slippagePercentage = formatRatio(diff, recalcIdealSol, 1, 100n);
 	    }
 
 	    // 3. Calculate suggested liquidity
@@ -38141,8 +38193,7 @@
 	    if (freeTokenAmount >= sellTokenAmountBig) {
 	      completionPercentage = "100.0";
 	    } else {
-	      const percentage = Math.floor((Number(freeTokenAmount) / Number(sellTokenAmountBig)) * 1000) / 10;
-	      completionPercentage = percentage.toFixed(1);
+	      completionPercentage = formatRatio(freeTokenAmount, sellTokenAmountBig, 1, 100n);
 	    }
 
 	    // 2. Calculate slippage percentage and get final SOL amount
@@ -38153,8 +38204,7 @@
 	    if (realSolAmount > 0n) {
 	      // Normal case: calculate slippage
 	      const diff = idealSolAmount > realSolAmount ? idealSolAmount - realSolAmount : realSolAmount - idealSolAmount;
-	      const slippage = Math.floor((Number(diff) / Number(idealSolAmount)) * 1000) / 10;
-	      slippagePercentage = slippage.toFixed(1);
+	      slippagePercentage = formatRatio(diff, idealSolAmount, 1, 100n);
 	    } else {
 	      // Special case: real SOL amount is 0, need to recalculate with suggested liquidity
 	      const suggestedAmount = (freeTokenAmount * BigInt(this.sdk.SUGGEST_LIQ_RATIO)) / 1000n;
@@ -38179,8 +38229,7 @@
 	      finalRealSolAmount = recalcRealSol;
 	      
 	      const diff = recalcIdealSol > recalcRealSol ? recalcIdealSol - recalcRealSol : recalcRealSol - recalcIdealSol;
-	      const slippage = Math.floor((Number(diff) / Number(recalcIdealSol)) * 1000) / 10;
-	      slippagePercentage = slippage.toFixed(1);
+	      slippagePercentage = formatRatio(diff, recalcIdealSol, 1, 100n);
 	    }
 
 	    // 3. Calculate suggested liquidity
@@ -39035,9 +39084,9 @@
 	            const tokenSellResult = await this.simulateTokenSell(mint, tokenAmountBigInt, null, priceResult, ordersResult);
 
 	            // Estimate ideal SOL amount
-	            const priceDecimal = CurveAMM$3.u128ToDecimal(currentPrice);
-	            const tokenInDecimal = Number(tokenAmountBigInt) / 1e9; // Convert token lamports to tokens (9-digit precision)
-	            const estimatedSolAmount = BigInt(Math.floor((tokenInDecimal * priceDecimal) * 1e9)); // Convert to SOL lamports
+	            // Token and SOL both use 9 decimals, so their unit conversions cancel out.
+	            const priceScale = BigInt(CurveAMM$3.PRICE_PRECISION_FACTOR_DECIMAL.toFixed(0));
+	            const estimatedSolAmount = tokenAmountBigInt * currentPrice / priceScale;
 
 	            // Transform result to match simulateSell format
 	            return {
@@ -49064,8 +49113,8 @@
 	    network: 'mainnet',
 	    programId: 'sGecRTjTZmnqJBmLK4ZMNCzsaMrgkFfNqEcYk1GhRde',
 	    defaultDataSource: 'fast',
-	    solanaEndpoint: 'https://solana-rpc.pinpet.fun',
-	    fastApiUrl: 'https://api.pinpet.fun/',
+	    solanaEndpoint: 'https://solana-rpc.100x.fun',
+	    fastApiUrl: 'https://api.100x.fun/',
 	    feeRecipient: 'CmDe8JRAPJ7QpZNCb4ArVEyzyxYoCNL7WZw5qXLePULn',
 	    baseFeeRecipient: '2xhAfEfnH8wg7ZGujSijJi4Zt4ge1ZuwMypo7etntgXA',
 	    paramsAccount: 'CJSn3n4MVCg4qWQ7qb2nxzosYwfcRyBvmwhtM77ugu1V'
@@ -49076,7 +49125,7 @@
 	    programId: 'sGecRTjTZmnqJBmLK4ZMNCzsaMrgkFfNqEcYk1GhRde',
 	    defaultDataSource: 'fast',
 	    solanaEndpoint: 'https://lu-ura5lv-fast-devnet.helius-rpc.com',
-	    fastApiUrl: 'https://devtestapi.pinpet.fun',
+	    fastApiUrl: 'https://devtestapi.100x.fun',
 	    feeRecipient: 'GesAj2dTn2wdNcxj4x8qsqS9aNRVPBPkE76aaqg7skxu',
 	    baseFeeRecipient: '5YHi1HsxobLiTD6NQfHJQpoPoRjMuNyXp4RroTvR6dKi',
 	    paramsAccount: 'Ckz5CmbpyKtKmwgw7NDLzFnVACxekWqrX8i6vhCyLkqY'
@@ -49088,8 +49137,6 @@
 	    defaultDataSource: 'fast', // 'fast' or 'chain'
 	    solanaEndpoint: 'http://127.0.0.1:8899',
 	    fastApiUrl: 'http://127.0.0.1:3000',
-	    // solanaEndpoint: 'http://216.158.231.58:8899',
-	    // fastApiUrl: 'http://216.158.231.58:3000',
 	    feeRecipient: 'GesAj2dTn2wdNcxj4x8qsqS9aNRVPBPkE76aaqg7skxu',
 	    baseFeeRecipient: '5YHi1HsxobLiTD6NQfHJQpoPoRjMuNyXp4RroTvR6dKi',
 	    paramsAccount: 'HPuvtLLcgSMPSyRmULPiFe9oAvm1o8mR4weqXZrUhzRM'

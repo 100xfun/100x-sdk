@@ -187,6 +187,26 @@ export interface SimulationResult {
   suggestedSolAmount: string;
 }
 
+/** The leverage implied by the executable stop-loss price, not a maximum limit. */
+export interface StopLossSimulationResult {
+  executableStopLossPrice: bigint;
+  tradeAmount: bigint;
+  stopLossPercentage: number;
+  /** Existing four-decimal, downward-truncated value. */
+  leverage: number;
+  /** Rounded to two decimals from the original price ratio, with trailing zeros removed. Display only. */
+  leverageDisplay: string;
+  currentPrice: bigint;
+  iterations: number;
+  originalStopLossPrice: bigint;
+  close_insert_indices: number[];
+  estimatedMargin: bigint;
+  rawSellSol?: bigint;
+  buyTokenAmount?: bigint;
+  sellTokenAmount?: bigint;
+  adjustmentIterations?: number;
+}
+
 // ========================= Utility Related Types =========================
 
 export interface FindPrevNextResult {
@@ -238,8 +258,10 @@ export interface ParamModule {
 export interface SimulatorModule {
   simulateTokenBuy(mint: string, buyTokenAmount: bigint | string | number, passOrder?: string | null): Promise<SimulationResult>;
   simulateTokenSell(mint: string, sellTokenAmount: bigint | string | number, passOrder?: string | null): Promise<SimulationResult>;
-  simulateLongStopLoss(mint: string, buyTokenAmount: bigint | string | number, stopLossPrice: bigint | string | number, lastPrice?: any, ordersData?: any): Promise<any>;
-  simulateSellStopLoss(mint: string, sellTokenAmount: bigint | string | number, stopLossPrice: bigint | string | number, lastPrice?: any, ordersData?: any): Promise<any>;
+  simulateLongStopLoss(mint: string, buyTokenAmount: bigint | string | number, stopLossPrice: bigint | string | number, lastPrice?: any, ordersData?: any, borrowFee?: number | null): Promise<StopLossSimulationResult>;
+  simulateShortStopLoss(mint: string, sellTokenAmount: bigint | string | number, stopLossPrice: bigint | string | number, lastPrice?: any, ordersData?: any, borrowFee?: number | null): Promise<StopLossSimulationResult>;
+  simulateLongSolStopLoss(mint: string, buySolAmount: bigint | string | number, stopLossPrice: bigint | string | number, lastPrice?: any, ordersData?: any, borrowFee?: number | null, initialVirtualSol?: string | number | null, initialVirtualToken?: string | number | null, curveAccount?: any): Promise<StopLossSimulationResult>;
+  simulateShortSolStopLoss(mint: string, sellSolAmount: bigint | string | number, stopLossPrice: bigint | string | number, lastPrice?: any, ordersData?: any, borrowFee?: number | null, initialVirtualSol?: string | number | null, initialVirtualToken?: string | number | null, curveAccount?: any): Promise<StopLossSimulationResult>;
 }
 
 // ========================= Data Interface Types =========================

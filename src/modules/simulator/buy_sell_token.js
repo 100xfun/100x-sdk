@@ -1,6 +1,7 @@
 
 
 const { calcLiqTokenBuy, calcLiqTokenSell } = require('./calcLiq');
+const { formatRatio } = require('./precision');
 
 /**
  * Simulate token buy transaction - calculate if target token amount can be purchased
@@ -95,8 +96,7 @@ async function simulateTokenBuy(mint, buyTokenAmount, passOrder = null, lastPric
     if (freeTokenAmount >= buyTokenAmountBig) {
       completionPercentage = "100.0";
     } else {
-      const percentage = Math.floor((Number(freeTokenAmount) / Number(buyTokenAmountBig)) * 1000) / 10;
-      completionPercentage = percentage.toFixed(1);
+      completionPercentage = formatRatio(freeTokenAmount, buyTokenAmountBig, 1, 100n);
     }
 
     // 2. Calculate slippage percentage and get final SOL amount
@@ -107,8 +107,7 @@ async function simulateTokenBuy(mint, buyTokenAmount, passOrder = null, lastPric
     if (realSolAmount > 0n) {
       // Normal case: calculate slippage
       const diff = idealSolAmount > realSolAmount ? idealSolAmount - realSolAmount : realSolAmount - idealSolAmount;
-      const slippage = Math.floor((Number(diff) / Number(idealSolAmount)) * 1000) / 10;
-      slippagePercentage = slippage.toFixed(1);
+      slippagePercentage = formatRatio(diff, idealSolAmount, 1, 100n);
     } else {
       // Special case: real SOL amount is 0, need to recalculate with suggested liquidity
       const suggestedAmount = (freeTokenAmount * BigInt(this.sdk.SUGGEST_LIQ_RATIO)) / 1000n;
@@ -133,8 +132,7 @@ async function simulateTokenBuy(mint, buyTokenAmount, passOrder = null, lastPric
       finalRealSolAmount = recalcRealSol;
       
       const diff = recalcIdealSol > recalcRealSol ? recalcIdealSol - recalcRealSol : recalcRealSol - recalcIdealSol;
-      const slippage = Math.floor((Number(diff) / Number(recalcIdealSol)) * 1000) / 10;
-      slippagePercentage = slippage.toFixed(1);
+      slippagePercentage = formatRatio(diff, recalcIdealSol, 1, 100n);
     }
 
     // 3. Calculate suggested liquidity
@@ -253,8 +251,7 @@ async function simulateTokenSell(mint, sellTokenAmount, passOrder = null, lastPr
     if (freeTokenAmount >= sellTokenAmountBig) {
       completionPercentage = "100.0";
     } else {
-      const percentage = Math.floor((Number(freeTokenAmount) / Number(sellTokenAmountBig)) * 1000) / 10;
-      completionPercentage = percentage.toFixed(1);
+      completionPercentage = formatRatio(freeTokenAmount, sellTokenAmountBig, 1, 100n);
     }
 
     // 2. Calculate slippage percentage and get final SOL amount
@@ -265,8 +262,7 @@ async function simulateTokenSell(mint, sellTokenAmount, passOrder = null, lastPr
     if (realSolAmount > 0n) {
       // Normal case: calculate slippage
       const diff = idealSolAmount > realSolAmount ? idealSolAmount - realSolAmount : realSolAmount - idealSolAmount;
-      const slippage = Math.floor((Number(diff) / Number(idealSolAmount)) * 1000) / 10;
-      slippagePercentage = slippage.toFixed(1);
+      slippagePercentage = formatRatio(diff, idealSolAmount, 1, 100n);
     } else {
       // Special case: real SOL amount is 0, need to recalculate with suggested liquidity
       const suggestedAmount = (freeTokenAmount * BigInt(this.sdk.SUGGEST_LIQ_RATIO)) / 1000n;
@@ -291,8 +287,7 @@ async function simulateTokenSell(mint, sellTokenAmount, passOrder = null, lastPr
       finalRealSolAmount = recalcRealSol;
       
       const diff = recalcIdealSol > recalcRealSol ? recalcIdealSol - recalcRealSol : recalcRealSol - recalcIdealSol;
-      const slippage = Math.floor((Number(diff) / Number(recalcIdealSol)) * 1000) / 10;
-      slippagePercentage = slippage.toFixed(1);
+      slippagePercentage = formatRatio(diff, recalcIdealSol, 1, 100n);
     }
 
     // 3. Calculate suggested liquidity
