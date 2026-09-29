@@ -56460,7 +56460,7 @@ var require$$1 = {
 	types: types$1
 };
 
-var address = "EVNaaiyg9z876PUmLCVQcdc5L5eJukT4pni5GtVJ8P37";
+var address = "CYzM71ENGdE6Gjx5NWt4r12EbhGX2DnoEua5oWh8xpCz";
 var metadata = {
 	name: "fun100x",
 	version: "0.1.0",
@@ -60701,18 +60701,18 @@ const DEFAULT_NETWORKS = {
   MAINNET: {
     name: 'mainnet-beta',
     network: 'mainnet',
-    programId: 'sGecRTjTZmnqJBmLK4ZMNCzsaMrgkFfNqEcYk1GhRde',
+    programId: 'CYzM71ENGdE6Gjx5NWt4r12EbhGX2DnoEua5oWh8xpCz',
     defaultDataSource: 'fast',
     solanaEndpoint: 'https://solana-rpc.100x.fun',
     fastApiUrl: 'https://api.100x.fun/',
-    feeRecipient: 'CmDe8JRAPJ7QpZNCb4ArVEyzyxYoCNL7WZw5qXLePULn',
-    baseFeeRecipient: '2xhAfEfnH8wg7ZGujSijJi4Zt4ge1ZuwMypo7etntgXA',
-    paramsAccount: 'CJSn3n4MVCg4qWQ7qb2nxzosYwfcRyBvmwhtM77ugu1V'
+    feeRecipient: '3846yjHxwauQpWTfRWZWGy4JRaX1zfb3iT51ubhasFEp',
+    baseFeeRecipient: 'E9Tx5Mq44vGDPZWV2ZbupqMT6imLsLoe1C1cQVx9pfXZ',
+    paramsAccount: 'A2PoRSyW6FG1jUM8M5HCKqBdyfrLYoE8F16JboRno7hL'
   },
   DEVNET: {
     name: 'devnet',
     network: 'localnet',
-    programId: 'sGecRTjTZmnqJBmLK4ZMNCzsaMrgkFfNqEcYk1GhRde',
+    programId: 'EVNaaiyg9z876PUmLCVQcdc5L5eJukT4pni5GtVJ8P37',
     defaultDataSource: 'fast',
     solanaEndpoint: 'https://lu-ura5lv-fast-devnet.helius-rpc.com',
     fastApiUrl: 'https://devtestapi.100x.fun',
