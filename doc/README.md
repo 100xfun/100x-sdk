@@ -1,6 +1,6 @@
 # 100x SDK documentation
 
-These guides describe the current JavaScript implementation in `src/` (package version **1.0.7**).
+These guides describe the current JavaScript implementation in `src/` (package version **1.0.8**).
 
 | Guide | Contents |
 | --- | --- |
@@ -56,3 +56,13 @@ All six trading methods return an unsigned transaction builder result. Amount ar
 | `trading.closeShort` | `buyTokenAmount`, `maxSolAmount`, `closeOrderId`, `closeOrderIndices` (1–19 indices), `userSolAccount` |
 
 Each method also accepts `{ computeUnits }` as its second argument. `closeOrderId` is the order's stable `order_id`, while the candidate arrays contain orderbook slot indices. Use `simulator.simulateLongClose(mint, orderId)` or `simulateShortClose(mint, orderId)` to obtain `{ closeOrderIndices }`. The stop loss methods are `simulateLongStopLoss`, `simulateShortStopLoss`, `simulateLongSolStopLoss`, and `simulateShortSolStopLoss`; they return an executable stop loss price, estimated margin, leverage display, and `close_insert_indices` among other fields. `simulateBuy` accepts lamports and `simulateSell` accepts token smallest units; both return a `{ success, errorCode, errorMessage, data }` result rather than throwing for their handled calculation errors.
+
+## Token quote compatibility (1.0.8)
+
+`simulateTokenBuy(mint, amount, passOrder?, lastPrice?, ordersData?, curveData?)` and `simulateTokenSell(...)` keep the same argument order and result fields. `passOrder` accepts a stable `order_id` as a string, bigint, or safe integer (including zero). Legacy PDA strings still match `order_pda` when supplied in the order data. `null` and omitted values skip no order. Use strings or bigints for amounts and IDs beyond JavaScript's safe integer range; rounded numeric inputs are rejected.
+
+Quotes use the supplied pool's virtual reserves throughout. Sell quotes no longer use the legacy global `MIN_U128_PRICE` as a trading floor. After traversing the complete order chain, they calculate only the remaining requested tokens, capped by `next_lp_token_amount` when present. The public constant remains unchanged for existing callers. The order traversal limit still prevents a truncated orderbook from being treated as its end.
+
+For sell results, `free_lp_*_amount_sum` includes traversed free ranges plus the portion of the final range needed by this request; for an empty orderbook it describes the requested trade. These fields are quote coverage, not a maximum withdrawal or the pool's spendable SOL balance. `has_infinite_lp` marks reaching the order chain's end, not unlimited cash. `pass_order_id` remains the skipped order's array index, not its stable ID or on-chain slot. Partial quotes keep `real_lp_sol_amount = 0` and provide a smaller suggested amount through the existing fields.
+
+Quote SOL amounts remain before swap fees. Existing fee helpers, stop loss helpers, transaction builders, signing and submission behavior are unchanged. Quotes do not validate actual pool balances or guarantee execution; retain transaction simulation and existing minimum-output/maximum-input checks.

@@ -1,6 +1,6 @@
 # 100x SDK
 
-JavaScript SDK for the 100x protocol on Solana. The package provides transaction builders for trading and token creation, RPC and API data readers, and simulation utilities. Package version: **1.0.7**.
+JavaScript SDK for the 100x protocol on Solana. The package provides transaction builders for trading and token creation, RPC and API data readers, and simulation utilities. Package version: **1.0.8**.
 
 ## Install
 

@@ -32,6 +32,7 @@ export interface Fun100xSdkOptions {
 // ========================= Order and Trading Related Types =========================
 
 export interface OrderData {
+  order_id?: string;
   order_pda: string;
   user: string;
   mint: string;
@@ -171,6 +172,7 @@ export interface UserOrdersQueryOptions {
 
 export interface SimulationResult {
   liqResult: {
+    /** Quote coverage; sell tail includes only the requested remaining amount, not withdrawable reserves. */
     free_lp_sol_amount_sum: bigint;
     free_lp_token_amount_sum: bigint;
     lock_lp_sol_amount_sum: bigint;
@@ -256,8 +258,8 @@ export interface ParamModule {
 }
 
 export interface SimulatorModule {
-  simulateTokenBuy(mint: string, buyTokenAmount: bigint | string | number, passOrder?: string | null): Promise<SimulationResult>;
-  simulateTokenSell(mint: string, sellTokenAmount: bigint | string | number, passOrder?: string | null): Promise<SimulationResult>;
+  simulateTokenBuy(mint: string, buyTokenAmount: bigint | string | number, passOrder?: string | bigint | number | null, lastPrice?: string | bigint | null, ordersData?: any, curveData?: any): Promise<SimulationResult>;
+  simulateTokenSell(mint: string, sellTokenAmount: bigint | string | number, passOrder?: string | bigint | number | null, lastPrice?: string | bigint | null, ordersData?: any, curveData?: any): Promise<SimulationResult>;
   simulateLongStopLoss(mint: string, buyTokenAmount: bigint | string | number, stopLossPrice: bigint | string | number, lastPrice?: any, ordersData?: any, borrowFee?: number | null): Promise<StopLossSimulationResult>;
   simulateShortStopLoss(mint: string, sellTokenAmount: bigint | string | number, stopLossPrice: bigint | string | number, lastPrice?: any, ordersData?: any, borrowFee?: number | null): Promise<StopLossSimulationResult>;
   simulateLongSolStopLoss(mint: string, buySolAmount: bigint | string | number, stopLossPrice: bigint | string | number, lastPrice?: any, ordersData?: any, borrowFee?: number | null, initialVirtualSol?: string | number | null, initialVirtualToken?: string | number | null, curveAccount?: any): Promise<StopLossSimulationResult>;

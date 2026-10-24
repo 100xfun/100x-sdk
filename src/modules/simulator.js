@@ -23,7 +23,7 @@ class SimulatorModule {
      * Simulate token buy transaction - calculate if target token amount can be purchased
      * @param {string} mint - Token address
      * @param {bigint|string|number} buyTokenAmount - Target token amount to buy
-     * @param {string} passOrder - Optional order address to skip (won't be liquidated)
+     * @param {string|bigint|number|null} passOrder - Stable order ID or legacy PDA to skip; null skips nothing
      * @param {Object|null} lastPrice - Token price info, default null
      * @param {Object|null} ordersData - Orders response object, default null
      * @returns {Promise<Object>} Token buy simulation result with the following structure:
@@ -50,7 +50,7 @@ class SimulatorModule {
      * Simulate token sell transaction analysis
      * @param {string} mint - Token address
      * @param {bigint|string|number} sellTokenAmount - Token amount to sell (u64 format, precision 10^9)
-     * @param {string} passOrder - Optional order address to skip (won't be liquidated)
+     * @param {string|bigint|number|null} passOrder - Stable order ID or legacy PDA to skip; null skips nothing
      * @param {Object|null} lastPrice - Token price info, default null
      * @param {Object|null} ordersData - Orders response object, default null
      * @returns {Promise<Object>} Token sell simulation result with the following structure:

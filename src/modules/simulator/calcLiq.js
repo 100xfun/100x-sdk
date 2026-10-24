@@ -2,6 +2,20 @@
 const CurveAMM = require('../../utils/curve_amm');
 const Decimal = require('decimal.js');
 
+function orderReference(value) {
+  if (typeof value === 'number' && (!Number.isSafeInteger(value) || value < 0)) {
+    throw new RangeError('Order ID must be a non-negative safe integer; use string or bigint for large IDs');
+  }
+  return value == null ? null : String(value);
+}
+
+function matchesOrder(order, reference) {
+  if (reference === null) return false;
+  return reference === orderReference(order.order_id)
+    || (order.order_pda != null && reference === String(order.order_pda));
+}
+
+
 
 /**
  * Calculate liquidity impact for token buy operations
@@ -26,9 +40,9 @@ const Decimal = require('decimal.js');
  *   - borrow_amount: {number} Borrow amount
  *   - position_asset_amount: {number} Position asset amount
  *   - borrow_fee: {number} Borrow fee
- *   - order_pda: {string} Order PDA address (required for passOrder matching)
+ *   - order_id: {string} Stable order ID; legacy order_pda matching is also supported
  * @param {number} onceMaxOrder - Maximum orders to process at once, limits traversal range
- * @param {string|null} passOrder - Order PDA address string to skip, when this value matches an order's order_pda, skip that order and count its liquidity as free liquidity
+ * @param {string|bigint|number|null} passOrder - Stable order ID (or legacy PDA) to skip; null skips nothing
  *
  * @returns {Object} Liquidity calculation result object with detailed liquidity analysis data:
  *
@@ -92,9 +106,17 @@ function calcLiqTokenBuy(price, buyTokenAmount, orders, onceMaxOrder, passOrder 
 
 
 
+  const passOrderReference = orderReference(passOrder);
+  if (typeof buyTokenAmount === 'number' && !Number.isSafeInteger(buyTokenAmount)) {
+    throw new RangeError('Token amount must be a safe integer; use string or bigint for large amounts');
+  }
+  const initialVirtualSolDecimal = new Decimal(initialVirtualSol).div(CurveAMM.SOL_PRECISION_FACTOR_DECIMAL);
+  const initialVirtualTokenDecimal = new Decimal(initialVirtualToken).div(CurveAMM.TOKEN_PRECISION_FACTOR_DECIMAL);
+
   let buyTokenAmountBigInt;
   try {
     buyTokenAmountBigInt = BigInt(buyTokenAmount);
+    if (buyTokenAmountBigInt < 0n || buyTokenAmountBigInt > 18446744073709551615n) throw new RangeError('Token amount must fit u64');
   } catch (error) {
     throw new Error(`价格转换错误：无法将 buyTokenAmount 转换为 BigInt Price conversion error: Cannot convert buyTokenAmount to BigInt - ${error.message}`);
   }
@@ -106,8 +128,6 @@ function calcLiqTokenBuy(price, buyTokenAmount, orders, onceMaxOrder, passOrder 
 
   try {
     const priceBigInt = BigInt(price);
-    const initialVirtualSolDecimal = new Decimal(initialVirtualSol).div(CurveAMM.SOL_PRECISION_FACTOR_DECIMAL);
-    const initialVirtualTokenDecimal = new Decimal(initialVirtualToken).div(CurveAMM.TOKEN_PRECISION_FACTOR_DECIMAL);
 
     [, result.ideal_lp_sol_amount] = CurveAMM.buyFromPriceWithTokenOutputWithParams(
       priceBigInt,
@@ -125,8 +145,6 @@ function calcLiqTokenBuy(price, buyTokenAmount, orders, onceMaxOrder, passOrder 
   if (orders.length === 0) {
     
 
-    const initialVirtualSolDecimal = new Decimal(initialVirtualSol).div(CurveAMM.SOL_PRECISION_FACTOR_DECIMAL);
-    const initialVirtualTokenDecimal = new Decimal(initialVirtualToken).div(CurveAMM.TOKEN_PRECISION_FACTOR_DECIMAL);
 
 
     [result.free_lp_sol_amount_sum, result.free_lp_token_amount_sum] = CurveAMM.buyFromPriceToPriceWithParams(
@@ -182,8 +200,6 @@ function calcLiqTokenBuy(price, buyTokenAmount, orders, onceMaxOrder, passOrder 
     // If a price gap exists, calculate free liquidity
     if (endPrice > startPrice) {
       try {
-        const initialVirtualSolDecimal = new Decimal(initialVirtualSol).div(CurveAMM.SOL_PRECISION_FACTOR_DECIMAL);
-        const initialVirtualTokenDecimal = new Decimal(initialVirtualToken).div(CurveAMM.TOKEN_PRECISION_FACTOR_DECIMAL);
         const gapLiquidity = CurveAMM.buyFromPriceToPriceWithParams(
           startPrice,
           endPrice,
@@ -205,13 +221,13 @@ function calcLiqTokenBuy(price, buyTokenAmount, orders, onceMaxOrder, passOrder 
 
           // Calculate the actual amount of SOL used, until enough can be bought
           if (result.real_lp_sol_amount === 0n) {
-            if (result.free_lp_token_amount_sum > buyTokenAmountBigInt) {
+            if (result.free_lp_token_amount_sum >= buyTokenAmountBigInt) {
               // At this point the gap liquidity is already enough to buy
               // Calculate the final precise amount of token to buy
               try {
                 const actualBuyAmount = buyTokenAmountBigInt - (result.free_lp_token_amount_sum - BigInt(tokenAmount));
                 // console.log("actualBuyAmount",actualBuyAmount)
-                const [, preciseSol] = CurveAMM.buyFromPriceWithTokenOutput(startPrice, actualBuyAmount)
+                const [, preciseSol] = CurveAMM.buyFromPriceWithTokenOutputWithParams(startPrice, actualBuyAmount, initialVirtualSolDecimal, initialVirtualTokenDecimal)
                 result.real_lp_sol_amount = prev_free_lp_sol_amount_sum + BigInt(preciseSol);
 
                 // console.log(`actual calculation[${i}]: free liquidity sufficient, actualBuyAmount=${actualBuyAmount}, preciseSol=${preciseSol}, actual SOL=${result.real_lp_sol_amount}`);
@@ -236,10 +252,9 @@ function calcLiqTokenBuy(price, buyTokenAmount, orders, onceMaxOrder, passOrder 
     }
 
     // Check whether this order needs to be skipped (passOrder logic)
-    //const shouldSkipOrder = passOrder && typeof passOrder === 'string' && order.order_pda === passOrder;
 
 
-    if (passOrder == order.order_pda) {
+    if (matchesOrder(order, passOrderReference)) {
 
       // Add the skipped order's liquidity to the free liquidity
       try {
@@ -264,9 +279,9 @@ function calcLiqTokenBuy(price, buyTokenAmount, orders, onceMaxOrder, passOrder 
             try {
               //const remainingToken = result.free_lp_token_amount_sum - buyTokenAmountBigInt;
               // Calculate from the current price how much SOL is needed to buy the precise token amount
-              const targetPrice = i === 0 ? BigInt(price) : BigInt(orders[i - 1].lock_lp_end_price);
+              const targetPrice = BigInt(order.lock_lp_start_price);
               const actualBuyAmount = buyTokenAmountBigInt - (result.free_lp_token_amount_sum - BigInt(order.lock_lp_token_amount));
-              const [, preciseSol] = CurveAMM.buyFromPriceWithTokenOutput(targetPrice, actualBuyAmount);
+              const [, preciseSol] = CurveAMM.buyFromPriceWithTokenOutputWithParams(targetPrice, actualBuyAmount, initialVirtualSolDecimal, initialVirtualTokenDecimal);
               result.real_lp_sol_amount = prevFreeSolSum + BigInt(preciseSol);
               // console.log(`actual calculation[${i}]: sufficient after skipping order, targetPrice=${targetPrice}, preciseSol=${preciseSol}, actual SOL=${result.real_lp_sol_amount}`);
               result.force_close_num = counti;
@@ -328,8 +343,6 @@ function calcLiqTokenBuy(price, buyTokenAmount, orders, onceMaxOrder, passOrder 
 
     if (maxPrice > lastEndPrice) {
       try {
-        const initialVirtualSolDecimal = new Decimal(initialVirtualSol).div(CurveAMM.SOL_PRECISION_FACTOR_DECIMAL);
-        const initialVirtualTokenDecimal = new Decimal(initialVirtualToken).div(CurveAMM.TOKEN_PRECISION_FACTOR_DECIMAL);
         const infiniteLiquidity = CurveAMM.buyFromPriceToPriceWithParams(
           lastEndPrice,
           maxPrice,
@@ -349,13 +362,13 @@ function calcLiqTokenBuy(price, buyTokenAmount, orders, onceMaxOrder, passOrder 
 
           // After entering infinite liquidity, also calculate the actual amount of SOL used, until enough can be bought
           if (result.real_lp_sol_amount === 0n) {
-            if (result.free_lp_token_amount_sum > buyTokenAmountBigInt) {
+            if (result.free_lp_token_amount_sum >= buyTokenAmountBigInt) {
               // At this point the gap liquidity is already enough to buy
               // Calculate the final precise amount of token to buy
               try {
                 const actualBuyAmount = buyTokenAmountBigInt - (result.free_lp_token_amount_sum - BigInt(tokenAmount));
-                const [, preciseSol] = CurveAMM.buyFromPriceWithTokenOutput(lastEndPrice, actualBuyAmount)
-                result.real_lp_sol_amount += BigInt(preciseSol);
+                const [, preciseSol] = CurveAMM.buyFromPriceWithTokenOutputWithParams(lastEndPrice, actualBuyAmount, initialVirtualSolDecimal, initialVirtualTokenDecimal)
+                result.real_lp_sol_amount = result.free_lp_sol_amount_sum - BigInt(solAmount) + BigInt(preciseSol);
                 result.force_close_num = counti; // Number of force closed orders
               } catch (error) {
                 throw new Error(`流动性计算错误：无限流动性精确SOL计算失败 Liquidity calculation error: Infinite liquidity precise SOL calculation failed - ${error.message}`);
@@ -405,9 +418,9 @@ function calcLiqTokenBuy(price, buyTokenAmount, orders, onceMaxOrder, passOrder 
  *   - borrow_amount: {number} Borrow amount
  *   - position_asset_amount: {number} Position asset amount
  *   - borrow_fee: {number} Borrow fee
- *   - order_pda: {string} Order PDA address (required for passOrder matching)
+ *   - order_id: {string} Stable order ID; legacy order_pda matching is also supported
  * @param {number} onceMaxOrder - Maximum orders to process at once, limits traversal range
- * @param {string|null} passOrder - Order PDA address string to skip, when this value matches an order's order_pda, skip that order and count its liquidity as free liquidity
+ * @param {string|bigint|number|null} passOrder - Stable order ID (or legacy PDA) to skip; null skips nothing
  *
  * @returns {Object} Liquidity calculation result object with detailed liquidity analysis data:
  *
@@ -420,7 +433,7 @@ function calcLiqTokenBuy(price, buyTokenAmount, orders, onceMaxOrder, passOrder 
  *   - lock_lp_token_amount_sum: {bigint} Total locked liquidity token amount, excludes skipped orders, corresponds to locked SOL liquidity
  *
  *   **Liquidity Status Indicators:**
- *   - has_infinite_lp: {boolean} Whether includes infinite liquidity, true means order chain ended and liquidity to min price (MIN_U128_PRICE) was calculated
+ *   - has_infinite_lp: {boolean} Whether includes infinite liquidity, true means the order chain ended; tail liquidity is bounded by the requested amount and any supplied tail capacity
  *   - pass_order_id: {number} Index of skipped order in array, -1 means no order skipped, >=0 means order at that index was skipped
  *
  *   **Sell Execution Info:**
@@ -468,9 +481,17 @@ function calcLiqTokenSell(price, sellTokenAmount, orders, onceMaxOrder, passOrde
     real_lp_sol_amount: 0n, // Amount of SOL actually obtainable from selling sellTokenAmount
   }
 
+  const passOrderReference = orderReference(passOrder);
+  if (typeof sellTokenAmount === 'number' && !Number.isSafeInteger(sellTokenAmount)) {
+    throw new RangeError('Token amount must be a safe integer; use string or bigint for large amounts');
+  }
+  const initialVirtualSolDecimal = new Decimal(initialVirtualSol).div(CurveAMM.SOL_PRECISION_FACTOR_DECIMAL);
+  const initialVirtualTokenDecimal = new Decimal(initialVirtualToken).div(CurveAMM.TOKEN_PRECISION_FACTOR_DECIMAL);
+
   let sellTokenAmountBigInt;
   try {
     sellTokenAmountBigInt = BigInt(sellTokenAmount);
+    if (sellTokenAmountBigInt < 0n || sellTokenAmountBigInt > 18446744073709551615n) throw new RangeError('Token amount must fit u64');
   } catch (error) {
     throw new Error(`价格转换错误：无法将 sellTokenAmount 转换为 BigInt Price conversion error: Cannot convert sellTokenAmount to BigInt - ${error.message}`);
   }
@@ -481,8 +502,6 @@ function calcLiqTokenSell(price, sellTokenAmount, orders, onceMaxOrder, passOrde
   // Calculate the amount of SOL obtainable from selling under ideal conditions
   try {
     const priceBigInt = BigInt(price);
-    const initialVirtualSolDecimal = new Decimal(initialVirtualSol).div(CurveAMM.SOL_PRECISION_FACTOR_DECIMAL);
-    const initialVirtualTokenDecimal = new Decimal(initialVirtualToken).div(CurveAMM.TOKEN_PRECISION_FACTOR_DECIMAL);
 
     //console.log("initialVirtualSolDecimal,initialVirtualTokenDecimal = ",initialVirtualSolDecimal.toString(),initialVirtualTokenDecimal.toString());
     [, result.ideal_lp_sol_amount] = CurveAMM.sellFromPriceWithTokenInputWithParams(
@@ -498,21 +517,8 @@ function calcLiqTokenSell(price, sellTokenAmount, orders, onceMaxOrder, passOrde
 
   // orders length of 0 requires separate calculation
   if (orders.length === 0) {
-    const initialVirtualSolDecimal = new Decimal(initialVirtualSol).div(CurveAMM.SOL_PRECISION_FACTOR_DECIMAL);
-    const initialVirtualTokenDecimal = new Decimal(initialVirtualToken).div(CurveAMM.TOKEN_PRECISION_FACTOR_DECIMAL);
-    const sellResult = CurveAMM.sellFromPriceToPriceWithParams(
-      BigInt(price),
-      CurveAMM.MIN_U128_PRICE,
-      initialVirtualSolDecimal,
-      initialVirtualTokenDecimal
-    );
-    if (sellResult) {
-      [result.free_lp_token_amount_sum, result.free_lp_sol_amount_sum] = sellResult;
-    } else {
-      // If the current price is already below the minimum price, no more can be sold
-      result.free_lp_token_amount_sum = 0n;
-      result.free_lp_sol_amount_sum = 0n;
-    }
+    result.free_lp_token_amount_sum = sellTokenAmountBigInt;
+    result.free_lp_sol_amount_sum = result.ideal_lp_sol_amount;
     result.has_infinite_lp = true;
     result.real_lp_sol_amount = result.ideal_lp_sol_amount
     return result
@@ -561,8 +567,6 @@ function calcLiqTokenSell(price, sellTokenAmount, orders, onceMaxOrder, passOrde
     // If a price gap exists (when selling, startPrice should be greater than endPrice)
     if (startPrice > endPrice) {
       try {
-        const initialVirtualSolDecimal = new Decimal(initialVirtualSol).div(CurveAMM.SOL_PRECISION_FACTOR_DECIMAL);
-        const initialVirtualTokenDecimal = new Decimal(initialVirtualToken).div(CurveAMM.TOKEN_PRECISION_FACTOR_DECIMAL);
         const gapLiquidity = CurveAMM.sellFromPriceToPriceWithParams(
           startPrice,
           endPrice,
@@ -588,7 +592,7 @@ function calcLiqTokenSell(price, sellTokenAmount, orders, onceMaxOrder, passOrde
               // Calculate the precise amount of SOL obtainable
               try {
                 const actualSellAmount = sellTokenAmountBigInt - (result.free_lp_token_amount_sum - BigInt(tokenAmount));
-                const [, preciseSol] = CurveAMM.sellFromPriceWithTokenInput(startPrice, actualSellAmount);
+                const [, preciseSol] = CurveAMM.sellFromPriceWithTokenInputWithParams(startPrice, actualSellAmount, initialVirtualSolDecimal, initialVirtualTokenDecimal);
                 result.real_lp_sol_amount = prev_free_lp_sol_amount_sum + preciseSol;
                 // console.log(`sell actual calculation[${i}]: free liquidity sufficient, actualSellAmount=${actualSellAmount}, preciseSol=${preciseSol}, actual SOL=${result.real_lp_sol_amount}`);
                 result.force_close_num = counti; // Number of force closed orders
@@ -612,7 +616,7 @@ function calcLiqTokenSell(price, sellTokenAmount, orders, onceMaxOrder, passOrde
 
     // Check whether this order needs to be skipped (passOrder logic)
 
-    if (passOrder == order.order_pda) {
+    if (matchesOrder(order, passOrderReference)) {
 
       // Add the skipped order's liquidity to the free liquidity
       try {
@@ -636,9 +640,9 @@ function calcLiqTokenSell(price, sellTokenAmount, orders, onceMaxOrder, passOrde
             // Free liquidity is already enough for the sell requirement
             try {
               // Calculate the precise amount of SOL obtainable
-              const targetPrice = i === 0 ? BigInt(price) : BigInt(orders[i - 1].lock_lp_end_price);
+              const targetPrice = BigInt(order.lock_lp_start_price);
               const actualSellAmount = sellTokenAmountBigInt - (result.free_lp_token_amount_sum - BigInt(order.lock_lp_token_amount));
-              const [, preciseSol] = CurveAMM.sellFromPriceWithTokenInput(targetPrice, actualSellAmount);
+              const [, preciseSol] = CurveAMM.sellFromPriceWithTokenInputWithParams(targetPrice, actualSellAmount, initialVirtualSolDecimal, initialVirtualTokenDecimal);
               result.real_lp_sol_amount = prevFreeSolSum + preciseSol;
               result.force_close_num = counti;
             } catch (error) {
@@ -685,62 +689,29 @@ function calcLiqTokenSell(price, sellTokenAmount, orders, onceMaxOrder, passOrde
       throw new Error(`订单数据格式错误：最后一个订单缺少 lock_lp_end_price Order data format error: Last order missing lock_lp_end_price`);
     }
 
-    let lastEndPrice, minPrice;
-    try {
-      lastEndPrice = BigInt(lastOrder.lock_lp_end_price);
-      minPrice = CurveAMM.MIN_U128_PRICE;
-    } catch (error) {
-      throw new Error(`价格转换错误：无法转换最后订单价格或最小价格 Price conversion error: Cannot convert last order price or min price - ${error.message}`);
-    }
-
-
-    if (lastEndPrice > minPrice) {
-
-      try {
-        const initialVirtualSolDecimal = new Decimal(initialVirtualSol).div(CurveAMM.SOL_PRECISION_FACTOR_DECIMAL);
-        const initialVirtualTokenDecimal = new Decimal(initialVirtualToken).div(CurveAMM.TOKEN_PRECISION_FACTOR_DECIMAL);
-        const infiniteLiquidity = CurveAMM.sellFromPriceToPriceWithParams(
-          lastEndPrice,
-          minPrice,
-          initialVirtualSolDecimal,
-          initialVirtualTokenDecimal
-        );
-        if (infiniteLiquidity && Array.isArray(infiniteLiquidity) && infiniteLiquidity.length === 2) {
-          const [tokenAmount, solAmount] = infiniteLiquidity;
-
-          let prevFreeSolSum;
-          try {
-            prevFreeSolSum = result.free_lp_sol_amount_sum;
-            result.free_lp_sol_amount_sum += BigInt(solAmount);
-            result.free_lp_token_amount_sum += BigInt(tokenAmount);
-            result.has_infinite_lp = true;
-          } catch (error) {
-            throw new Error(`流动性计算错误：无法转换无限流动性数值 Liquidity calculation error: Cannot convert infinite liquidity values - ${error.message}`);
-          }
-
-          // After entering infinite liquidity, calculate the actual amount of SOL obtained
-          if (result.real_lp_sol_amount === 0n) {
-            if (result.free_lp_token_amount_sum >= sellTokenAmountBigInt) {
-              // Infinite liquidity is enough for the sell requirement
-              try {
-                const actualSellAmount = sellTokenAmountBigInt - (result.free_lp_token_amount_sum - BigInt(tokenAmount));
-                const [, preciseSol] = CurveAMM.sellFromPriceWithTokenInput(lastEndPrice, actualSellAmount);
-                result.real_lp_sol_amount = prevFreeSolSum + preciseSol;
-                result.force_close_num = counti; // Number of force closed orders
-              } catch (error) {
-                throw new Error(`流动性计算错误：无限流动性精确SOL计算失败 Liquidity calculation error: Infinite liquidity precise SOL calculation failed - ${error.message}`);
-              }
-            }
-          }
-
-        } else {
-          throw new Error(`无限流动性计算失败a：返回数据格式错误 Infinite liquidity calculation failure: Invalid return data format`);
+    const lastEndPrice = BigInt(lastOrder.lock_lp_end_price);
+    result.has_infinite_lp = true;
+    if (result.free_lp_token_amount_sum < sellTokenAmountBigInt) {
+      const remainingToken = sellTokenAmountBigInt - result.free_lp_token_amount_sum;
+      let tailToken = remainingToken;
+      if (lastOrder.next_lp_token_amount != null) {
+        if (typeof lastOrder.next_lp_token_amount === 'number' && !Number.isSafeInteger(lastOrder.next_lp_token_amount)) {
+          throw new RangeError('Tail capacity must be a safe integer; use string or bigint');
         }
-      } catch (error) {
-        if (error.message.includes('无限流动性计算失败') || error.message.includes('流动性计算错误') || error.message.includes('订单数据格式错误') || error.message.includes('价格转换错误')) {
-          throw error;
-        }
-        throw new Error(`无限流动性计算失败b：${error.message} Infinite liquidity calculation failure: ${error.message}`);
+        const capacity = BigInt(lastOrder.next_lp_token_amount);
+        if (capacity < 0n || capacity > 18446744073709551615n) throw new RangeError('Tail capacity must fit u64');
+        if (capacity < tailToken) tailToken = capacity;
+      }
+      // The tail has no fixed price floor; its curve and input limit belong to this pool.
+      const tail = CurveAMM.sellFromPriceWithTokenInputWithParams(
+        lastEndPrice, tailToken, initialVirtualSolDecimal, initialVirtualTokenDecimal
+      );
+      if (!tail) throw new Error('Tail liquidity calculation failed');
+      result.free_lp_token_amount_sum += tailToken;
+      result.free_lp_sol_amount_sum += tail[1];
+      if (tailToken === remainingToken) {
+        result.real_lp_sol_amount = result.free_lp_sol_amount_sum;
+        result.force_close_num = counti;
       }
     }
   }

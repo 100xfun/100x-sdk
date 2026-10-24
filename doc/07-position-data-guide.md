@@ -52,3 +52,5 @@ const built = await sdk.trading.closeLong({
 ```
 
 For shorts, use `simulateShortClose()` and `trading.closeShort()` with `buyTokenAmount` and `maxSolAmount`. These methods build transactions; your application signs and sends them. The SDK has no standalone “close half” UI operation. Any partial close must use the corresponding close builder with an allowed amount and current order data.
+
+For a close quote, pass the stable `order.order_id` as the third argument to `simulateTokenSell` (long) or `simulateTokenBuy` (short). This releases that order's locked liquidity for the calculation. Omit the argument for ordinary spot trades. Legacy `order_pda` matching is retained when callers supply that field; do not substitute an orderbook slot index for the stable ID.
